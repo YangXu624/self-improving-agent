@@ -16,12 +16,27 @@ are outcomes to measure.
 
 ## Current status
 
-Documentation-only foundation. No application features or dependencies have been added.
+Project foundation and a local product catalogue only. No application features or dependencies have been added.
 No agent framework, LLM provider, database implementation or frontend stack has been selected.
 
 This is a new project inspired by [ASTRA](https://devpost.com/software/reimagining-the-digital-experience).
 Its reference implementation and the earlier AutoML project remain separate and unchanged.
-No reference code, datasets, model weights or configuration have been copied here.
+No reference code, model weights or configuration have been copied here. The user has explicitly
+authorised data-only reuse of the frozen TechJam catalogue and its image references.
+
+## Local catalogue
+
+The ignored `data/catalogue/` directory contains:
+
+- `catalog.jsonl`: exactly 50,000 unique parent-product records, byte-identical to the supplied
+  TechJam catalogue.
+- `product_images.json`: the original image-URL mapping for 49,944 of those products.
+- `manifest.json`: source provenance, checksums, counts and the 56 product IDs without an image entry.
+
+Images are remote URL references, matching the original ASTRA assets; image files have not
+been downloaded and URL reachability has not been verified. No sessions, user profiles,
+evaluation cases, embeddings or experiment outputs were imported. The data files are not
+tracked or uploaded to GitHub.
 
 ## Research documents
 

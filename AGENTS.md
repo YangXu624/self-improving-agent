@@ -2,7 +2,9 @@
 
 ## Current phase
 
-This repository contains only the project foundation and research documentation.
+This repository contains the project foundation, research documentation and an ignored local
+copy of the user-approved TechJam product catalogue/image-URL mapping in `data/catalogue/`.
+No sessions or evaluation cases were imported. Application implementation has not begun.
 Read `README.md` and the documents in `docs/` before proposing implementation work.
 Do not add application features, speculative modules, dependencies or a technology stack
 until the relevant architectural decisions have been discussed with the user.
@@ -27,6 +29,8 @@ until the relevant architectural decisions have been discussed with the user.
 
 - The previous ASTRA project and supplied ZIP are read-only reference material. Do not
   modify them or copy code, datasets, weights or configuration without an explicit decision.
+  The user has approved copying only the frozen 50k catalogue and its associated image references;
+  this does not authorise copying sessions or any other ASTRA assets.
 - Do not modify the separate AutoML project or other neighbouring repositories.
 - Work within this repository and verify the target remote before pushing.
 - Never commit API keys, environment files, credentials, private datasets or local databases.

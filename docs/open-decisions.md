@@ -9,8 +9,10 @@ an implementation plan, dependency list or approved architecture.
 - Which decisions can the agent make: clarify, retrieve, filter, rank, recommend or recover?
 - Which actions belong to trusted application logic, and how is their outcome verified?
 - How are current hard constraints protected, and when could a relaxation be proposed?
-- Which catalogue/domain has sufficient ground truth and a genuine opportunity for learning?
-  Any reuse of ASTRA data or components requires an explicit later decision.
+- Initial catalogue selection is settled: the user approved the frozen TechJam 50k product
+  records and associated image references, without sessions or other assets. Attribute quality,
+  variant handling, evaluation suitability and any future category expansion remain open.
+  Reuse of additional ASTRA data or components requires an explicit later decision.
 
 ## Responsibilities and boundaries of memory
 

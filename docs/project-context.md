@@ -47,8 +47,11 @@ retrieval/question-selection policies. Its purpose was helping shoppers find sui
 It supplies background and lessons, not a prescribed implementation for this project.
 Its reported capabilities and results must not be treated as verified features of the new app.
 
-The original ASTRA checkout and ZIP remain read-only. No code, catalogue, model weights,
-configuration or historical experiment outputs have been copied into this repository.
+The original ASTRA checkout and ZIP remain read-only. The user subsequently authorised
+data-only reuse of the frozen 50,000-product catalogue and its associated image-URL mapping.
+These are local, ignored assets under `data/catalogue/`; 56 products have no image entry.
+No sessions, user profiles, evaluation cases, code, model weights, configuration or historical
+experiment outputs were copied. Image files have not been downloaded.
 
 ## New direction
 
