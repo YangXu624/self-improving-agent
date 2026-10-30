@@ -4,10 +4,16 @@
 
 This repository contains the project foundation, research documentation and an ignored local
 copy of the user-approved TechJam product catalogue/image-URL mapping in `data/catalogue/`.
-No sessions or evaluation cases were imported. Application implementation has not begun.
+No sessions or evaluation cases were imported. Milestone 1 implementation is now authorised
+on `feat/baseline-shopping-agent`: session memory, lexical retrieval, bounded LLM decisions,
+tracing and CLI only. Long-term user memory, experience learning and evaluation remain future work.
 Read `README.md` and the documents in `docs/` before proposing implementation work.
 Do not add application features, speculative modules, dependencies or a technology stack
 until the relevant architectural decisions have been discussed with the user.
+
+Use `.venv/bin/python -m unittest discover -s tests -v` and `.venv/bin/ruff check .`.
+After each tested component, review the diff, make a Conventional Commit and push the feature
+branch. Open a PR at milestone completion; do not merge main or rewrite published history.
 
 ## Research and development principles
 

@@ -16,8 +16,10 @@ are outcomes to measure.
 
 ## Current status
 
-Project foundation and a local product catalogue only. No application features or dependencies have been added.
-No agent framework, LLM provider, database implementation or frontend stack has been selected.
+Milestone 1 is in progress on `feat/baseline-shopping-agent`. Strict shopping/action contracts,
+evidence-linked state corrections, and JSONL/snapshot session persistence are implemented.
+DeepSeek is the approved first provider; SQLite FTS5 will provide deterministic catalogue search.
+No agent framework or frontend is being introduced. Long-term memories and learning are out of scope.
 
 This is a new project inspired by [ASTRA](https://devpost.com/software/reimagining-the-digital-experience).
 Its reference implementation and the earlier AutoML project remain separate and unchanged.
@@ -45,5 +47,11 @@ tracked or uploaded to GitHub.
 - [Open decisions](docs/open-decisions.md): unresolved architectural and experimental choices.
 - [Agent guidance](AGENTS.md): principles for future coding-agent sessions.
 
-The next discussion concerns the conversational agent's decision-making workflow and the
-responsibilities of the three proposed memory layers. Implementation has not begun.
+Development checks (Python 3.11 or newer):
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/ruff check .
+```
