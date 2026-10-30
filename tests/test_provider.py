@@ -79,3 +79,11 @@ class ProviderTests(unittest.TestCase):
             "shopping_agent.provider.urlopen", return_value=self.response(content="")
         ):
             self.assertEqual(DeepSeekPolicy(api_key="test").complete([]).content, "")
+
+    def test_invalid_key_format_never_reaches_transport_or_error_text(self):
+        for key in ["test-secret\nheader", "test-secret\x00", "test-secret⚠"]:
+            with patch("shopping_agent.provider.urlopen") as send:
+                with self.assertRaises(ProviderError) as caught:
+                    DeepSeekPolicy(api_key=key)
+                self.assertNotIn("test-secret", str(caught.exception))
+                send.assert_not_called()

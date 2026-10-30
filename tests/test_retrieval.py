@@ -157,6 +157,20 @@ class RetrievalTests(unittest.TestCase):
             self.assertIsNone(exact_price(bad))
         self.assertEqual(exact_price("19.99"), 19.99)
 
+    def test_material_substring_exclusion_rejects_mixed_and_unknown_material(self):
+        search = self.index(
+            [
+                product("mixed", Material="Leather and cotton"),
+                product("cotton", Material="Cotton"),
+                product("unknown"),
+            ]
+        )
+        state = self.state(
+            [add("material", "not_contains", "leather", "no leather")], "no leather"
+        )
+        out = search.search(Search(type="SEARCH", query="boots"), state)
+        self.assertEqual([p["id"] for p in out["candidates"]], ["cotton"])
+
 
 if __name__ == "__main__":
     unittest.main()

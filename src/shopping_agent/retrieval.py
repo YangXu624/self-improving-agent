@@ -277,6 +277,7 @@ def assess(record, state):
 
 class ProductSearch(Protocol):
     catalogue_version: str
+    strategy_version: str
 
     def search(self, action: Search, state: ShoppingState) -> dict: ...
 
@@ -292,6 +293,7 @@ class LexicalSearch:
             self.db.close()
             raise ValueError("Unsupported index version; rebuild required")
         self.catalogue_version = meta["catalogue_sha256"]
+        self.strategy_version = meta["index_version"]
         self.count = int(meta["count"])
         if (
             expected_catalogue_hash
@@ -358,7 +360,7 @@ class LexicalSearch:
             "search_id": uuid4().hex,
             "state_version": state.version,
             "catalogue_version": self.catalogue_version,
-            "strategy_version": INDEX_VERSION,
+            "strategy_version": self.strategy_version,
             "query": action.query,
             "match_mode": action.mode,
             "applied_hard_filters": [r.model_dump() for r in hard_filters],

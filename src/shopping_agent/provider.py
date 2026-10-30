@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -24,8 +25,11 @@ class DeepSeekPolicy:
         self._key = api_key or os.environ.get("DEEPSEEK_API_KEY", "")
         if not self._key.strip():
             raise ProviderError("missing_DEEPSEEK_API_KEY")
+        self._key = self._key.strip()
+        if len(self._key) > 512 or any(not 33 <= ord(c) <= 126 for c in self._key):
+            raise ProviderError("invalid_DEEPSEEK_API_KEY_format")
         self.model = model or os.environ.get("DEEPSEEK_MODEL", "deepseek-flash")
-        if not self.model.strip() or len(self.model) > 100:
+        if not re.fullmatch(r"[A-Za-z0-9._/-]{1,100}", self.model):
             raise ProviderError("invalid_model_name")
         self.timeout = timeout
 
@@ -52,7 +56,9 @@ class DeepSeekPolicy:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
         except HTTPError as exc:
-            raise ProviderError(f"provider_http_{exc.code}") from None
+            code = exc.code
+            exc.close()
+            raise ProviderError(f"provider_http_{code}") from None
         except (URLError, TimeoutError, OSError):
             raise ProviderError("provider_network_failure") from None
         if len(raw) > MAX_RESPONSE_BYTES:

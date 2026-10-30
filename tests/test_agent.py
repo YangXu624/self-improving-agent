@@ -299,3 +299,53 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(
             self.policy.contexts[-1]["latest_search"]["counts"]["verified_eligible"], 0
         )
+
+    def test_retrieval_strategy_change_invalidates_old_results(self):
+        self.agent(search, recommend).turn("alice", self.sid, "boots")
+        self.search.strategy_version = "changed-settings"
+        a = self.agent(
+            lambda c: decision(
+                c, {"type": "CLARIFY", "question": "What budget?", "attribute": "price"}
+            )
+        )
+        a.turn("alice", self.sid, "help")
+        self.assertIsNone(self.policy.contexts[0]["latest_search"])
+
+    def test_updates_after_tool_execution_rejected_without_second_commit(self):
+        edits = [add().model_dump()]
+        a = self.agent(
+            lambda c: search(c, edits), lambda c: search(c, edits), recommend
+        )
+        out = a.turn("alice", self.sid, "under 100")
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["budget_used"], {"model_calls": 3, "searches": 1})
+        self.assertEqual(
+            len([e for e in self.events() if e.type == "state_committed"]), 1
+        )
+        rejection = next(e for e in self.events() if e.type == "decision_rejected")
+        self.assertEqual(
+            rejection.payload["feedback"][0]["code"],
+            "state_updates_already_accepted_this_turn",
+        )
+
+    def test_recommendation_rechecks_current_product_eligibility(self):
+        a = self.agent(search, recommend)
+        with unittest.mock.patch.object(self.search, "eligible", return_value=False):
+            a.policy.steps.append(
+                lambda c: decision(
+                    c,
+                    {
+                        "type": "CLARIFY",
+                        "question": "What budget?",
+                        "attribute": "price",
+                    },
+                )
+            )
+            out = a.turn("alice", self.sid, "boots")
+        self.assertEqual(out["action"], "CLARIFY")
+        self.assertEqual(out["products"], [])
+        rejection = next(e for e in self.events() if e.type == "decision_rejected")
+        self.assertEqual(
+            rejection.payload["feedback"][0]["code"],
+            "recommendation_failed_constraint_recheck",
+        )

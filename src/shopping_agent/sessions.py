@@ -29,6 +29,7 @@ class Session:
     def __init__(self, directory, user_id, session_id):
         self.directory, self.user_id, self.id = directory, user_id, session_id
         self.events, self.state = [], ShoppingState()
+        seen_ids = set()
         path = directory / "events.jsonl"
         if path.exists():
             with path.open("rb") as handle:
@@ -54,7 +55,14 @@ class Session:
                             raise SessionError("corrupt_state_commit") from exc
                         if after.version != self.state.version + 1:
                             raise SessionError("invalid_state_version_history")
+                        if event.payload.get("before_version") != self.state.version:
+                            raise SessionError("invalid_commit_before_version")
                         self.state = after
+                    if event.state_version != self.state.version:
+                        raise SessionError("event_state_version_mismatch")
+                    if event.event_id in seen_ids:
+                        raise SessionError("duplicate_event_id")
+                    seen_ids.add(event.event_id)
                     self.events.append(event)
         if not self.events:
             raise SessionError("missing_session")

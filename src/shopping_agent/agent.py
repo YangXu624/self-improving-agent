@@ -77,7 +77,9 @@ class ShoppingAgent:
             calls, searches, feedback, edits_allowed = 0, 0, [], True
             failure = "decision_budget_exhausted"
             while calls < self.max_calls:
-                result = latest_search(session, self.search.catalogue_version)
+                result = latest_search(
+                    session, self.search.catalogue_version, self.search.strategy_version
+                )
                 try:
                     messages = self.context_builder(
                         session,

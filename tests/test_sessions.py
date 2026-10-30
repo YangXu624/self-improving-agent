@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -220,6 +222,41 @@ class SessionTests(unittest.TestCase):
             handle.write(b'{"unexpected":"record"}\n')
         before = path.read_bytes()
         with self.assertRaisesRegex(SessionError, "corrupt_event_log"):
+            with self.store.open("alice", sid):
+                pass
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_process_lock_blocks_a_second_interpreter(self):
+        sid = self.store.create("alice")
+        code = """
+import sys
+from shopping_agent.sessions import SessionStore, SessionError
+try:
+    with SessionStore(sys.argv[1]).open('alice', sys.argv[2]):
+        print('unexpectedly opened')
+except SessionError as exc:
+    print(str(exc))
+"""
+        with self.store.open("alice", sid):
+            result = subprocess.run(
+                [sys.executable, "-c", code, self.tmp.name, sid],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "session_busy")
+
+    def test_replay_rejects_semantically_corrupt_state_commit(self):
+        sid = self.store.create("alice")
+        with self.store.open("alice", sid) as session:
+            # An otherwise valid event envelope with an invalid state payload.
+            session.append(
+                "state_committed", {"state": {"version": 1}, "before_version": 5}
+            )
+        path = Path(self.tmp.name) / sid / "events.jsonl"
+        before = path.read_bytes()
+        with self.assertRaises(SessionError):
             with self.store.open("alice", sid):
                 pass
         self.assertEqual(path.read_bytes(), before)

@@ -51,13 +51,14 @@ class ContextLimitError(ValueError):
     pass
 
 
-def latest_search(session, catalogue_version):
+def latest_search(session, catalogue_version, strategy_version):
     for event in reversed(session.events):
         if event.type == "search_result":
             result = event.payload
             if (
                 result["state_version"] == session.state.version
                 and result["catalogue_version"] == catalogue_version
+                and result["strategy_version"] == strategy_version
             ):
                 return result
     return None
