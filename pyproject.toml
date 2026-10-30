@@ -9,6 +9,9 @@ description = "A bounded conversational shopping baseline with session-only memo
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
 
+[project.scripts]
+shopping-agent = "shopping_agent.cli:main"
+
 [project.optional-dependencies]
 dev = ["ruff>=0.14,<1"]
 

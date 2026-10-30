@@ -83,3 +83,40 @@ and product content and must remain local. Socket timeout is not a global wall-c
 Checkpoint: all 32 automated tests passed, including 12 orchestration acceptance cases and
 three mocked HTTP-adapter cases. No live requests were executed: the new project had no local
 key. Real-model usefulness/constraint extraction and cost are not established by these tests.
+
+## CLI and final integration
+
+Added `index`, `chat` and `inspect` commands via `python -m shopping_agent` and the installed
+`shopping-agent` entry point. Interactive chat prints a session UUID; `/state` inspects the
+ledger and `/quit` exits. Single-message JSON mode supports explicit request IDs. Session
+inspection and index construction need no API key. Chat refuses a missing key or stale source
+index before creating a session. The explicit project `.env` loader accepts two settings
+without executing shell syntax; process environment values take precedence. `.env.example`
+contains no key. No neighbouring project credentials were read or copied.
+
+Review tightened key-format validation to prevent header errors exposing malformed credentials,
+closed HTTP error resources, checked replayed state-version consistency and invalidated cached
+results after a retrieval-strategy version change. Added corresponding tests, mixed-material
+exclusion coverage, CLI coverage and a real second-interpreter writer-lock check.
+
+Final local acceptance: **45 tests passed** (11 session/contracts, 9 retrieval, 15 orchestration,
+4 provider-transport, 6 CLI). Ruff lint/format and package dependency checks passed. Installed
+entry point and module help were exercised. An editable reinstall initially failed with
+`--no-build-isolation` because setuptools was not installed in the runtime venv; rerunning
+with normal isolated build succeeded. No application dependency change was needed.
+
+The actual imported index also completed a three-turn integration smoke with test-only
+scripted decisions: ask budget, recommend below USD100, replace budget with below USD60,
+then search/recommend again. State advanced v1→v2→v3, preserving the superseded price. Of
+341 literal `hiking boots` matches, 13 and 8 passed the respective stored price/category
+requirements. There were 39 local trace events and five mocked policy calls; **zero paid
+API calls**. Counts of unknown/failed products overlap and are not additive. This confirms
+mechanics with the real catalogue, not live model quality or measured learning.
+
+The user explicitly chose mocked-provider tests for completion. Unverified: live DeepSeek
+compatibility/decision quality, cost, real shopping success, semantic constraint extraction,
+prompt-injection resistance, other Python/OS environments and remote image reachability.
+Sparse metadata/lexical category matching can prevent useful recommendations. Source hashes
+and reference ZIP are checked for preservation; raw assets and generated traces/index remain
+ignored. There is no experience-learning demonstration yet because Levels 2/3 and evaluation
+were explicitly excluded; the README documents a reproducible session-memory demonstration.

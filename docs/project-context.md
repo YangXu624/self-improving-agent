@@ -73,11 +73,14 @@ separately rather than credited to the same memory intervention.
 
 The current philosophy is that LLMs may interpret interactions and propose updates, while
 application logic validates and executes allowed operations. Proposed operations include
-addition, confirmation, refinement, supersession, retraction and no-op; their contracts are
-not finalised. Deterministic checks cannot automatically prove a general lesson from one
-successful interaction.
+addition, confirmation, refinement, supersession, retraction and no-op. Milestone 1 now
+supports ADD, REPLACE, RETRACT and NEW_GOAL for session requirements only. Persistent memory
+lifecycle contracts are not finalised. Deterministic checks cannot automatically prove a
+general lesson from one successful interaction.
 
 The desired demonstration links an outcome to a lesson, explains its applicability to a new
 task, records the resulting behavioural change and measures its effect. Incorrect or outdated
-experience must remain inspectable and correctable. The three memory roles, technologies,
-decision-making workflow and development milestones remain open for discussion.
+experience must remain inspectable and correctable. Milestone 1 now supplies a session-only
+baseline: a bounded DeepSeek decision policy, trusted state edits and FTS5 search, JSONL history/snapshots and a CLI. User memory, experience learning
+and independent evaluation remain future design discussions. No transfer benefit is claimed
+from implementing the baseline.

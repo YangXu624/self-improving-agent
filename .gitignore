@@ -74,6 +74,10 @@ secrets/
 *.safetensors
 *.onnx
 
+# Session files, including explicit CLI roots outside data/
+**/events.jsonl
+**/state.json
+
 # Generated experiment outputs; source protocols are not blanket-ignored
 /artifacts/
 /outputs/

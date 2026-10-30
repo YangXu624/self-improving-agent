@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from test_retrieval import product
 from test_sessions import add
@@ -330,7 +331,7 @@ class AgentTests(unittest.TestCase):
 
     def test_recommendation_rechecks_current_product_eligibility(self):
         a = self.agent(search, recommend)
-        with unittest.mock.patch.object(self.search, "eligible", return_value=False):
+        with patch.object(self.search, "eligible", return_value=False):
             a.policy.steps.append(
                 lambda c: decision(
                     c,
