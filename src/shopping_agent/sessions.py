@@ -48,7 +48,10 @@ class Session:
                     if not self.events and event.type != "session_created":
                         raise SessionError("missing_session_creation")
                     if event.type == "state_committed":
-                        after = ShoppingState.model_validate(event.payload["state"])
+                        try:
+                            after = ShoppingState.model_validate(event.payload["state"])
+                        except (KeyError, ValueError) as exc:
+                            raise SessionError("corrupt_state_commit") from exc
                         if after.version != self.state.version + 1:
                             raise SessionError("invalid_state_version_history")
                         self.state = after

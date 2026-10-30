@@ -46,3 +46,40 @@ SQLite 3.51.2 environment the actual 50,000-product index built in 2.24 seconds 
 bytes). Unconstrained lexical smoke queries returned 341 `hiking boots`, 6,263 `dress` and 468
 `backpack` matches in approximately 3–43 ms. These are functionality/timing observations,
 not relevance or shopping-success evaluation. Raw asset checksums remained unchanged.
+
+## Bounded decisions and traces
+
+The policy returns JSON proposals; orchestration validates state edits, commits accepted edits,
+executes trusted search, then invokes the policy again with actual tool results. Default budget
+is three model calls (including malformed-output repairs) and two searches per user turn.
+No search runs on the last call because a further decision must inspect its result. Provider
+HTTP/auth/network failures stop the turn without hidden retries or offline fallback. A failed
+turn retains already accepted state changes. Completed request IDs replay the recorded answer
+without another model call; incomplete IDs fail closed for explicit inspection/new-request recovery.
+
+Recommendations must reference the result supplied in that decision context, at the current
+state/catalogue versions, contain only returned IDs, and pass a fresh hard-constraint recheck.
+Product cards use tool facts, not model-written descriptions. The model selects questions,
+queries, all/any matching, eligible product order and when to recommend. Soft matches are
+available for its ranking decisions. Ordinary RESPOND/CLARIFY text is model-generated and
+cannot be proved factually correct by schema validation; the prompt restricts those channels,
+but semantic adherence, correct requirement extraction and prompt-injection resistance need
+real-model evaluation. Deterministic gates protect stored constraints, not unextracted needs.
+
+Policy, context construction, tool and session interfaces are separate. The context builder
+can later supply scoped guidance without altering the executor; no persistent experience or
+user-memory implementation has been added. Full dialogue/events are durable; the prompt uses
+active state, current message, current search and up to twelve recent conversation messages.
+Old dialogue is trimmed first under a 40,000-character cap. Essential context is never silently
+truncated: an oversized essential context fails before a paid call. Long sessions may need a
+new session. No summarizer or session compaction is implemented.
+
+The DeepSeek adapter uses stdlib HTTP, JSON mode, disabled thinking, a 2,000-output-token cap
+and 25-second socket timeout; no automatic retries. Model/usage/duration and full actual prompt,
+structured output, validation failures, tool results and recommendations are traced locally.
+Authorization headers and provider reasoning fields are excluded. Logs contain private user
+and product content and must remain local. Socket timeout is not a global wall-clock deadline.
+
+Checkpoint: all 32 automated tests passed, including 12 orchestration acceptance cases and
+three mocked HTTP-adapter cases. No live requests were executed: the new project had no local
+key. Real-model usefulness/constraint extraction and cost are not established by these tests.
