@@ -1,13 +1,18 @@
 # Open decisions
 
-These questions are intentionally unresolved. This document records discussion topics, not
-an implementation plan, dependency list or approved architecture.
+The future-memory and evaluation questions below remain open. Milestone 1 has since been
+approved and implemented for review: direct bounded LLM orchestration, DeepSeek first,
+JSONL events/JSON snapshots, SQLite FTS5/BM25 and a local CLI. See `milestone-1.md` for the
+chosen contracts, limitations and verification. No agent framework or frontend was introduced.
+Persistent user memory, agent experience and evaluation remain outside the approved baseline.
 
 ## Task scope and decision-making workflow
 
 - What constitutes a shopping task, success, failure and appropriate abstention?
-- Which decisions can the agent make: clarify, retrieve, filter, rank, recommend or recover?
-- Which actions belong to trusted application logic, and how is their outcome verified?
+- Baseline decisions are CLARIFY, SEARCH, RECOMMEND and RESPOND. How should later
+  scoped experience influence these decisions and support recovery?
+- Baseline state edits and search/recommendation gates execute in trusted Python. What
+  independent outcome evidence will later verify shopping success and procedural learning?
 - How are current hard constraints protected, and when could a relaxation be proposed?
 - Initial catalogue selection is settled: the user approved the frozen TechJam 50k product
   records and associated image references, without sessions or other assets. Attribute quality,
@@ -46,11 +51,10 @@ an implementation plan, dependency list or approved architecture.
 
 ## Technology and delivery
 
-- Agent framework or direct orchestration, if any.
-- LLM provider/model, database/storage implementation and retrieval technology.
-- Frontend stack, deployment environment and operating costs.
-- Development milestones and criteria for moving from a minimal experiment to a live app.
+- Whether future complexity justifies a framework beyond the current direct orchestration.
+- Later provider adapters and retrieval strategies beyond the DeepSeek/FTS5 baseline.
+- Frontend stack, hosted deployment, authentication and operating costs.
+- Acceptance criteria for Level 2, Level 3 and controlled memory evaluation.
 
-The next discussion begins with the conversational agent's decision-making workflow and the
-responsibilities of the three proposed memory layers. No application implementation is
-authorised by these open questions alone.
+Future memory and evaluation work requires further design discussion and approval. The
+user-authorised Milestone 1 baseline does not authorise implementing these future layers.
