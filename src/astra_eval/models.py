@@ -112,3 +112,33 @@ class ShopperReply(Strict):
         if not self.message.strip():
             raise ValueError("Shopper message must contain non-whitespace text")
         return self
+
+
+class TargetGroundTruth(Strict):
+    """Evaluator-only identity and evidence; never a shopper/agent input."""
+
+    scenario_id: str
+    target_id: str | None = None
+    catalogue_sha256: str
+    profile_sha256: str
+    hard: list[Fact]
+    soft: list[Fact] = Field(default_factory=list)
+    ambiguity: Literal[
+        "distinguishable", "ambiguous", "insufficient_evidence", "no_target"
+    ]
+    compatible_count: int = Field(ge=0)
+    compatible_ids_sha256: str
+    evidence: dict[str, str] = Field(default_factory=dict)
+    target_title: str | None = None
+
+    @model_validator(mode="after")
+    def consistent_target(self):
+        if (self.target_id is None) != (self.ambiguity == "no_target"):
+            raise ValueError("Only verified no-target tasks omit the target ID")
+        if self.ambiguity == "distinguishable" and self.compatible_count != 1:
+            raise ValueError("Distinguishable targets must have one compatible product")
+        if self.ambiguity == "ambiguous" and self.compatible_count < 2:
+            raise ValueError("Ambiguous targets need multiple compatible products")
+        if self.ambiguity == "no_target" and self.compatible_count:
+            raise ValueError("No-target tasks cannot have compatible products")
+        return self

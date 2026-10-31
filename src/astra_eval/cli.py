@@ -50,11 +50,24 @@ def parser():
     )
     g.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
     g.add_argument("--output", required=True)
+    g.add_argument(
+        "--evaluation-mode", choices=("preference", "target_item"), default="preference"
+    )
+    g.add_argument(
+        "--target-group",
+        choices=("distinguishable", "ambiguous", "all"),
+        default="distinguishable",
+    )
+    g.add_argument("--no-target-per-split", type=int, default=0)
     g.add_argument("--seed", type=int, default=20261101)
     g.add_argument("--learning", type=int, default=12)
     g.add_argument("--development", type=int, default=8)
     g.add_argument("--held-out", type=int, default=24)
     g.add_argument("--max-user-turns", type=int, default=6)
+    audit = sub.add_parser(
+        "audit-targets", help="offline target eligibility and ambiguity counts"
+    )
+    audit.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
     c = sub.add_parser(
         "check-simulator", help="verify Ollama, the model and structured output"
     )
@@ -75,7 +88,11 @@ def parser():
     )
     r.add_argument("--env-file", default=".env")
     r.add_argument("--k", type=int, nargs="+", default=[1, 3, 5])
-    r.add_argument("--headline-k", type=int, default=3)
+    r.add_argument("--headline-k", type=int)
+    r.add_argument(
+        "--evaluation-mode", choices=("preference", "target_item"), default="preference"
+    )
+    r.add_argument("--session-max-model-calls", type=int)
     r.add_argument("--turn-budget", type=int)
     r.add_argument("--price-input-per-million", type=float)
     r.add_argument("--price-output-per-million", type=float)
@@ -103,15 +120,32 @@ def main(argv=None):
 
 
 def run_command(args):
+    if args.command == "audit-targets":
+        from .target_scenarios import TargetPool
+
+        print(json.dumps(TargetPool(args.catalogue).audit(), indent=2))
+        return 0
     if args.command == "generate":
         per_split = {
             "learning": args.learning,
             "development": args.development,
             "held_out": args.held_out,
         }
-        scenarios, truths, manifest = generate(
-            args.catalogue, args.seed, per_split, max_user_turns=args.max_user_turns
-        )
+        if args.evaluation_mode == "target_item":
+            from .target_scenarios import generate_targets
+
+            scenarios, truths, manifest = generate_targets(
+                args.catalogue,
+                args.seed,
+                per_split,
+                max_user_turns=args.max_user_turns,
+                group=args.target_group,
+                no_target_per_split=args.no_target_per_split,
+            )
+        else:
+            scenarios, truths, manifest = generate(
+                args.catalogue, args.seed, per_split, max_user_turns=args.max_user_turns
+            )
         print(
             json.dumps(
                 save(args.output, scenarios, truths, manifest), indent=2, sort_keys=True
@@ -135,6 +169,10 @@ def run_command(args):
         return 0
     config = ExperimentConfig(
         scenarios_dir=Path(args.scenarios),
+        evaluation_mode=args.evaluation_mode,
+        session_max_model_calls=args.session_max_model_calls
+        if args.session_max_model_calls is not None
+        else (18 if args.evaluation_mode == "target_item" else None),
         catalogue=Path(args.catalogue),
         index=Path(args.index),
         output=Path(args.output),
@@ -144,7 +182,9 @@ def run_command(args):
         simulator=sim_config(args),
         score=ScoreConfig(
             k_values=tuple(args.k),
-            headline_k=args.headline_k,
+            headline_k=args.headline_k
+            if args.headline_k is not None
+            else (5 if args.evaluation_mode == "target_item" else 3),
             turn_budget=args.turn_budget,
             price_input_per_million=args.price_input_per_million,
             price_output_per_million=args.price_output_per_million,

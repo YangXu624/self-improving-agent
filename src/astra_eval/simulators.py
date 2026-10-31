@@ -108,6 +108,7 @@ class SimulatorResult:
     usage: dict = field(default_factory=dict)
     prompt_info: dict = field(default_factory=dict)
     raw_sha256: str = ""
+    raw_content: str = ""
 
 
 class ShopperSimulator(Protocol):
@@ -286,6 +287,7 @@ class OllamaShopper:
                 totals,
                 info,
                 hashlib.sha256(content.encode()).hexdigest(),
+                content,
             )
         raise SimulatorError(last_error)
 
