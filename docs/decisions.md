@@ -133,3 +133,26 @@ trusted executor, not the prompt, and adds only the optional `closure` response 
 - **Replay integrity** checks the seeded schedule, duplicates, completeness and error trials;
   consistent record fabrication and forged certificates remain undetectable by code.
 
+## Simulated-shopper evaluation (31 October 2026)
+
+The user approved building the evaluation harness without waiting for a proposal review, with
+Ollama (`llama3.1:latest`) running only on the user's Mac.
+
+- **Separate package, one-way dependency.** `astra_eval` depends on `shopping_agent`, never the
+  reverse; ground truth is a separate hash-checked file loaded only by the scorer and audit.
+- **Independent oracle.** The scorer re-judges raw catalogue rows with its own small rule set
+  instead of the agent's retrieval gate, so a gate bug cannot grade itself; a test cross-checks
+  the two. Trade-off: a little duplicated matching logic.
+- **Scenario truth is verifiable, not guessed.** Acceptable sets come from explicit catalogue
+  fields; unknown is never acceptable; no-valid-product tasks are verified empty variations.
+- **Shopper memory is consistency-only.** Immutable profile, token-budgeted window and a
+  code-built ledger; no vectors, no persistence, no model summaries (so nothing generated can
+  override the profile). Trade-off: lexical question-to-fact matching is brittle by design.
+- **Lexical consistency checks and invalid sessions.** Simulator faults invalidate a session and
+  are excluded from agent denominators but reported; agent failures and exhausted budgets are
+  failures that stay in every denominator.
+- **No scripted application policy.** Offline end-to-end tests use test-only decision policies;
+  the CLI can only use DeepSeek, and only with `--live --max-model-calls`.
+- **Memory comparison seam only.** `Condition`/`ExperienceSnapshot`/agent factory and one hashed
+  shared config; memory ON raises `NotImplementedError` until a factory exists.
+

@@ -112,6 +112,17 @@ live storage separate from historical mock fixtures. The UI lock records the tes
 environment; the core lock remains separate. `ChatService` now requires explicit policy
 injection; tests supply a fixture or mock HTTP, while production supplies DeepSeekPolicy.
 
+## Simulated-shopper evaluation
+
+An offline-tested harness (`python -m astra_eval`) generates catalogue-grounded shopping
+scenarios, plays them against ASTRA with a scripted or Ollama-backed simulated shopper that
+keeps a fixed hidden profile and a bounded conversation memory, scores them independently from
+raw catalogue data and reports Success@K, nDCG@K, violations, turns, cost and retrieval
+diagnostics. Ollama is only needed to run the real simulator; the paid DeepSeek path requires
+`--live --max-model-calls N`. See
+[docs/simulated-shopper-evaluation.md](docs/simulated-shopper-evaluation.md) for the Mac setup
+guide. No real evaluation result exists yet.
+
 ## Experiment A (BM25 card presentation)
 
 Optional, offline-first controlled comparison of card count/format profiles; see

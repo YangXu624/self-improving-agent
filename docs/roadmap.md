@@ -19,7 +19,7 @@ by themselves evidence that the agent has learned something useful.
 | 1. Frozen catalogue | Complete for the initial 50k scope | Future category expansion is a separate decision |
 | 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance pending; earlier defects fixed on a branch pending merge |
 | 3. Minimal UI | Streamlit UI connected to DeepSeek; runtime script removed | User review pending; five-request smoke is not a benchmark |
-| 4. Evaluation and baseline measurement | Design guidance documented; runner not implemented | Approve protocol, validate simulator and record baseline |
+| 4. Evaluation and baseline measurement | Simulated-shopper harness implemented and offline-tested ([details](simulated-shopper-evaluation.md)); no real Ollama/DeepSeek run yet | Validate Llama 3.1 reliability locally, approve protocol and budget, record the baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
 | 6. Persistent user memory | Not started | Approve lifecycle and repeated-user evaluation |
 | 7. Agent experience learning | Not started | Approve outcome evidence, lesson lifecycle and transfer study |
