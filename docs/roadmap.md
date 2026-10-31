@@ -22,7 +22,7 @@ by themselves evidence that the agent has learned something useful.
 | 4. Evaluation and baseline measurement | Simulated-shopper harness implemented and offline-tested ([details](simulated-shopper-evaluation.md)); no real Ollama/DeepSeek run yet | Validate Llama 3.1 reliability locally, approve protocol and budget, record the baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
 | 6. Persistent user memory | Not started | Approve lifecycle and repeated-user evaluation |
-| 7. Agent experience learning | Not started | Approve outcome evidence, lesson lifecycle and transfer study |
+| 7. Agent experience learning | MVP vertical slice implemented and verified offline ([details](reviews/experiential-memory-mvp.md)) | Run real DeepSeek learning and evaluation trials |
 | 8. Retrieval-code experimentation | Deferred, optional research extension | Demonstrate a need beyond permitted configuration choices |
 
 Historical **Milestone 1** covers the session/retrieval/CLI baseline in Phase 2, using the

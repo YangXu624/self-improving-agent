@@ -308,3 +308,10 @@ Current session working memory includes goal-scoped asked/disclosed attribute le
 in `state.json` and reconstructed from the event log. Confirmed values remain in the existing
 requirements; no-preference/declined responses and distinct clarification facets prevent
 redundant questions. See `docs/architecture.md` for evidence and replay boundaries.
+
+Experiential self-improvement (`shopping_agent.experience`) provides persistent, versioned
+procedural lessons stored in SQLite. Candidate lessons extracted from learning traces require
+explicit human confirmation before becoming active. Retrieval matches behavioral triggers and
+decision context cues. Injected procedural guidance and observable action compliance are
+tracked separately, and immutable content-hashed snapshots enable side-by-side evaluation
+(`--experience-snapshot`) across distinct tasks.
