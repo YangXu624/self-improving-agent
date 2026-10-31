@@ -29,6 +29,13 @@ not hosted authentication. Session UUID selection remains separate from transien
 
 ## Execution and responsibilities
 
+A subsequent live watch conversation exposed a product-type vocabulary mismatch and a
+final SEARCH request after search slots were exhausted. The executor stayed within its
+bounds, but the user received `decision_budget_exhausted`. See the
+[trace diagnosis and proposed remedies](reviews/watch-decision-budget-audit.md). No loop,
+prompt, matching or budget fix has been applied; diagnostic tests include explicit expected
+failures pending review. The earlier successful smoke does not establish general reliability.
+
 ```text
 CLI or Streamlit UI message + user/session/request IDs
   → SessionStore: owner check, writer lock, event replay

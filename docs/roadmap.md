@@ -203,3 +203,10 @@ The live DeepSeek UI is implemented for review and running locally. Review its b
 then decide when to address the two deferred defects and broaden acceptance/evaluation. The
 small smoke is not the Phase 4 benchmark, and neither memory nor retrieval upgrades are part
 of this integration. Each submitted turn now makes paid API requests; display/inspection does not.
+
+The [watch failure audit](reviews/watch-decision-budget-audit.md) now identifies an additional
+product-type representation limitation and exhausted-search recovery issue. Its independent
+replays, token accounting and synthetic regressions are complete; production fixes remain
+proposals for review. Resolve bounded completion and catalogue-grounded type semantics before
+assuming that a larger budget or semantic search is needed. Three regression cases currently
+remain explicit expected failures.
