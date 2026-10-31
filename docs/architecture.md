@@ -3,6 +3,17 @@
 Status: implemented session-only CLI baseline, reviewed 31 October 2026. Live provider
 behaviour remains unverified. Future phases are in the [roadmap](roadmap.md).
 
+## Phase 3 mock UI boundary (in progress)
+
+The user authorised a mock-first UI before the pending live Phase 2 acceptance/fixes.
+`ui_service.py` now adapts the existing ShoppingAgent and SessionStore for a visual client;
+`mock_policy.py` is an explicitly scripted DecisionPolicy, never a fallback for DeepSeek.
+It selects IDs from actual search results, not canned products, and supports a limited set
+of product types, USD upper budgets, colour/material preferences and explicit new goals.
+No core validator, executor, retrieval or storage implementation was changed. SQLite opens
+per request so a UI rerun thread never reuses another thread's connection. Persisted logs
+are the conversation source of truth. The visual renderer is the next checkpoint.
+
 ## Execution and responsibilities
 
 ```text
