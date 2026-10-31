@@ -17,9 +17,13 @@ AutoML project remain separate. No reference code, weights, configuration, sessi
 historical evaluation cases were copied. Only the user-approved frozen 50k catalogue and
 image-URL references were reused as local, ignored data.
 
-The [development review roles](docs/subagents.md) define `qa_tester` and
-`architecture_reviewer`, when to use them, their review-only boundaries and future roles.
-These Codex helpers are separate from the application agent.
+The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. We are after
+baseline implementation and before live-model validation or UI work. All 45 automated tests
+passed when rerun on 31 October 2026; they use mocked policies/transport, not live model
+validation. The next proposed checkpoint is a small explicitly authorised live acceptance
+session, followed by review before choosing the UI. No later phase is implemented by the plan.
+See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
+and [decision record](docs/decisions.md).
 
 ## Setup
 
