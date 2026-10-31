@@ -104,7 +104,9 @@ imported by the application.
 - UI session data: ignored `data/ui-sessions/deepseek/<UUID>/`; old mock histories are separate.
   Owner association does not automatically transfer facts into another session.
 - Credentials: ignored local environment; never in prompts or authorization-header traces.
-- No persistent user profile, agent-experience store, shopper simulator or scoring service.
+- No persistent user profile or agent-experience store. The simulated-shopper evaluation lives
+  in a separate package, `astra_eval` (see [its documentation](simulated-shopper-evaluation.md));
+  the application never imports it and it never feeds the agent anything but the shopper's messages.
 
 The event log retains full conversation/action history and state-commit versions. The prompt
 uses active requirements and at most twelve recent dialogue messages, with a 40,000-character
