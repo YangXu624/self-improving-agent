@@ -15,6 +15,7 @@ shopping-agent = "shopping_agent.cli:main"
 [project.optional-dependencies]
 dev = ["ruff>=0.14,<1"]
 ui = ["streamlit>=1.66,<2"]
+experiment = ["tokenizers==0.23.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
