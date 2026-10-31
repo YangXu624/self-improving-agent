@@ -5,7 +5,6 @@ from typing import Any
 
 from .agent import DecisionPolicy, ShoppingAgent
 from .contracts import Event
-from .mock_policy import MockShoppingPolicy
 from .retrieval import LexicalSearch, file_hash
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
 
@@ -13,9 +12,8 @@ from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
 class ChatService:
     """Owned session operations; open SQLite per request, never across UI rerun threads.
 
-    A policy can be explicitly injected (including the existing DeepSeekPolicy) without
-    changing the UI renderer. The shipped UI always uses the mock; no credential loader
-    or automatic provider fallback is involved.
+    The composition root must supply an explicit policy. Production uses DeepSeekPolicy;
+    tests inject fixtures or mock HTTP. No implicit scripted/default policy is available.
     """
 
     def __init__(
@@ -24,11 +22,11 @@ class ChatService:
         index: Path,
         sessions: Path,
         *,
-        policy: DecisionPolicy | None = None,
+        policy: DecisionPolicy,
     ):
         self.index = index
         self.catalogue_hash = file_hash(catalogue)
-        self.policy = policy if policy is not None else MockShoppingPolicy()
+        self.policy = policy
         self.store = SessionStore(sessions)
         tool = self._search()
         tool.close()

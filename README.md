@@ -5,11 +5,12 @@ future decisions. The intended research cycle is: complete a task, independently
 its outcome, distil applicable experience, and compare future behaviour with/without it.
 Memory is not assumed to improve performance; negative transfer is an outcome to measure.
 
-## Current status: baseline and mock chat UI
+## Current status: live DeepSeek shopping UI
 
 Implemented: session-only memory, lexical product retrieval, a bounded DeepSeek decision
-loop, local tracing, CLI and automated acceptance tests. Phase 3 adds a minimal Streamlit
-chat UI using explicitly scripted mock decisions with real catalogue retrieval. **No long-term
+loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI now uses
+DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
+been removed; mocked responses remain confined to automated tests. **No long-term
 user memory, agent experience learning, evaluator or code self-optimisation is implemented.**
 
 This is a new implementation inspired by
@@ -19,9 +20,10 @@ historical evaluation cases were copied. Only the user-approved frozen 50k catal
 image-URL references were reused as local, ignored data.
 
 The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. The user
-approved mock-first UI work while deferring live Phase 2 validation and the two documented
-[review findings](docs/reviews/phase-2-subagent-review.md). Those defects remain unchanged.
-UI tests/demo do not establish live interpretation or shopping quality. See the
+subsequently supplied a local key and authorised live DeepSeek integration. A bounded two-turn
+live check succeeded with five API requests, including a budget correction and fresh verified
+recommendations. This is integration evidence, not a quality benchmark. The two deferred
+[review findings](docs/reviews/phase-2-subagent-review.md) remain unchanged. See
 [Phase 3 evidence and limitations](docs/phase-3-ui.md).
 See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
 and [decision record](docs/decisions.md).
@@ -61,40 +63,52 @@ The index is generated at `data/index/catalogue.sqlite`; it is not session memor
 hashes and index version are recorded. Chat checks the source hash and refuses a stale index.
 The measured local index size is about 173 MB, in addition to about 61 MB of raw catalogue.
 
-## Mock chat UI (no API key)
+## Live chat UI
 
 From this repository, install the optional UI dependencies and launch the local app:
 
 ```bash
 .venv/bin/python -m pip install -r requirements-ui-lock.txt
 .venv/bin/python -m pip install --no-deps -e .
+# Configure DEEPSEEK_API_KEY in this project's ignored .env; see .env.example.
 .venv/bin/python -m streamlit run streamlit_app.py
 ```
 
-Open [the local chat UI](http://127.0.0.1:8501). If the catalogue index is not built yet,
-run `.venv/bin/python -m shopping_agent index` first. The UI is bound to loopback by default;
-it is for a trusted local operator, with no hosted authentication.
+Open [the local chat UI](http://127.0.0.1:8501). The user-provided key remains server-side;
+no key should be entered into chat or committed. If the index is absent, first run
+`.venv/bin/python -m shopping_agent index`. The UI binds to loopback by default and assumes
+a trusted local operator; shopper labels are not authentication.
 
-Try `hello`, `boots under $100`, `actually under $30`, `prefer red`, `no leather`,
-`leather is okay`, or `new goal: backpack`. The mock recognises a limited vocabulary and
-simple phrase patterns; compound/unrecognised requirements may not be interpreted correctly.
-The interface clearly labels mock mode. Recommendations come from the actual catalogue,
-with deterministic hard gates; no product IDs or search results are canned.
+The UI reads only the project's explicit `.env` file (or `ASTRA_ENV_FILE`), accepts
+`DEEPSEEK_API_KEY` and `DEEPSEEK_MODEL`, and gives process variables precedence. File values
+are not copied into os.environ, so later reruns can pick up a changed file key. Restart the
+server after upgrading code to ensure the final module versions are loaded. A missing or
+invalid key disables chat. HTTP/auth/network failures surface as safe errors; **there is no
+scripted fallback**. No live request runs just from startup, refresh or session inspection.
 
-Use the sidebar to start/select/resume a chat, inspect active needs/preferences and previous
-requirements, or switch the local shopper label. Each response has a **View activity**
-expander showing actual state edits, searches, candidate counts and recommendation actions.
-Product cards keep text/facts available when images are missing; remote image reachability
-is not guaranteed. The default UI sessions live separately in ignored `data/ui-sessions/mock/`.
-Refresh creates a fresh UI session; select a saved chat or resume its UUID to recover history.
-The browser does not maintain a second authoritative transcript.
+Sending a prompt or using a suggested prompt makes paid DeepSeek requests. Defaults remain
+three API attempts (including repairs) and two searches per turn, with a 2,000-output-token
+cap per request. There is no lifetime spend cap. Each answer shows API attempts/searches and
+reported input/output usage; incomplete usage is labelled. Dollar cost is not estimated.
 
-The UI does not load `.env`, read keys or call DeepSeek. Adding a key does **not** silently
-switch modes. `ChatService(policy=...)` can receive the existing `DeepSeekPolicy` when live UI
-integration is explicitly enabled later. The existing live CLI below remains available.
-For local tests/custom paths, process variables `ASTRA_CATALOGUE`, `ASTRA_INDEX` and
-`ASTRA_UI_SESSIONS` override UI paths; they are not additional `.env` loader settings.
-The UI lock records the complete tested UI/dev environment; the core lock remains separate.
+Try a shopping request and a follow-up correction, such as `boots under 100 USD` then
+`actually under 30 USD`. The model chooses what to clarify, which queries to run, and which
+returned candidates to recommend; the Python gates still enforce stored hard constraints
+and valid/current product IDs. Prompt `shopping-baseline-v2` includes a schema and an example
+JSON shape, following [DeepSeek JSON-output guidance](https://api-docs.deepseek.com/guides/json_mode/).
+
+Use the sidebar to start/select/resume a chat, inspect active needs/preferences and history,
+or switch the local shopper label. **View activity** shows real state edits, search counts
+and recommendation events. Product text remains available when images are missing.
+New live chats default to ignored `data/ui-sessions/deepseek/`. Earlier mock histories remain
+untouched in `data/ui-sessions/mock/` and are not migrated or listed in the default live UI.
+Refresh creates a fresh UI session; select/resume a saved UUID to recover history.
+
+Process variables `ASTRA_CATALOGUE`, `ASTRA_INDEX`, `ASTRA_UI_SESSIONS` and `ASTRA_ENV_FILE`
+can override UI paths; these are not additional accepted keys in the `.env` file. Keep custom
+live storage separate from historical mock fixtures. The UI lock records the tested UI/dev
+environment; the core lock remains separate. `ChatService` now requires explicit policy
+injection; tests supply a fixture or mock HTTP, while production supplies DeepSeekPolicy.
 
 ## Chat with DeepSeek
 
@@ -121,9 +135,9 @@ scripted production path. It may ask more questions or find no verified matches.
 
 Only `DEEPSEEK_API_KEY` and `DEEPSEEK_MODEL` are accepted in `.env` (simple KEY=value, optional
 quotes, whole-line comments; no shell expansion). Existing process variables take precedence.
-The default model is `deepseek-flash`. This adapter has been tested with mocked HTTP responses;
-**no live DeepSeek request was run during this milestone, at the user's request.** Model
-availability, live interpretation quality, latency and actual API cost remain unverified.
+The default model is `deepseek-flash`; `DEEPSEEK_MODEL` overrides it. The adapter is covered
+by mocked HTTP tests and a successful five-request live integration smoke. Broad interpretation
+quality, reliability across tasks/model versions and actual dollar cost remain unmeasured.
 Each user turn allows at most three requests (repairs included), each capped at 2,000 output
 tokens, and two searches. HTTP/network errors stop without automatic retries. Total spend
 still grows with turns. Credentials are not placed in prompts or persisted in session logs.
@@ -234,9 +248,9 @@ no future-memory placeholder implementation or persistent cross-session preferen
 .venv/bin/python -m pip check
 ```
 
-The baseline test suite uses generated catalogue fixtures, scripted **test-only** policies
-and mocked HTTP transport. The UI has its own explicitly labelled scripted demo policy and
-Streamlit AppTest acceptance tests. UI tests are explicitly skipped without the optional
+The suite uses generated catalogue fixtures, scripted **test-only** policies and mocked
+DeepSeek HTTP responses; no application module supplies scripted decisions. UI acceptance
+tests exercise the real provider adapter with offline responses, never the local key. UI tests are explicitly skipped without the optional
 `[ui]` extra; install the UI lock to run them. Coverage includes corrections, retractions,
 unknown data, real SQLite search/filtering,
 owner/session isolation, restart recovery, a second-process writer lock, bounded repairs,

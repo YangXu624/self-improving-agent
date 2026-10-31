@@ -78,3 +78,48 @@ false-conflict backend defects remain deferred at the user's explicit instructio
 has no authentication or production hosting guarantees; do not expose it publicly as a
 multi-user service. No live shopping-provider API calls, new dataset downloads, image-binary
 imports, AGENTS.md changes or original ASTRA/AutoML modifications are part of this phase.
+
+## Checkpoint 3: live DeepSeek policy — current behaviour
+
+The user supplied a local key and explicitly authorised replacing scripted decisions. The
+prior mock-only descriptions above are historical checkpoints. Current UI startup reads the
+explicit project env file and instantiates DeepSeekPolicy; ChatService requires an explicit
+policy. `src/shopping_agent/mock_policy.py` has been deleted. Deterministic fixtures now live
+only in tests and simulate HTTP responses, not a selectable runtime fallback.
+
+The shared parser preserves CLI compatibility and process-variable precedence. UI/provider
+resolution does not copy file secrets into os.environ, so later reruns can see a changed file
+key. Missing/invalid credentials disable chat. Provider failures return safe errors and never
+switch to a canned answer. API attempts/search counts and reported token usage replace mock
+labels. New live sessions default to `data/ui-sessions/deepseek/`; earlier mock histories are
+preserved unchanged in their old directory. Startup/resume/widget reruns do not call the model.
+
+Prompt `shopping-baseline-v2` adds a current-version JSON example alongside the closed schema,
+following the official provider guidance. Existing action choices, hard gates, BM25, budgets,
+session lifecycle and deferred Phase 2 validator defects remain unchanged. No SDK, new model
+framework, memory layer or retrieval strategy was introduced.
+
+**Executed offline verification:** 70 tests passed: the original 45 baseline checks, 9 service
+cases now exercising the real provider with mocked HTTP, 12 AppTest cases and 4 configuration
+cases. New checks cover fresh key-file resolution, environment precedence, missing-key gating,
+HTTP401 without fallback/key leakage, usage display and no requests during widget reruns.
+A temporary test-only NameError from a removed redundant assertion was caught and corrected
+in a follow-up commit; the full suite, lint and formatting then passed. No secret file is read
+by the test fixtures; ASTRA_ENV_FILE points them to temporary test paths. Strict ResourceWarning
+checks remain clean apart from Streamlit's expected bare-mode context log warning.
+
+**Executed live smoke:** two generated shopping turns used the real 50k catalogue and the
+actual configured API, capped at six requests. Five requests were used. Both turns completed
+with RECOMMEND, with no decision-validation rejections. The first stored a USD100 upper budget
+and used two calls/one search (9.65 seconds); the second replaced it with USD30 and used three
+calls/two searches (5.46 seconds). The old budget remained superseded. Every final recommended
+price was below USD30. The API reported 35,507 input and 664 output tokens in total. Actual
+dollar cost and model quality across tasks are not measured by this smoke. No further paid
+requests were made for browser inspection: the saved conversation was resumed and its usage,
+state and activity were verified in the running UI. The actual credential was checked absent
+from the stored smoke log without printing or persisting it.
+
+The key remains local/ignored. Use README's live UI setup; do not paste it into chat. Missing
+configuration, unavailable service, incomplete usage, wider language/constraint behaviour and
+prompt-injection resistance still need broader testing. The two previously deferred defects
+remain pending; this integration does not implement or claim the formal evaluation baseline.

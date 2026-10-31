@@ -5,10 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
+from deepseek_fixtures import completion, service
 from test_retrieval import product
 
 from shopping_agent.retrieval import build_index
-from shopping_agent.ui_service import ChatService
 
 
 class UiServiceTests(unittest.TestCase):
@@ -34,7 +34,10 @@ class UiServiceTests(unittest.TestCase):
         )
         self.catalogue.write_text("".join(json.dumps(r) + "\n" for r in rows))
         build_index(self.catalogue, self.index)
-        self.service = ChatService(self.catalogue, self.index, self.root / "sessions")
+        self.http = patch("shopping_agent.provider.urlopen", side_effect=completion)
+        self.transport = self.http.start()
+        self.addCleanup(self.http.stop)
+        self.service = service(self.catalogue, self.index, self.root / "sessions")
         self.sid = self.service.create("alice")
         self.number = 0
 
@@ -42,13 +45,9 @@ class UiServiceTests(unittest.TestCase):
         self.number += 1
         return self.service.send("alice", self.sid, message, f"request-{self.number}")
 
-    def test_clarify_real_search_recommend_without_network_or_credentials(self):
-        with patch(
-            "shopping_agent.provider.urlopen",
-            side_effect=AssertionError("No live transport"),
-        ):
-            self.assertEqual(self.send("hello")["action"], "CLARIFY")
-            response = self.send("boots under $60")
+    def test_clarify_real_search_recommend_through_mocked_http(self):
+        self.assertEqual(self.send("hello")["action"], "CLARIFY")
+        response = self.send("boots under $60")
         self.assertEqual(response["action"], "RECOMMEND")
         self.assertEqual([p["id"] for p in response["products"]], ["cotton"])
         view = self.service.view("alice", self.sid)
@@ -62,13 +61,13 @@ class UiServiceTests(unittest.TestCase):
             for e in view["events"]
             if e["type"] == "model_response"
         )
-        self.assertEqual(meta["provider"], "mock")
+        self.assertEqual(meta["provider"], "deepseek")
 
     def test_budget_replacement_and_persistent_resume(self):
         self.send("boots under $100")
         response = self.send("actually under $60")
         self.assertEqual([p["id"] for p in response["products"]], ["cotton"])
-        another = ChatService(self.catalogue, self.index, self.root / "sessions")
+        another = service(self.catalogue, self.index, self.root / "sessions")
         another.resume("alice", self.sid)
         view = another.view("alice", self.sid)
         prices = [r for r in view["state"]["requirements"] if r["field"] == "price"]
@@ -146,12 +145,12 @@ class UiServiceTests(unittest.TestCase):
             responses = [f.result() for f in futures]
         self.assertTrue(all(r["status"] == "ok" for r in responses))
 
-    def test_stale_index_refused_and_unrecognised_text_explained(self):
+    def test_fixture_response_and_stale_index_refused(self):
         response = self.send("boots")
         before = response["state_version"]
         response = self.send("please teleport it")
-        self.assertIn("scripted demo", response["message"])
+        self.assertIn("tell me more", response["message"])
         self.assertEqual(response["state_version"], before)
         self.catalogue.write_text(self.catalogue.read_text() + "\n")
         with self.assertRaisesRegex(ValueError, "Stale catalogue"):
-            ChatService(self.catalogue, self.index, self.root / "other")
+            service(self.catalogue, self.index, self.root / "other")
