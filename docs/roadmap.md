@@ -212,3 +212,10 @@ retrieval semantics and exhausted-turn recovery remain proposals for review.
 Resolve bounded completion and catalogue-grounded type semantics before
 assuming that a larger budget or semantic search is needed. Three regression cases currently
 remain explicit expected failures.
+
+Retrieval improvement is now under [design review](reviews/multistage-retrieval-proposal.md):
+larger local eligible candidate pools, five compact evidence cards, optional dense/RRF and
+reranking, then one bounded DETAILS batch if supported by evidence. The immediate proposed
+checkpoint is serving-version verification and a fixed, independently judged query benchmark.
+The application remains BM25; full retrieval implementation awaits review. Known correctness
+defects and decision-decoder versioning must remain separate from ranking-quality attribution.
