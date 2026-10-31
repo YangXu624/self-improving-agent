@@ -159,14 +159,17 @@ class ShoppingAgent:
                         ):
                             scope = str(req.value)
                             break
+                    has_cand = bool(result and result.get("candidates"))
                     cues = {
+                        "is_initial": searches == 0,
                         "searches": searches,
                         "calls": calls,
                         "has_search": result is not None,
+                        "has_candidates": has_cand,
                         "candidate_count": len(result.get("candidates", []))
                         if result
                         else 0,
-                        "is_initial": searches == 0,
+                        "empty_search": result is not None and not has_cand,
                     }
                     if result is None:
                         possible_triggers = [

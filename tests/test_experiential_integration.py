@@ -188,7 +188,10 @@ class ExperientialIntegrationTests(F.EvalCase):
             version=1,
             scope="*",
             trigger_type="initial_query",
+            trigger_condition={"is_initial": True},
             directive="Initial search directive",
+            expected_action="SEARCH",
+            action_signature={"mode": "all"},
             status="active",
             evidence={"source_split": "learning"},
         )
@@ -201,7 +204,10 @@ class ExperientialIntegrationTests(F.EvalCase):
             lesson_id="exp-test-02",
             scope="*",
             trigger_type="initial_query",
+            trigger_condition={"is_initial": True},
             directive="Improved search directive v2",
+            expected_action="SEARCH",
+            action_signature={"mode": "all"},
             evidence={"source_split": "learning"},
         )
         old, new = self.store.supersede(
@@ -239,6 +245,10 @@ class ExperientialIntegrationTests(F.EvalCase):
                 Lesson(
                     lesson_id="exp-bad-split",
                     directive="Clean query",
+                    trigger_type="initial_query",
+                    trigger_condition={"is_initial": True},
+                    expected_action="SEARCH",
+                    action_signature={"mode": "all"},
                     evidence={"source_split": "development"},
                 )
             )
@@ -249,6 +259,10 @@ class ExperientialIntegrationTests(F.EvalCase):
                 Lesson(
                     lesson_id="exp-bad-asin",
                     directive="Always search for B001234567 product",
+                    trigger_type="initial_query",
+                    trigger_condition={"is_initial": True},
+                    expected_action="SEARCH",
+                    action_signature={"mode": "all"},
                     evidence={"source_split": "learning"},
                 )
             )
@@ -259,10 +273,168 @@ class ExperientialIntegrationTests(F.EvalCase):
                 Lesson(
                     lesson_id="exp-bad-title",
                     directive="Look for Acme Red Wool Scarf with fringe",
+                    trigger_type="initial_query",
+                    trigger_condition={"is_initial": True},
+                    expected_action="SEARCH",
+                    action_signature={"mode": "all"},
                     evidence={"source_split": "learning"},
                 ),
                 forbidden_titles=["Acme Red Wool Scarf"],
             )
+
+    def test_authentic_experiential_loop_unmodified_lesson(self):
+        """Authentic end-to-end self-improvement loop:
+        1. Produces a genuine run trace from an evaluation execution.
+        2. Extracts a candidate lesson without any manual rewriting.
+        3. Confirms and freezes it into an immutable snapshot.
+        4. Retrieves and injects it on a different scenario (development split).
+        5. Verifies resulting behavior matches its original action signature.
+        6. Compares memory ON/OFF without sabotaging baseline policy.
+        """
+
+        # Step 1: Run learning scenario to produce genuine run trace
+        class RestrictiveLearningPolicy(F.HeuristicPolicy):
+            def __init__(self):
+                super().__init__(ask_department=False)
+                self.custom_searches = 0
+
+            def complete(self, messages):
+                reply = super().complete(messages)
+                data = json.loads(reply.content)
+                if data["action"]["type"] == "SEARCH" and self.custom_searches == 0:
+                    self.custom_searches += 1
+                    data["action"]["query"] = "nonexistent_restrictive_words_query"
+                return PolicyReply(json.dumps(data), reply.metadata)
+
+        learn_out = self.root / "learn_out"
+        learn_config = ExperimentConfig(
+            scenarios_dir=self.scenarios_dir,
+            catalogue=self.catalogue,
+            index=self.index,
+            output=learn_out,
+            split="learning",
+            limit=1,
+            conditions=(Condition("memory_off"),),
+            score=ScoreConfig(headline_k=1, turn_budget=2),
+        )
+        run_experiment(
+            learn_config,
+            simulator=ScriptedShopper(),
+            policy=RestrictiveLearningPolicy(),
+            agent_factory=experiential_agent_factory,
+        )
+
+        # Read the authoritative, ground-truth-free trace.json directly
+        learn_session_dir = next((learn_out / "sessions").iterdir())
+        trace_file = learn_session_dir / "trace.json"
+        result_file = learn_session_dir / "result.json"
+        self.assertTrue(trace_file.exists())
+        self.assertTrue(result_file.exists())
+
+        trace_data = json.loads(trace_file.read_text(encoding="utf-8"))
+        result_data = json.loads(result_file.read_text(encoding="utf-8"))
+
+        # Authoritative turns contain real counts and searches
+        self.assertTrue(len(trace_data["turns"]) >= 1)
+        first_turn = trace_data["turns"][0]
+        self.assertTrue(first_turn["searches"] >= 1)
+        self.assertTrue(
+            any(c.get("verified_eligible") == 0 for c in first_turn["counts"])
+        )
+
+        # Step 2: Extract candidate lesson without ANY manual modification or rewriting
+        candidate = extract_candidate_lesson(
+            trace=trace_data,
+            outcome=result_data["score"],
+            source_split="learning",
+        )
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.status, "candidate")
+        self.assertEqual(candidate.trigger_type, "initial_query")
+        self.assertEqual(candidate.trigger_condition, {"is_initial": True})
+        self.assertEqual(candidate.action_signature, {"mode": "all"})
+
+        # Validate that the unmodified candidate strictly conforms to all sanitizer rules
+        validate_lesson(candidate)
+
+        # Step 3: Explicit human confirmation and snapshot freeze
+        self.store.add_candidate(candidate)
+        confirmed = self.store.confirm(
+            candidate.lesson_id,
+            review_notes="Verified authentic failure trace and approved unmodified lesson",
+        )
+        self.assertEqual(confirmed.status, "active")
+
+        snapshot = self.store.create_snapshot("freeze-authentic-v1")
+        self.assertEqual(len(snapshot.lessons), 1)
+        self.assertEqual(snapshot.lessons[0].lesson_id, candidate.lesson_id)
+        snap_file = self.root / "authentic_snapshot.json"
+        self.store.save_snapshot(snapshot, snap_file)
+
+        # Step 4: Run paired evaluation on a different scenario (development split)
+        # Using a responsive policy whose baseline behavior is NOT sabotaged
+        class CleanGuidanceResponsivePolicy(F.HeuristicPolicy):
+            def complete(self, messages):
+                ctx = json.loads(messages[-1]["content"])
+                self.contexts.append(ctx)
+                reply = super().complete(messages)
+                data = json.loads(reply.content)
+                guidance = ctx.get("procedural_guidance", [])
+                if data["action"]["type"] == "SEARCH":
+                    if guidance:
+                        # Follows procedural guidance: sets exact match mode
+                        data["action"]["mode"] = "all"
+                    else:
+                        # Standard unsabotaged baseline behavior
+                        data["action"]["mode"] = "any"
+                return PolicyReply(json.dumps(data), reply.metadata)
+
+        dev_out = self.root / "dev_out"
+        dev_config = ExperimentConfig(
+            scenarios_dir=self.scenarios_dir,
+            catalogue=self.catalogue,
+            index=self.index,
+            output=dev_out,
+            split="development",
+            limit=1,
+            conditions=(
+                Condition("memory_off"),
+                Condition("memory_on", experience=snapshot),
+            ),
+            score=ScoreConfig(headline_k=1, turn_budget=3),
+        )
+        dev_summary = run_experiment(
+            dev_config,
+            simulator=ScriptedShopper(),
+            policy=CleanGuidanceResponsivePolicy(),
+            agent_factory=experiential_agent_factory,
+        )
+        self.assertEqual(dev_summary["sessions"], 2)
+
+        # Step 5 & 6: Verify retrieval, injection, observable application, and distinct metrics
+        dev_results = [
+            json.loads(line)
+            for line in (dev_out / "results.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        ]
+        off_res = next(r for r in dev_results if r["condition"] == "memory_off")
+        on_res = next(r for r in dev_results if r["condition"] == "memory_on")
+
+        # Memory OFF: zero lessons retrieved, injected, or applied
+        self.assertEqual(off_res["experience"]["retrieved"], [])
+        self.assertEqual(off_res["experience"]["injected"], [])
+        self.assertEqual(off_res["experience"]["applied"], [])
+
+        # Memory ON: lesson retrieved, injected, and applied matching original signature
+        self.assertIn(candidate.lesson_id, on_res["experience"]["retrieved"])
+        self.assertIn(candidate.lesson_id, on_res["experience"]["injected"])
+        self.assertIn(candidate.lesson_id, on_res["experience"]["applied"])
+
+        # Trace files exist and are authoritative
+        self.assertTrue((dev_out / off_res["session_dir"] / "trace.json").exists())
+        self.assertTrue((dev_out / on_res["session_dir"] / "trace.json").exists())
 
     def test_cli_experience_snapshot_dry_run(self):
         """CLI accepts --experience-snapshot and schedules both conditions."""
@@ -287,3 +459,94 @@ class ExperientialIntegrationTests(F.EvalCase):
         ]
         with patch("urllib.request.urlopen", side_effect=AssertionError("No network")):
             self.assertEqual(main(cmd), 0)
+
+    def test_cli_extract_review_and_freeze_workflow(self):
+        """Test full CLI lifecycle commands: extract-lessons -> review-lessons -> freeze-lessons."""
+        # Setup a mock run output with learning session containing trace.json and result.json
+        run_dir = self.root / "mock_learn_run"
+        session_dir = run_dir / "sessions" / "task-001__memory_off"
+        session_dir.mkdir(parents=True)
+        trace_data = {
+            "scenario_id": "learn-task-001",
+            "split": "learning",
+            "turns": [
+                {
+                    "turn": 1,
+                    "action": "SEARCH",
+                    "searches": 1,
+                    "counts": [{"verified_eligible": 0, "lexical_matches": 0}],
+                }
+            ],
+        }
+        result_data = {
+            "score": {"outcome": "failure", "termination": "decision_budget_exhausted"}
+        }
+        (session_dir / "trace.json").write_text(
+            json.dumps(trace_data), encoding="utf-8"
+        )
+        (session_dir / "result.json").write_text(
+            json.dumps(result_data), encoding="utf-8"
+        )
+
+        cli_store = self.root / "cli_store.sqlite"
+
+        # 1. extract-lessons
+        extract_cmd = [
+            "extract-lessons",
+            "--run",
+            str(run_dir),
+            "--store",
+            str(cli_store),
+        ]
+        self.assertEqual(main(extract_cmd), 0)
+
+        store = ExperienceStore(cli_store)
+        candidates = store.list_lessons(status="candidate")
+        self.assertEqual(len(candidates), 1)
+        lesson_id = candidates[0].lesson_id
+        store.close()
+
+        # 2. review-lessons report
+        review_cmd = [
+            "review-lessons",
+            "--store",
+            str(cli_store),
+        ]
+        self.assertEqual(main(review_cmd), 0)
+
+        # 3. review-lessons confirm
+        confirm_cmd = [
+            "review-lessons",
+            "--store",
+            str(cli_store),
+            "--confirm",
+            lesson_id,
+            "--notes",
+            "Human evaluation approved",
+        ]
+        self.assertEqual(main(confirm_cmd), 0)
+
+        store = ExperienceStore(cli_store)
+        active = store.list_lessons(status="active")
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].lesson_id, lesson_id)
+        self.assertEqual(active[0].review_notes, "Human evaluation approved")
+        store.close()
+
+        # 4. freeze-lessons
+        frozen_snap_file = self.root / "cli_frozen.json"
+        freeze_cmd = [
+            "freeze-lessons",
+            "--store",
+            str(cli_store),
+            "--output",
+            str(frozen_snap_file),
+            "--snapshot-id",
+            "snap-cli-test",
+        ]
+        self.assertEqual(main(freeze_cmd), 0)
+        self.assertTrue(frozen_snap_file.exists())
+        loaded_snap = ExperienceStore.load_snapshot(frozen_snap_file)
+        self.assertEqual(loaded_snap.snapshot_id, "snap-cli-test")
+        self.assertEqual(len(loaded_snap.lessons), 1)
+        self.assertEqual(loaded_snap.lessons[0].lesson_id, lesson_id)

@@ -276,7 +276,7 @@ class IdentityTests(ExperimentCase):
         self.assertEqual(shared["decision_policy"]["class"], "HeuristicPolicy")
         self.assertEqual(
             shared["decision_policy"]["prompt_version"],
-            "shopping-baseline-v4-attributes",
+            "shopping-baseline-v5-experience",
         )
         self.assertNotIn("key", json.dumps(shared["decision_policy"]).lower())
 
