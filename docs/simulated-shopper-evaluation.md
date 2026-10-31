@@ -277,8 +277,10 @@ and a rule-based test policy completed end to end; that run only checks plumbing
   the first N in file order.
 - A malformed-JSON retry appends the bad reply to the prompt without re-checking the token
   budget (unlikely to matter at the default 4096 context).
-- Consistency checks are lexical (a paraphrased contradiction can pass; a
-benign colour word can trigger a false alarm); product-type matching is category-word based;
+- Consistency checks are lexical (a paraphrased contradiction can pass; a benign colour word
+  can trigger a false alarm). Negation is handled only for the three words after
+  "not/no/without/n't"; prices in other currencies ("50 pounds") are not recognised; a 10-digit
+  number counts as a possible product identifier. Product-type matching is category-word based;
 acceptable sets use historical parent-product data and say nothing about stock or variants; the
 shopper sees titles and prices of recommended cards, which is realistic but lets it react to
 price; the generator cycles a fixed mix of kinds; there is no resume for interrupted runs.
