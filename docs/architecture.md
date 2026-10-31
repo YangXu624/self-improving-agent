@@ -31,13 +31,23 @@ not hosted authentication. Session UUID selection remains separate from transien
 
 ## Execution and responsibilities
 
-A subsequent live watch conversation exposed a product-type vocabulary mismatch and a
-final SEARCH request after search slots were exhausted. The executor stayed within its
-bounds, but the user received `decision_budget_exhausted`. See the
-[trace diagnosis and proposed remedies](reviews/watch-decision-budget-audit.md). Prompt
-compaction is implemented separately; matching and exhausted-turn recovery remain unfixed,
-with explicit expected-failure regressions. The earlier successful smoke does not establish
-general reliability.
+A live watch conversation exposed a product-type vocabulary mismatch and a final SEARCH
+after search slots were exhausted; see the
+[trace diagnosis](reviews/watch-decision-budget-audit.md). The exhausted-search case is
+now closed: when the last permitted decision is a SEARCH that cannot execute
+(`search_budget_exhausted` or `search_requires_a_remaining_decision_call`) the executor
+appends `turn_closed_safely` and returns `status=ok`, `action=RESPOND`, no products, a fixed
+message and a `closure` code. No extra call or search is made; other failures (schema
+errors, conflicts, provider errors) still end as `turn_failed`. If calls remain, the model
+may still repair its decision. Product-type vocabulary matching remains unfixed, with two
+expected-failure regressions. The earlier successful smoke does not establish reliability.
+
+Evidence edits require a nonblank quote contained in the current message (`state.py`).
+`state.conflicts` now uses the gate's semantics: department aliases are normalised, and
+product-type requirements conflict only when category token containment cannot be
+satisfied (`state.type_conflict`). Detection stays conservative; oversized cases are not
+flagged. The alias table is duplicated in `state.py` so the frozen `retrieval.py` baseline is
+unchanged; a test pins both tables together.
 
 ```text
 CLI or Streamlit UI message + user/session/request IDs

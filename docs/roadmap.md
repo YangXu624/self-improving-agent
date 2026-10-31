@@ -17,7 +17,7 @@ by themselves evidence that the agent has learned something useful.
 | Phase | Status | Remaining gate |
 | --- | --- | --- |
 | 1. Frozen catalogue | Complete for the initial 50k scope | Future category expansion is a separate decision |
-| 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance and deferred defects remain pending |
+| 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance pending; earlier defects fixed on a branch pending merge |
 | 3. Minimal UI | Streamlit UI connected to DeepSeek; runtime script removed | User review pending; five-request smoke is not a benchmark |
 | 4. Evaluation and baseline measurement | Design guidance documented; runner not implemented | Approve protocol, validate simulator and record baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
@@ -80,7 +80,7 @@ fact in a long session is not established. Requirement extraction still depends 
 **Exit gate:** live acceptance report identifies completed checks, defects and remaining
 limitations; the user reviews the baseline before the next phase. Mocked tests alone do not
 satisfy this live-validation gate. The user subsequently authorised live integration and a
-small check passed; the broader gate and two deferred defects remain pending.
+small check passed; the broader gate remains pending; the two deferred defects are fixed on `fix/state-evidence-and-conflicts` (pending merge).
 
 ## Phase 3 — Add a minimal visual interface
 
@@ -89,7 +89,7 @@ Phase 2 fixes. The user then supplied a key and authorised removing scripted app
 decisions. Streamlit now uses DeepSeek for live decisions, retaining the same chat, product,
 session/state and trace views. Seventy offline tests and a five-request live smoke passed;
 see [Phase 3 evidence](phase-3-ui.md). Historical mock sessions remain separate. The two
-reviewed backend defects are still deferred; this is not a complete live-quality evaluation.
+reviewed backend defects were later fixed on a branch pending merge; this is not a complete live-quality evaluation.
 
 **Purpose:** make conversation and decisions inspectable while preserving the existing core.
 
@@ -200,7 +200,8 @@ gaming or test contamination. This is deferred research, not a current implement
 ## Immediate next checkpoint
 
 The live DeepSeek UI is implemented for review and running locally. Review its behaviour;
-then decide when to address the two deferred defects and broaden acceptance/evaluation. The
+then broaden acceptance/evaluation. The blank-evidence, false-conflict and exhausted-search
+defects are fixed on `fix/state-evidence-and-conflicts` (pending review/merge). The
 small smoke is not the Phase 4 benchmark, and neither memory nor retrieval upgrades are part
 of this integration. Each submitted turn now makes paid API requests; display/inspection does not.
 
@@ -208,10 +209,10 @@ The [watch failure audit](reviews/watch-decision-budget-audit.md) now identifies
 product-type representation limitation and exhausted-search recovery issue. Its independent
 replays, token accounting and synthetic regressions are complete. Prompt and lossless event
 compaction are implemented in a separate [checkpoint](reviews/context-and-storage-compaction.md);
-retrieval semantics and exhausted-turn recovery remain proposals for review.
+exhausted-turn recovery is implemented; retrieval/type semantics remain a proposal for review.
 Resolve bounded completion and catalogue-grounded type semantics before
-assuming that a larger budget or semantic search is needed. Three regression cases currently
-remain explicit expected failures.
+assuming that a larger budget or semantic search is needed. Two regression cases (watch
+type vocabulary) remain explicit expected failures; the exhausted-search case now passes.
 
 Retrieval improvement is now under [design review](reviews/multistage-retrieval-proposal.md):
 larger local eligible candidate pools, five compact evidence cards, optional dense/RRF and

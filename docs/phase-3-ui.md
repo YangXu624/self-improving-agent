@@ -73,8 +73,9 @@ a key's presence alone never enables calls. Session files default to ignored
 
 Live DeepSeek behaviour, general intent parsing, shopping success, persistent memories,
 learning and evaluation remain unverified or unimplemented. Mock parsing is a limited demo
-and may misinterpret unsupported/compound requirements. Known whitespace-evidence and
-false-conflict backend defects remain deferred at the user's explicit instruction. The UI
+and may misinterpret unsupported/compound requirements. The whitespace-evidence and
+false-conflict backend defects were deferred at the user's instruction when this UI was built;
+they are now fixed on `fix/state-evidence-and-conflicts` (pending merge). The UI
 has no authentication or production hosting guarantees; do not expose it publicly as a
 multi-user service. No live shopping-provider API calls, new dataset downloads, image-binary
 imports, AGENTS.md changes or original ASTRA/AutoML modifications are part of this phase.
@@ -96,7 +97,7 @@ preserved unchanged in their old directory. Startup/resume/widget reruns do not 
 
 Prompt `shopping-baseline-v2` adds a current-version JSON example alongside the closed schema,
 following the official provider guidance. Existing action choices, hard gates, BM25, budgets,
-session lifecycle and deferred Phase 2 validator defects remain unchanged. No SDK, new model
+session lifecycle remain unchanged (the Phase 2 validator defects were deferred at that time). No SDK, new model
 framework, memory layer or retrieval strategy was introduced.
 
 **Executed offline verification:** 70 tests passed: the original 45 baseline checks, 9 service
@@ -122,4 +123,4 @@ from the stored smoke log without printing or persisting it.
 The key remains local/ignored. Use README's live UI setup; do not paste it into chat. Missing
 configuration, unavailable service, incomplete usage, wider language/constraint behaviour and
 prompt-injection resistance still need broader testing. The two previously deferred defects
-remain pending; this integration does not implement or claim the formal evaluation baseline.
+are since fixed on `fix/state-evidence-and-conflicts` (pending merge); this integration does not implement or claim the formal evaluation baseline.
