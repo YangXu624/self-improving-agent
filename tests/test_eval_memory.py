@@ -194,6 +194,39 @@ class MemoryTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
 
+    def test_questions_are_matched_on_whole_words_and_split_on_sentences_not_decimals(
+        self,
+    ):
+        p = profile()
+        self.assertEqual(matched_keys(p, "Would you like to see more products?"), [])
+        self.assertEqual(
+            matched_keys(p, "What are you hoping to spend?"), []
+        )  # no 'budget' word
+        self.assertEqual(
+            matched_keys(p, "Is this for a whole outfit?"), []
+        )  # 'who' in 'whole'
+        self.assertEqual(matched_keys(p, "What is your budget?"), ["budget"])
+        self.assertEqual(matched_keys(p, "Any price limit?"), ["budget"])
+        self.assertEqual(questions_in("Is $29.99 too much?"), ["Is $29.99 too much?"])
+        self.assertEqual(
+            questions_in("Try e.g. under $30.50? Or not. Fine?"),
+            [
+                "under $30.50?",
+                "Fine?",
+            ],  # abbreviations may split a sentence, never a decimal,
+        )
+        self.assertEqual(questions_in("No questions here."), [])
+        memory = ShopperMemory(p, window_turns=2)
+        memory.record_shopper(1, "Boots", ["type", "budget"])
+        memory.record_assistant(view("Would you like to see more products?", 1))
+        self.assertEqual(memory.repeat_counts, {})
+        self.assertEqual(memory.unmatched_questions, 1)
+
+    def test_whitespace_only_replies_are_not_valid(self):
+        for blank in ("   ", "\n\t", "\u00a0"):
+            with self.assertRaises(ValueError):
+                ShopperReply(message=blank)
+
     def test_window_turns_must_be_positive(self):
         with self.assertRaises(ValueError):
             ShopperMemory(profile(), window_turns=0)

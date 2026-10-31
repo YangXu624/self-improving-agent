@@ -63,8 +63,12 @@ class Transcript:
 
 
 def questions_in(text):
-    """Segments of an assistant message that end in a question mark."""
-    return [s.strip() for s in re.findall(r"[^?.!]*\?", text) if s.strip()]
+    """Sentences of an assistant message that end in a question mark.
+
+    Splits only at sentence punctuation followed by whitespace, so "$29.99" stays whole.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [s.strip() for s in sentences if s.strip().endswith("?")]
 
 
 def matched_keys(profile, question):
@@ -73,7 +77,7 @@ def matched_keys(profile, question):
     return [
         f.key
         for f in profile.facts
-        if any(re.search(rf"\b{re.escape(k.lower())}", lowered) for k in f.keywords)
+        if any(re.search(rf"\b{re.escape(k.lower())}s?\b", lowered) for k in f.keywords)
     ]
 
 

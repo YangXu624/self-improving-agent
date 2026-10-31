@@ -109,7 +109,7 @@ class ConsistencyTests(unittest.TestCase):
             scenario_id="s", persona="p", facts=(fact,), opening_keys=()
         )
         said = check_reply(
-            ShopperReply(message="For my wife.", reveals=["department"]), women
+            ShopperReply(message="For someone special.", reveals=["department"]), women
         )
         self.assertIn("claimed_reveal_missing", codes(said))
         ok = check_reply(
@@ -136,6 +136,50 @@ class ConsistencyTests(unittest.TestCase):
             "over_reveal",
             codes(check("All.", ["type", "budget", "color"], config=relaxed)),
         )
+
+    def test_negation_is_not_a_contradiction_but_the_wrong_value_still_is(self):
+        self.assertEqual(
+            errors(check("It is not for men.")), []
+        )  # negated: excluded, not requested
+        invented = [v.detail for v in errors(check("Not for men, for women."))]
+        self.assertEqual(
+            invented, ["department: ['women']"]
+        )  # only the requested one is flagged
+        self.assertEqual(errors(check("No brown please, red is fine.")), [])
+        self.assertIn("contradicts_profile", codes(check("Make it brown.")))
+
+    def test_colour_spelling_variants_and_full_width_text_are_normalised(self):
+        from astra_eval.models import Fact, ShopperProfile
+
+        fact = Fact(
+            key="color",
+            kind="soft",
+            field="color",
+            op="eq",
+            value="grey",
+            statement="s",
+            keywords=["color"],
+        )
+        grey = ShopperProfile(
+            scenario_id="s", persona="p", facts=(fact,), opening_keys=()
+        )
+        self.assertEqual(
+            errors(check_reply(ShopperReply(message="Gray please."), grey)), []
+        )
+        self.assertIn(
+            "contradicts_profile",
+            codes(check_reply(ShopperReply(message="ｂｌａｃｋ please"), grey)),
+        )
+
+    def test_thousands_separators_and_family_words_for_departments(self):
+        self.assertEqual(
+            prices_in("About $1,000 total or 2,500.50 dollars"), [1000.0, 2500.5]
+        )
+        self.assertIn("invented_attribute", codes(check("It's for my husband.")))
+        self.assertIn("invented_attribute", codes(check("for the guys")))
+
+    def test_product_identifiers_are_case_insensitive_leaks(self):
+        self.assertIn("target_leak", codes(check("try b012345678")))
 
     def test_product_identifiers_and_target_titles_are_leaks(self):
         self.assertIn("target_leak", codes(check("Maybe B001234567?")))

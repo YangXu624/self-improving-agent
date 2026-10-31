@@ -165,7 +165,12 @@ def score_session(record, truth, oracle, config=ScoreConfig(), *, max_turns):
         }
     budget = config.turn_budget or max_turns
     judged = Judge(oracle, truth)
-    recs = [(t.turn, t.recommended_ids) for t in record.turns if t.recommended_ids]
+    # Duplicate IDs inside one list must not inflate nDCG or precision.
+    recs = [
+        (t.turn, list(dict.fromkeys(t.recommended_ids)))
+        for t in record.turns
+        if t.recommended_ids
+    ]
     all_ids = list(dict.fromkeys(i for _, ids in recs for i in ids))
     verdicts = {i: judged(i) for i in all_ids}
     fails = [i for i in all_ids if verdicts[i]["hard"] == "fail"]

@@ -54,8 +54,12 @@ fields. Missing price or attributes are unknown and never acceptable.
 | `underspecified` | The opening states only the type; budget and more are revealed on request (the ambiguous-requirements case) |
 | `no_valid_product` | A verifiably empty variation of a satisfiable task (budget below the cheapest known price, or a colour/brand pair that never co-occurs). Correct behaviour is to abstain |
 
-Splits `learning`, `development`, `held_out` are assigned by **family** (product type), so no
-family crosses splits; held-out feedback must not be used for learning. Graded relevance:
+Splits `learning`, `development`, `held_out` are assigned by **family cluster**: product types
+that share a noun ("Necklaces" and "Pendant Necklaces", "Sunglasses" and "Replacement Sunglass
+Lenses") are grouped first, because their product scopes overlap, and each cluster stays in one
+split. Identical tasks are not generated twice, departments are limited to men/women/boys/girls/
+unisex, and no-valid budgets are never absurdly low (a pair variant is used when the cheapest
+product costs under $5). Held-out feedback must not be used for learning. Graded relevance:
 grade 0 if a hard fact fails or is unknown; otherwise 1-3 by the share of soft preferences
 matched (3 when there are none). `ideal_grades` holds the best 20 grades for nDCG.
 
@@ -212,7 +216,11 @@ check the DeepSeek side only); `--sim-model`, `--sim-url`, `--sim-temperature`, 
 environment variables (defaults: `llama3.1:latest`, `http://127.0.0.1:11434`, temperature 0,
 seed 7, context 4096, 220 reply tokens, window 8). `--price-input-per-million` and
 `--price-output-per-million` turn on a cost estimate; check DeepSeek's current published prices
-yourself. A run needs a **new** output directory; an interrupted run is not resumed (start a new
+yourself. Option values are validated before anything is spent (`--limit`, `--max-model-calls` and
+`--turn-budget` must be at least 1, `--headline-k` must be one of `--k`, `--window-turns` at
+least 1, a timeout positive); an invalid value prints `error: ...` and exits 2. A live run with
+`--simulator ollama` first runs the free `check-simulator` probe and stops before any DeepSeek
+call if Ollama is unreachable or the model is missing. A run needs a **new** output directory; an interrupted run is not resumed (start a new
 one). `data/` is git-ignored, so scenarios, transcripts and session logs stay local.
 
 Cost control: nothing paid runs without `--live` and `--max-model-calls`. ASTRA allows at most
@@ -260,8 +268,8 @@ and a rule-based test policy completed end to end; that run only checks plumbing
   product type (category-word containment), departments and exact prices, so it catches
   implementation bugs and state-extraction errors, not a shared conceptual mistake. Spot-check
   some acceptable samples by hand before relying on "grounded".
-- Splits are by leaf category, but a family such as `Boots` also contains `Hiking Boots`
-  products; families can overlap across splits, which matters once learning exists.
+- Family clustering is a word-sharing heuristic, so overlap between clusters can remain (for
+  example products tagged with two unrelated types); check it again before a learning study.
 - `accept` and `give_up` come from the shopper and end the session, so shopper behaviour can
   shorten conversations; termination counts are reported but not corrected for.
 - The kind mix cycles feasible, underspecified, feasible, no-valid, underspecified, feasible, so

@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from decimal import Decimal
 from pathlib import Path
 
@@ -30,7 +31,8 @@ DEPARTMENT_ALIASES = {
 
 
 def norm(text):
-    return " ".join(str(text).casefold().split())
+    # NFKC folds full-width and compatibility characters ("ｂｌａｃｋ" -> "black").
+    return " ".join(unicodedata.normalize("NFKC", str(text)).casefold().split())
 
 
 def tokens(text):

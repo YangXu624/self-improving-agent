@@ -92,6 +92,20 @@ class ExperimentConfig:
     max_model_calls: int | None = None
     user_id: str = "eval-shopper"
 
+    def __post_init__(self):
+        # Zero or negative values must not silently mean "unset" (a limit of 0 once meant all).
+        for name, value in (
+            ("limit", self.limit),
+            ("max_model_calls", self.max_model_calls),
+            ("turn_budget", self.score.turn_budget),
+        ):
+            if value is not None and value < 1:
+                raise ValueError(f"{name} must be at least 1 when given")
+        if not self.score.k_values or min(self.score.k_values) < 1:
+            raise ValueError("k_values must be positive")
+        if self.score.headline_k not in self.score.k_values:
+            raise ValueError("headline_k must be one of k_values")
+
 
 def policy_descriptor(policy):
     """Identity of the decision policy for audit; never includes credentials."""

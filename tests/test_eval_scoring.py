@@ -195,6 +195,13 @@ class ScoringTests(F.EvalCase):
         )
         self.assertIsNone(none["metrics"]["precision_first_at_k"]["3"])
 
+    def test_duplicate_ids_in_one_recommendation_cannot_inflate_ndcg_or_precision(self):
+        a = self.pass_ids[0]
+        s = self.score(self.record([self.turn(1, [a, a, a], seen=[a], searches=1)]))
+        self.assertLess(s["metrics"]["ndcg_first"]["3"], 0.5)
+        self.assertEqual(s["violations"]["items"], 1)
+        self.assertEqual(s["metrics"]["precision_first_at_k"]["3"], 1.0)
+
     def test_turn_budget_decides_whether_a_late_success_counts(self):
         ids = self.pass_ids[:2]
         record = self.record(

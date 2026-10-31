@@ -1,6 +1,7 @@
 """Scenario generation: reproducible, grounded, verifiable, split-safe, leak-free."""
 
 import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,8 @@ import eval_fixtures as F
 from astra_eval.models import Fact, Scenario, ShopperProfile
 from astra_eval.oracle import CatalogueOracle, judge, raw_facts
 from astra_eval.scenarios import (
+    assign_types,
+    cluster_types,
     generate,
     load_ground_truth,
     load_scenarios,
@@ -177,6 +180,54 @@ class ScenarioTests(F.EvalCase):
         )
         with self.assertRaises(ValueError):
             profile.persona = "changed"  # immutable
+
+    def test_no_two_scenarios_are_identical_tasks(self):
+        signatures = [
+            (
+                s.family,
+                json.dumps([f.model_dump() for f in s.profile.facts], sort_keys=True),
+            )
+            for s in self.scenarios
+        ]
+        self.assertEqual(len(signatures), len(set(signatures)))
+
+    def test_overlapping_product_families_are_clustered_into_one_split(self):
+        leaves = [
+            "Necklaces",
+            "Pendant Necklaces",
+            "Sunglasses",
+            "Replacement Sunglass Lenses",
+            "Fashion Hoodies & Sweatshirts",
+            "Hoodies",
+            "Boots",
+            "Hiking Boots",
+            "Watches",
+        ]
+        clusters = {frozenset(c) for c in cluster_types(leaves)}
+        self.assertIn(frozenset({"Necklaces", "Pendant Necklaces"}), clusters)
+        self.assertIn(
+            frozenset({"Sunglasses", "Replacement Sunglass Lenses"}), clusters
+        )
+        self.assertIn(frozenset({"Fashion Hoodies & Sweatshirts", "Hoodies"}), clusters)
+        self.assertIn(frozenset({"Boots", "Hiking Boots"}), clusters)
+        self.assertIn(frozenset({"Watches"}), clusters)
+        for seed in range(6):
+            split = assign_types(
+                [(leaf, 50) for leaf in leaves],
+                seed,
+                {"learning": 0.4, "development": 0.2, "held_out": 0.4},
+            )
+            where = {leaf: name for name, group in split.items() for leaf in group}
+            self.assertEqual(where["Necklaces"], where["Pendant Necklaces"])
+            self.assertEqual(where["Boots"], where["Hiking Boots"])
+
+    def test_generated_tasks_use_plausible_budgets_and_clean_departments(self):
+        for scenario, truth in zip(self.scenarios, self.truths):
+            budget = next(f.value for f in scenario.profile.facts if f.key == "budget")
+            self.assertGreaterEqual(budget, 2.0)
+            for f in scenario.profile.facts:
+                if f.field == "department":
+                    self.assertIn(f.value, {"men", "women", "boys", "girls", "unisex"})
 
     def test_nice_budget_rounds_up_to_human_numbers(self):
         self.assertEqual(

@@ -202,10 +202,71 @@ class OllamaAdapterTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, code)
 
     def test_context_that_cannot_fit_is_a_simulator_error_not_a_truncation(self):
+        shopper = self.shopper(num_ctx=1024, max_tokens=100)
+        m = memory()
+        huge = view(
+            "Tell me about your needs? " * 400, 1
+        )  # the current message is essential
+        m.record_assistant(huge)
         with self.assertRaises(SimulatorError) as raised:
-            self.run_once(self.shopper(num_ctx=512, max_tokens=300))
+            shopper.respond(m, huge)
         self.assertEqual(raised.exception.code, "simulator_context_overflow")
         self.assertEqual(self.transport.calls, 0)
+
+    def test_configs_that_leave_no_room_for_the_prompt_are_rejected_up_front(self):
+        for kwargs in (
+            {"num_ctx": 512, "max_tokens": 300},
+            {"timeout": 0},
+            {"timeout": float("nan")},
+            {"timeout": -1},
+            {"url": "ftp://x"},
+            {"window_turns": 0},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                SimulatorConfig(**kwargs)
+
+    def test_url_trailing_slash_is_removed_however_it_was_supplied(self):
+        self.assertEqual(SimulatorConfig(url="http://h:11434/").url, "http://h:11434")
+
+    def test_http_protocol_errors_are_a_safe_simulator_error_not_a_crash(self):
+        import http.client
+
+        for exc in (http.client.IncompleteRead(b"x"), http.client.BadStatusLine("x")):
+            shopper = self.shopper()
+
+            def broken(*a, _e=exc, **k):
+                raise _e
+
+            shopper.transport = broken
+            with (
+                self.subTest(exc=type(exc).__name__),
+                self.assertRaises(SimulatorError) as raised,
+            ):
+                self.run_once(shopper)
+            self.assertEqual(raised.exception.code, "simulator_unreachable")
+
+    def test_long_replies_up_to_the_limit_are_accepted(self):
+        shopper = self.shopper()
+        shopper.transport = lambda *a: {
+            "message": {
+                "content": json.dumps(
+                    {"message": "x" * 900, "reveals": [], "action": "reply"}
+                )
+            }
+        }
+        self.assertEqual(len(self.run_once(shopper).reply.message), 900)
+
+    def test_whitespace_only_replies_are_malformed_not_sent_to_astra(self):
+        shopper = self.shopper()
+        shopper.transport = lambda *a: {
+            "message": {
+                "content": json.dumps(
+                    {"message": "   ", "reveals": [], "action": "reply"}
+                )
+            }
+        }
+        with self.assertRaises(SimulatorError):
+            self.run_once(shopper)
 
     def test_import_and_construction_never_touch_the_network(self):
         with patch(
@@ -262,6 +323,11 @@ class CheckOllamaTests(unittest.TestCase):
         )
         self.assertFalse(report["probe_ok"])
         self.assertIn("did not state the budget", report["problems"][0])
+
+    def test_a_non_object_tags_response_is_reported_not_a_crash(self):
+        report = check_ollama(self.config, getter=lambda url, timeout: ["unexpected"])
+        self.assertTrue(report["reachable"])
+        self.assertFalse(report["model_present"])
 
     def test_model_name_without_tag_matches_latest(self):
         report = check_ollama(

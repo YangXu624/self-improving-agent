@@ -170,7 +170,7 @@ class ReportConfigTests(ExperimentCase):
         report = build_report(self.root / "out")
         cell = report["cells"]["memory_off/all"]["feasible"]
         self.assertEqual(set(cell["success_at_k_within_budget"]), {"2", "4"})
-        self.assertEqual(cell["success_headline_k"]["k"], 4)
+        self.assertEqual(cell["success_headline_k"]["headline_k"], 4)
         self.assertIn("Headline Success@4", render_markdown(report))
 
     def test_a_headline_k_outside_the_scored_values_is_rejected_up_front(self):
@@ -226,6 +226,37 @@ class PairedAttritionTests(ExperimentCase):
                 worst["only_treatment_succeeds"],
             ),
             (3, 1, 1),
+        )
+
+
+class ConfigValidationTests(ExperimentCase):
+    def test_zero_and_negative_limits_budgets_and_k_never_mean_unset(self):
+        for kwargs in (
+            {"limit": 0},
+            {"limit": -1},
+            {"max_model_calls": 0},
+            {"max_model_calls": -5},
+            {"score": ScoreConfig(turn_budget=0)},
+            {"score": ScoreConfig(k_values=(0, 3), headline_k=3)},
+            {"score": ScoreConfig(k_values=(2, 4), headline_k=3)},
+        ):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                self.config("c", **kwargs)
+
+    def test_paired_comparison_uses_memory_off_as_the_reference(self):
+        conditions = (Condition("alpha"), Condition("memory_off"))
+        self.run_it(conditions=conditions, max_model_calls=1000, limit=3)
+        paired = build_report(self.root / "out")["paired_comparison"]
+        self.assertEqual(
+            (paired["treatment"], paired["reference"]), ("alpha", "memory_off")
+        )
+
+    def test_headline_label_names_k_not_the_success_count(self):
+        self.run_it(max_model_calls=500, limit=2)
+        cell = build_report(self.root / "out")["cells"]["memory_off/all"]["feasible"]
+        self.assertEqual(cell["success_headline_k"]["headline_k"], 3)
+        self.assertIn(
+            "Headline Success@3", render_markdown(build_report(self.root / "out"))
         )
 
 

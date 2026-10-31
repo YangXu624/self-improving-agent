@@ -95,7 +95,14 @@ def parser():
 
 
 def main(argv=None):
-    args = parser().parse_args(argv)
+    try:
+        return run_command(parser().parse_args(argv))
+    except ValueError as error:  # bad option values: report plainly, spend nothing
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+
+def run_command(args):
     if args.command == "generate":
         per_split = {
             "learning": args.learning,
@@ -160,6 +167,16 @@ def main(argv=None):
             "Warning: the cap is below the worst case; the run may stop early.",
             file=sys.stderr,
         )
+    if args.simulator == "ollama":
+        # Free check first: never start paying DeepSeek if the simulator cannot answer.
+        probe = check_ollama(config.simulator)
+        if not probe["probe_ok"]:
+            print(
+                "Simulator check failed; nothing was sent to DeepSeek:", file=sys.stderr
+            )
+            for problem in probe["problems"]:
+                print(f"  - {problem}", file=sys.stderr)
+            return 1
     from shopping_agent.provider import DeepSeekPolicy
 
     policy = DeepSeekPolicy.from_env_file(args.env_file)

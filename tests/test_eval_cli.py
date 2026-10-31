@@ -126,6 +126,63 @@ class CliTests(F.EvalCase):
         code, shown, _ = run_cli("show", str(self.root / "o"), first)
         self.assertIn("SHOPPER", shown)
 
+    def test_bad_option_values_exit_cleanly_with_a_message_and_spend_nothing(self):
+        directory, _ = self.generate()
+        base = [
+            "run",
+            "--scenarios",
+            str(directory),
+            "--catalogue",
+            str(self.catalogue),
+            "--index",
+            str(self.index),
+            "--output",
+            str(self.root / "o"),
+        ]
+        for extra in (
+            ["--limit", "0"],
+            ["--window-turns", "0"],
+            ["--turn-budget", "0"],
+            ["--k", "2", "4", "--headline-k", "3"],
+            ["--sim-timeout", "-1"],
+        ):
+            with self.subTest(extra=extra):
+                code, _, err = run_cli(*base, *extra)
+                self.assertEqual(code, 2)
+                self.assertIn("error:", err)
+        self.assertFalse((self.root / "o").exists())
+
+    def test_live_run_checks_the_simulator_before_any_paid_call(self):
+        directory, _ = self.generate()
+        policy = F.HeuristicPolicy()
+        down = {"probe_ok": False, "problems": ["Cannot reach Ollama."]}
+        with (
+            patch("astra_eval.cli.check_ollama", return_value=down),
+            patch(
+                "shopping_agent.provider.DeepSeekPolicy.from_env_file",
+                return_value=policy,
+            ) as deepseek,
+        ):
+            code, _, err = run_cli(
+                "run",
+                "--scenarios",
+                str(directory),
+                "--catalogue",
+                str(self.catalogue),
+                "--index",
+                str(self.index),
+                "--output",
+                str(self.root / "o"),
+                "--live",
+                "--max-model-calls",
+                "50",
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("nothing was sent to DeepSeek", err)
+        deepseek.assert_not_called()
+        self.assertEqual(policy.contexts, [])
+        self.assertFalse((self.root / "o").exists())
+
     def test_check_simulator_reports_and_sets_the_exit_code(self):
         good = {"probe_ok": True, "problems": []}
         bad = {"probe_ok": False, "problems": ["Cannot reach Ollama."]}

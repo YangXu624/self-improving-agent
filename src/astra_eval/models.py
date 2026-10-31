@@ -102,6 +102,13 @@ class GroundTruth(Strict):
 class ShopperReply(Strict):
     """Structured simulator output; malformed output is detected, not repaired."""
 
-    message: str = Field(min_length=1, max_length=600)
+    message: str = Field(min_length=1, max_length=1000)
     reveals: list[str] = Field(default_factory=list, max_length=10)
     action: Literal["reply", "accept", "give_up"] = "reply"
+
+    @model_validator(mode="after")
+    def message_has_content(self):
+        # Whitespace passes min_length but would be sent to ASTRA as an empty turn.
+        if not self.message.strip():
+            raise ValueError("Shopper message must contain non-whitespace text")
+        return self

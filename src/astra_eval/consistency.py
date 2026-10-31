@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 
 from .models import ShopperProfile, ShopperReply
-from .oracle import tokens
+from .oracle import norm, tokens
 
 COLORS = {
     "black",
@@ -76,11 +76,30 @@ DEPARTMENT_WORDS = {
     "girl": "girls",
     "girls": "girls",
     "unisex": "unisex",
+    "guy": "men",
+    "guys": "men",
+    "husband": "men",
+    "dad": "men",
+    "father": "men",
+    "boyfriend": "men",
+    "wife": "women",
+    "mom": "women",
+    "mother": "women",
+    "girlfriend": "women",
+    "son": "boys",
+    "daughter": "girls",
 }
-ID_PATTERN = re.compile(r"\bB0[0-9A-Z]{8}\b|\b\d{9}[\dX]\b")
+ID_PATTERN = re.compile(r"\bB0[0-9A-Z]{8}\b|\b\d{9}[\dX]\b", re.I)
+NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?"
 PRICE_PATTERN = re.compile(
-    r"\$\s?(\d+(?:[.,]\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s?(?:usd|dollars|bucks)\b", re.I
+    rf"\$\s?({NUMBER})|({NUMBER})\s?(?:usd|dollars|bucks)\b", re.I
 )
+NEGATIONS = {"not", "no", "never", "without", "non", "t"}  # "t" is the n't of "don't"
+CANONICAL_COLORS = {
+    "gray": "grey",
+    "multicolored": "multicolor",
+    "multicoloured": "multicolor",
+}
 
 
 @dataclass(frozen=True)
@@ -96,6 +115,10 @@ class ConsistencyConfig:
     check_vocabulary: bool = True
 
 
+def canonical_words(words):
+    return {CANONICAL_COLORS.get(w, w) for w in words}
+
+
 def departments_in(words):
     return {DEPARTMENT_WORDS[w] for w in words if w in DEPARTMENT_WORDS}
 
@@ -103,7 +126,7 @@ def departments_in(words):
 def prices_in(text):
     found = []
     for a, b in PRICE_PATTERN.findall(text):
-        found.append(float((a or b).replace(",", ".")))
+        found.append(float((a or b).replace(",", "")))
     return found
 
 
@@ -162,6 +185,15 @@ def check_reply(
             Violation("over_reveal", "error", f"{len(set(reply.reveals))} facts")
         )
     message_words = tokens(reply.message)
+    # A word right after "not"/"no"/"without"/"n't" is excluded, not requested ("not for men").
+    ordered = re.findall(r"\w+", norm(reply.message))
+    negated = {
+        w
+        for i, token in enumerate(ordered)
+        if token in NEGATIONS
+        for w in ordered[i + 1 : i + 4]
+    }
+    positive_words = message_words - negated
     allowed_prices = {round(p, 2) for p in [*profile_prices(profile), *shown_prices]}
     for price in prices_in(reply.message):
         if round(price, 2) not in allowed_prices:
@@ -179,17 +211,18 @@ def check_reply(
         ):
             if name == "department":
                 mentioned, in_profile, in_titles, in_assistant = (
-                    departments_in(message_words),
+                    departments_in(positive_words),
                     departments_in(profile_w),
                     departments_in(title_w),
                     departments_in(assistant_w),
                 )
             else:
+                canon = canonical_words if name == "color" else (lambda w: w)
                 mentioned, in_profile, in_titles, in_assistant = (
-                    message_words & vocabulary,
-                    profile_w & vocabulary,
-                    title_w & vocabulary,
-                    assistant_w & vocabulary,
+                    canon(positive_words) & vocabulary,
+                    canon(profile_w) & vocabulary,
+                    canon(title_w) & vocabulary,
+                    canon(assistant_w) & vocabulary,
                 )
             if any(f.field == name for f in profile.facts):
                 bad = mentioned - in_profile - in_titles

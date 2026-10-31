@@ -7,6 +7,7 @@ visible message and cards: never ground truth, scores, ASTRA memory or the condi
 """
 
 import hashlib
+import http.client
 import json
 import os
 import time
@@ -55,6 +56,17 @@ class SimulatorConfig:
         # Validate at configuration time, not as a crash inside the first session.
         if self.window_turns < 1 or self.max_malformed_retries < 0:
             raise ValueError("window_turns must be >= 1 and retries >= 0")
+        if not (0 < self.timeout < float("inf")):
+            raise ValueError("timeout must be a positive finite number of seconds")
+        if not 0 <= self.temperature <= 2 or self.num_ctx < 512 or self.max_tokens < 32:
+            raise ValueError("Invalid simulator sampling/context settings")
+        if self.prompt_budget < 512:
+            raise ValueError(
+                "max_tokens leaves under 512 tokens of prompt: raise num_ctx"
+            )
+        if not self.url.startswith(("http://", "https://")):
+            raise ValueError("Ollama URL must be an http(s) URL")
+        object.__setattr__(self, "url", self.url.rstrip("/"))
 
     @classmethod
     def from_env(cls, environ=None, **overrides):
@@ -214,7 +226,13 @@ class OllamaShopper:
             code = exc.code
             exc.close()  # release the response body
             raise SimulatorError(f"simulator_http_{code}") from None
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ConnectionError,
+            OSError,
+            http.client.HTTPException,
+        ):
             raise SimulatorError("simulator_unreachable") from None
         except ValueError:
             raise SimulatorError("simulator_invalid_envelope") from None
@@ -286,13 +304,21 @@ def check_ollama(config, *, transport=None, getter=None):
     try:
         tags = getter(config.url + "/api/tags", min(config.timeout, 15.0))
         report["reachable"] = True
-    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, ValueError):
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        ConnectionError,
+        OSError,
+        ValueError,
+        http.client.HTTPException,
+    ):
         report["problems"].append(
             "Cannot reach Ollama. Start it (ollama serve / the desktop app) and check "
             "ASTRA_SIM_OLLAMA_URL."
         )
         return report
-    names = {m.get("name", "") for m in tags.get("models", []) if isinstance(m, dict)}
+    models = tags.get("models", []) if isinstance(tags, dict) else []
+    names = {m.get("name", "") for m in models if isinstance(m, dict)}
     report["models_available"] = sorted(names)
     wanted = config.model if ":" in config.model else config.model + ":latest"
     report["model_present"] = wanted in names or config.model in names

@@ -32,6 +32,13 @@ DEFAULT_EXCLUDED_TYPES = (
     "Baby",
     "Unisex",
     "Accessories",
+    "Stud",
+    "Bead",
+    "Beads",
+    "Bottoms",
+    "Hoop",
+    "Bands",
+    "Pendants Only",
     "Novelty",
 )
 MIN_TYPE_PRICED = 40
@@ -61,6 +68,10 @@ EVIDENCE_CONTRACT = (
 
 def stem(word):
     word = word.lower()
+    if len(word) > 4 and word.endswith(("sses", "xes", "ches", "shes")):
+        return word[:-2]  # sunglasses -> sunglass
+    if word.endswith("ss"):
+        return word  # glass, dress: not plurals
     return word[:-1] if len(word) > 3 and word.endswith("s") else word
 
 
@@ -114,11 +125,54 @@ def eligible_types(entries, excluded):
     return sorted(types, key=lambda t: (-t[1], t[0]))
 
 
+GENERIC_WORDS = {
+    "fashion",
+    "women",
+    "womens",
+    "mens",
+    "girls",
+    "boys",
+    "casual",
+    "other",
+    "sets",
+}
+
+
+def cluster_types(leaves):
+    """Group leaves that share a product noun ("Necklaces" with "Pendant Necklaces").
+
+    A scenario's scope is every product whose category words contain its type, so related
+    leaves overlap in products; keeping each cluster in one split stops that leakage.
+    """
+    parent = {leaf: leaf for leaf in leaves}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    owner = {}
+    for leaf in sorted(leaves):
+        for word in re.findall(r"[A-Za-z]+", leaf):
+            word = stem(word)
+            if len(word) < 4 or word in GENERIC_WORDS:
+                continue
+            if word in owner:
+                parent[find(leaf)] = find(owner[word])
+            else:
+                owner[word] = leaf
+    clusters = defaultdict(list)
+    for leaf in leaves:
+        clusters[find(leaf)].append(leaf)
+    return [sorted(v) for v in clusters.values()]
+
+
 def assign_types(types, seed, weights):
-    """Deterministic split by family: sort by seeded hash, then deal by weight."""
-    ordered = sorted(
-        (t[0] for t in types),
-        key=lambda leaf: hashlib.sha256(f"{seed}:{leaf}".encode()).hexdigest(),
+    """Deterministic split by family cluster: sort by seeded hash, then deal by weight."""
+    clusters = sorted(
+        cluster_types([t[0] for t in types]),
+        key=lambda c: hashlib.sha256(f"{seed}:{c[0]}".encode()).hexdigest(),
     )
     splits = {name: [] for name in weights}
     total = sum(weights.values())
@@ -126,10 +180,10 @@ def assign_types(types, seed, weights):
     for name, weight in weights.items():
         cumulative += weight / total
         edges.append((name, cumulative))
-    for index, leaf in enumerate(ordered):
-        position = (index + 0.5) / len(ordered)
+    for index, cluster in enumerate(clusters):
+        position = (index + 0.5) / len(clusters)
         name = next(n for n, edge in edges if position <= edge)
-        splits[name].append(leaf)
+        splits[name].extend(cluster)
     return splits
 
 
@@ -158,7 +212,7 @@ def fact(key, kind, field, op, value, statement, keywords):
     )
 
 
-TYPE_KEYWORDS = ["kind", "type", "looking for", "what are you", "product", "item"]
+TYPE_KEYWORDS = ["kind", "type", "looking for"]
 BUDGET_KEYWORDS = ["budget", "price", "spend", "cost", "afford", "how much"]
 DEPT_KEYWORDS = [
     "who",
@@ -282,7 +336,9 @@ def impossible_variant(
     rng.shuffle(options)
     for option in options:
         if option == "budget":
-            amount = float(max(1, math.floor(priced[0] * 0.6)))
+            if priced[0] < 5:  # "under $1" is absurd; use the pair variant instead
+                continue
+            amount = float(max(2, math.floor(priced[0] * 0.6)))
             changed = [f for f in base_facts if f.key != "budget"] + [
                 budget_fact(amount)
             ]
@@ -336,7 +392,11 @@ def build_scenario(entries_by_leaf, scopes, leaf, kind, rng, serial):
     priced = sorted(
         e["facts"]["price"] for e in pool if e["facts"]["price"] is not None
     )
-    departments = common_values(pool, "department")
+    departments = [
+        d
+        for d in common_values(pool, "department")
+        if d in {"men", "women", "boys", "girls", "unisex"}
+    ]
     colors = common_values(pool, "color", minimum=2)
     materials = common_values(pool, "material", minimum=2)
     brands = common_values(pool, "brand", minimum=3)
@@ -418,7 +478,7 @@ def generate(
         if count and not leaves:
             raise ValueError(f"No product families available for split {split!r}")
         rng = random.Random(f"{seed}:{split}")
-        produced, attempts = 0, 0
+        produced, attempts, seen = 0, 0, set()
         while produced < count and attempts < count * 20:
             attempts += 1
             leaf = leaves[(produced + attempts) % len(leaves)]
@@ -427,6 +487,15 @@ def generate(
             if built is None:
                 continue
             facts, graded, unknown = built
+            signature = (
+                leaf,
+                json.dumps([f.model_dump() for f in facts], sort_keys=True),
+            )
+            if (
+                signature in seen
+            ):  # identical tasks would inflate N with dependent samples
+                continue
+            seen.add(signature)
             ident = scenario_id(seed, split, produced, facts)
             opening, opening_keys = opening_text(kind, facts, rng)
             profile = ShopperProfile(

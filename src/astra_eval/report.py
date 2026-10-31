@@ -122,7 +122,7 @@ def feasible_cell(rows, k_values, headline):
         "sessions": len(rows),
         "valid": n,
         "invalid": len(rows) - n,
-        "success_headline_k": {"k": headline, **rate(len(successes), n)},
+        "success_headline_k": {"headline_k": headline, **rate(len(successes), n)},
         "success_at_k_within_budget": {
             str(k): rate(
                 sum(s["metrics"]["success_at_k_within_budget"][str(k)] for s in scores),
@@ -399,7 +399,10 @@ def build_report(directory, k_values=None, headline=None):
                     "no_valid_product": None,
                 }
     if len(conditions) == 2:
-        report["paired_comparison"] = paired(results, conditions[1], conditions[0])
+        # Memory OFF is the reference when present; otherwise the first name alphabetically.
+        reference = "memory_off" if "memory_off" in conditions else conditions[0]
+        treatment = next(c for c in conditions if c != reference)
+        report["paired_comparison"] = paired(results, treatment, reference)
     return report
 
 
@@ -450,7 +453,7 @@ def render_markdown(report):
                 "",
                 "| Measure | Value |",
                 "| --- | --- |",
-                f"| Headline Success@{feasible['success_headline_k']['k']} (verified, within turn budget) | {fmt(feasible['success_headline_k'])} |",
+                f"| Headline Success@{feasible['success_headline_k']['headline_k']} (verified, within turn budget) | {fmt(feasible['success_headline_k'])} |",
             ]
             for k, v in feasible["success_at_k_within_budget"].items():
                 lines.append(f"| Success@{k} (within turn budget) | {fmt(v)} |")
