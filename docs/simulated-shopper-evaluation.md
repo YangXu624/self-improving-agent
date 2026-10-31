@@ -1,6 +1,6 @@
 # Simulated-shopper evaluation framework
 
-Status (1 November 2026): implemented and tested **offline** with scripted and mocked
+Status (31 October 2026): implemented and tested **offline** with scripted and mocked
 components. **No real Ollama conversation, no DeepSeek-driven evaluation run and no result
 exist yet**; see [what is verified and what is not](#what-is-verified-and-what-is-not).
 Nothing here implements experience memory: memory OFF is the only condition.
@@ -41,8 +41,8 @@ Ollama is not needed to import, construct or test anything; only `OllamaShopper.
 ## Scenarios
 
 Generated from the real catalogue, deterministically for a fixed seed. Product types are
-leaf categories with at least 40 priced products whose titles actually contain the type word;
-brand-like or demographic leaves are excluded. Hidden **hard** facts (type, budget,
+leaf categories with at least 40 priced products where at least 30% of the type's products
+have a title containing a stem of a type word; brand-like or demographic leaves are excluded. Hidden **hard** facts (type, budget,
 department, sometimes brand or colour) and **soft** preferences (colour, material) come from
 attributes the catalogue really contains. The **acceptable set** is computed by the oracle
 over the whole catalogue: a product is acceptable only if every hard fact passes on explicit
@@ -79,6 +79,11 @@ product. Replies are structured: `{"message", "reveals", "action": reply|accept|
 3. a compact **ledger built by code**, not by a model: facts already revealed (and when), the
    assistant's recent questions and which of them repeat an answered one, products recently shown.
 
+Reveals are checked before they enter the ledger: a key the model lists but did not actually
+state (a price, department or attribute value missing from the message) stays out of the ledger
+and is flagged. The window is configurable (default 8 exchanges; the requested 6-10 is the
+intended range, any value of at least 1 is accepted and checked when the config is built).
+
 A complete append-only transcript (JSONL) is kept separately for replay and is never sent
 whole to the model. There is no vector store, no persistent evaluator memory and no model-written
 summary, so nothing generated can override the profile. The shopper cannot see ASTRA's memories,
@@ -87,8 +92,11 @@ ground truth, scores or the evaluation condition; tests inspect every payload se
 **Consistency checks** (lexical, so cheap and explainable, not a proof): reveals must name real
 profile keys and not exceed two; any price must be in the profile or shown on a card; colour,
 material or department words that contradict the profile, or that the profile never mentioned,
-are errors; product identifiers or target titles are leaks; a reveal whose value is absent from
-the message is a warning. An error triggers one re-ask with feedback; a second error makes the
+are errors (a contradiction of a profile attribute is an error even if ASTRA suggested the
+value); an attribute only ASTRA suggested, which the shopper then adopts, is a warning
+(`adopted_assistant_suggestion`); a product on a displayed card may be echoed; product
+identifiers or target titles ASTRA never displayed are leaks; a reveal whose value is absent
+from the message is a warning. An error triggers one re-ask with feedback; a second error makes the
 session **invalid** (a simulator fault). Malformed JSON is retried once inside the adapter. All
 of this is logged and summarised under "Simulator reliability" in the report, with a warning if
 more than 10% of sessions are invalid.
@@ -101,8 +109,10 @@ Defaults, fixed before any run (change them before a run, never after seeing res
 - **Success@K within B** (the "verified task success"): some recommendation by turn B has an
   independently verified acceptable product in its top K. **First-recommendation Hit@K** looks
   only at the first recommendation; no recommendation counts as a miss.
+- **Strict success@K**: every item in the top K of some recommendation is verified, reported next
+  to the lenient headline. Precision@K of the first recommendation is also kept.
 - **nDCG@K** with graded relevance, for the first and the final recommendation; the
-  no-recommendation-as-zero version is the headline.
+  no-recommendation-as-zero version is the headline for both.
 - **Hard-violation rate**: share of distinct recommended items failing a hidden hard
   requirement; items with an unknown required attribute and invented IDs are counted separately.
   Success@K is lenient (one hit is enough), so always read it with the violation rate.
@@ -125,12 +135,20 @@ Defaults, fixed before any run (change them before a run, never after seeing res
 
 **Invalid sessions** (simulator failure, provider error, run budget exhausted) are counted and
 excluded from agent-quality denominators because they are not the agent's behaviour; they are
-reported with their rate. **Agent failures and exhausted per-turn budgets stay in every
+reported with their rate and reasons. Because exclusion can be non-random, the report also shows
+the headline success with invalid sessions counted as failures, termination counts per cell
+(accepted, gave up, max turns, errors), and for a paired comparison the number of dropped pairs
+with reasons plus a worst-case difference. Compare invalid rates across conditions before
+trusting a difference. **Agent failures and exhausted per-turn budgets stay in every
 denominator.** The scorer never asks the shopper whether it was satisfied; it re-judges every
 recommended and returned product from raw catalogue rows. Wilson intervals accompany rates;
 with a few dozen sessions these are descriptive, not significance claims.
 
 ## Memory OFF vs ON (future)
+
+Each scenario runs under its own ASTRA user ID (`eval-shopper-<scenario id>`), so nothing
+user-scoped can leak between scenarios. `run.json` records the decision-policy class, model and
+prompt version plus the catalogue and index hashes in the shared config.
 
 `Condition(name, experience)` and `ExperienceSnapshot(snapshot_id, sha256, entries)` define the
 seam. Every condition runs the same scenarios (condition order rotates per scenario) with the
@@ -237,7 +255,21 @@ and a rule-based test policy completed end to end; that run only checks plumbing
 - That temperature 0 with a fixed seed reproduces replies on your machine.
 - Statistical power: a few dozen scenarios give wide intervals.
 
-**Known limitations:** consistency checks are lexical (a paraphrased contradiction can pass; a
+**Known limitations:**
+- The oracle is independent in code but not in semantics: it mirrors the agent gate's notion of
+  product type (category-word containment), departments and exact prices, so it catches
+  implementation bugs and state-extraction errors, not a shared conceptual mistake. Spot-check
+  some acceptable samples by hand before relying on "grounded".
+- Splits are by leaf category, but a family such as `Boots` also contains `Hiking Boots`
+  products; families can overlap across splits, which matters once learning exists.
+- `accept` and `give_up` come from the shopper and end the session, so shopper behaviour can
+  shorten conversations; termination counts are reported but not corrected for.
+- The kind mix cycles feasible, underspecified, feasible, no-valid, underspecified, feasible, so
+  the default held-out set has only 4 no-valid-product scenarios (wide intervals); `--limit` takes
+  the first N in file order.
+- A malformed-JSON retry appends the bad reply to the prompt without re-checking the token
+  budget (unlikely to matter at the default 4096 context).
+- Consistency checks are lexical (a paraphrased contradiction can pass; a
 benign colour word can trigger a false alarm); product-type matching is category-word based;
 acceptable sets use historical parent-product data and say nothing about stock or variants; the
 shopper sees titles and prices of recommended cards, which is realistic but lets it react to

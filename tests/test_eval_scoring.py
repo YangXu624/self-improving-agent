@@ -179,6 +179,22 @@ class ScoringTests(F.EvalCase):
             "failure",
         )
 
+    def test_strict_success_requires_every_item_in_the_top_k_to_be_verified(self):
+        mixed = [self.pass_ids[0], self.expensive, self.pass_ids[1]]
+        s = self.score(self.record([self.turn(1, mixed, seen=mixed, searches=1)]))
+        self.assertEqual(s["outcome"], "success")  # lenient headline: one verified hit
+        strict = s["metrics"]["strict_success_at_k_within_budget"]
+        self.assertEqual(strict, {"1": True, "3": False, "5": False})
+        self.assertAlmostEqual(s["metrics"]["precision_first_at_k"]["3"], 2 / 3)
+        clean = self.pass_ids[:3]
+        s = self.score(self.record([self.turn(1, clean, seen=clean, searches=1)]))
+        self.assertTrue(all(s["metrics"]["strict_success_at_k_within_budget"].values()))
+        none = self.score(self.record([self.turn(1, action="CLARIFY")]))
+        self.assertFalse(
+            any(none["metrics"]["strict_success_at_k_within_budget"].values())
+        )
+        self.assertIsNone(none["metrics"]["precision_first_at_k"]["3"])
+
     def test_turn_budget_decides_whether_a_late_success_counts(self):
         ids = self.pass_ids[:2]
         record = self.record(

@@ -227,6 +227,9 @@ def score_session(record, truth, oracle, config=ScoreConfig(), *, max_turns):
     metrics = {
         "hit_at_k": {},
         "success_at_k_within_budget": {},
+        # Strict: every item in the top K (as many as were recommended) is verified.
+        "strict_success_at_k_within_budget": {},
+        "precision_first_at_k": {},
         "ndcg_first": {},
         "ndcg_final": {},
     }
@@ -238,6 +241,15 @@ def score_session(record, truth, oracle, config=ScoreConfig(), *, max_turns):
         metrics["success_at_k_within_budget"][str(k)] = any(
             turn <= budget and any(g > 0 for g in grades[:k])
             for turn, grades in grades_by_rec
+        )
+        metrics["strict_success_at_k_within_budget"][str(k)] = any(
+            turn <= budget and grades[:k] and all(g > 0 for g in grades[:k])
+            for turn, grades in grades_by_rec
+        )
+        metrics["precision_first_at_k"][str(k)] = (
+            sum(g > 0 for g in grades_by_rec[0][1][:k]) / len(grades_by_rec[0][1][:k])
+            if grades_by_rec
+            else None
         )
         metrics["ndcg_first"][str(k)] = (
             ndcg(grades_by_rec[0][1], truth.ideal_grades, k) if grades_by_rec else None

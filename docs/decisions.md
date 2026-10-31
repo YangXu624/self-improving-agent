@@ -133,7 +133,7 @@ trusted executor, not the prompt, and adds only the optional `closure` response 
 - **Replay integrity** checks the seeded schedule, duplicates, completeness and error trials;
   consistent record fabrication and forged certificates remain undetectable by code.
 
-## Simulated-shopper evaluation (1 November 2026)
+## Simulated-shopper evaluation (31 October 2026)
 
 The user approved building the evaluation harness without waiting for a proposal review, with
 Ollama (`llama3.1:latest`) running only on the user's Mac.

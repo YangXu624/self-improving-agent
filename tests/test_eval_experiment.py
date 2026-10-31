@@ -160,6 +160,105 @@ class EndToEndTests(ExperimentCase):
             )
 
 
+class ReportConfigTests(ExperimentCase):
+    def test_report_follows_the_k_values_the_run_was_scored_with(self):
+        self.run_it(
+            max_model_calls=500,
+            limit=4,
+            score=ScoreConfig(k_values=(2, 4), headline_k=4),
+        )
+        report = build_report(self.root / "out")
+        cell = report["cells"]["memory_off/all"]["feasible"]
+        self.assertEqual(set(cell["success_at_k_within_budget"]), {"2", "4"})
+        self.assertEqual(cell["success_headline_k"]["k"], 4)
+        self.assertIn("Headline Success@4", render_markdown(report))
+
+    def test_a_headline_k_outside_the_scored_values_is_rejected_up_front(self):
+        with self.assertRaisesRegex(ValueError, "headline_k"):
+            self.run_it(limit=1, score=ScoreConfig(k_values=(1, 5), headline_k=3))
+
+    def test_report_adds_strict_success_invalid_sensitivity_and_terminations(self):
+        self.run_it(max_model_calls=500, limit=5)
+        cell = build_report(self.root / "out")["cells"]["memory_off/all"]["feasible"]
+        self.assertIn("3", cell["strict_success_at_k_within_budget"])
+        self.assertIn("accepted", cell["terminations"])
+        self.assertEqual(
+            cell["success_headline_k_if_invalid_counted_as_failure"]["n"],
+            cell["sessions"],
+        )
+        self.assertIn("3", cell["ndcg_final_recommendation_no_rec_as_zero"])
+
+
+class PairedAttritionTests(ExperimentCase):
+    def test_pairs_dropped_for_an_invalid_arm_are_reported_with_a_worst_case_row(self):
+        from astra_eval.report import paired
+
+        def result(scenario, condition, outcome, valid=True, category=None):
+            return {
+                "scenario": {"id": scenario, "kind": "feasible"},
+                "condition": condition,
+                "score": {
+                    "valid": valid,
+                    "outcome": outcome,
+                    "failure_category": category,
+                },
+            }
+
+        rows = [
+            result("a", "off", "success"),
+            result("a", "on", "success"),
+            result("b", "off", "success"),
+            result("b", "on", "invalid", False, "simulator_failure"),
+            result("c", "off", "failure"),
+            result("c", "on", "success"),
+        ]
+        p = paired(rows, "on", "off")
+        self.assertEqual((p["pairs"], p["dropped_pairs"]), (2, 1))
+        self.assertEqual(p["dropped_reasons"], {"on:simulator_failure": 1})
+        self.assertEqual(
+            (p["only_treatment_succeeds"], p["only_reference_succeeds"]), (1, 0)
+        )
+        worst = p["sensitivity_invalid_counted_as_failure"]
+        self.assertEqual(
+            (
+                worst["pairs"],
+                worst["only_reference_succeeds"],
+                worst["only_treatment_succeeds"],
+            ),
+            (3, 1, 1),
+        )
+
+
+class IdentityTests(ExperimentCase):
+    def test_each_scenario_gets_its_own_astra_user(self):
+        self.run_it(max_model_calls=500, limit=4)
+        users = [r["user_id"] for r in read_results(self.root / "out")]
+        self.assertEqual(len(set(users)), len(users))
+        self.assertTrue(all(u.startswith("eval-shopper-") for u in users))
+
+    def test_shared_config_records_policy_and_index_identity(self):
+        self.run_it(max_model_calls=500, limit=1)
+        shared = json.loads((self.root / "out" / "run.json").read_text())[
+            "shared_config"
+        ]
+        self.assertRegex(shared["index_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(shared["decision_policy"]["class"], "HeuristicPolicy")
+        self.assertEqual(
+            shared["decision_policy"]["prompt_version"], "shopping-baseline-v3-compact"
+        )
+        self.assertNotIn("key", json.dumps(shared["decision_policy"]).lower())
+
+    def test_inconsistent_turn_budget_and_window_are_rejected_at_configuration_time(
+        self,
+    ):
+        with self.assertRaisesRegex(ValueError, "turn_budget"):
+            self.run_it(limit=1, score=ScoreConfig(turn_budget=99))
+        with self.assertRaises(ValueError):
+            SimulatorConfig(window_turns=0)
+        with self.assertRaises(ValueError):
+            SimulatorConfig.from_env({"ASTRA_SIM_WINDOW_TURNS": "0"})
+
+
 class IsolationTests(ExperimentCase):
     def test_ground_truth_and_condition_never_reach_astra_or_the_shopper(self):
         fake = F.FakeOllama("good")
@@ -209,7 +308,7 @@ class IsolationTests(ExperimentCase):
             )
             entries = [json.loads(x) for x in lines]
             said = {k for e in entries if e["role"] == "shopper" for k in e["reveals"]}
-            with store.open("eval-shopper", result["astra_session_id"]) as session:
+            with store.open(result["user_id"], result["astra_session_id"]) as session:
                 logged = json.dumps([e.payload for e in session.events]).lower()
             for fact in scenario.profile.facts:
                 if fact.key not in said:

@@ -65,6 +65,58 @@ class ConsistencyTests(unittest.TestCase):
         wrong = check_reply(ShopperReply(message="It's for my husband, a man."), women)
         self.assertIn("contradicts_profile", codes(wrong))
 
+    def test_echoing_a_displayed_target_title_is_not_a_leak_but_an_unseen_one_is(self):
+        title = "Acme Trail Boot"
+        seen = check(
+            "Is the Acme Trail Boot waterproof?", shown_titles=title, forbidden=[title]
+        )
+        self.assertNotIn("target_leak", codes(seen))
+        unseen = check("Do you have the Acme Trail Boot?", forbidden=[title])
+        self.assertIn("target_leak", codes(unseen))
+        self.assertIn(
+            "target_leak", codes(check("B001234567", shown_titles="B001234567"))
+        )  # IDs never shown
+
+    def test_adopting_an_attribute_only_the_assistant_suggested_is_a_warning(self):
+        v = check("Yes, leather please.", shown_text="Would you like leather?")
+        self.assertIn("adopted_assistant_suggestion", codes(v))
+        self.assertEqual(errors(v), [])
+        # but a suggested value that contradicts a profile attribute is still an error
+        v = check("Yes, blue please.", shown_text="Would you like blue?")
+        self.assertIn("contradicts_profile", codes(v))
+        # a colour on a product card is fine to mention
+        self.assertEqual(
+            errors(check("The blue one is nice.", shown_titles="Blue boot")), []
+        )
+
+    def test_claimed_reveals_are_checked_for_price_and_department_too(self):
+        self.assertIn("claimed_reveal_missing", codes(check("Sure.", ["budget"])))
+        self.assertNotIn(
+            "claimed_reveal_missing", codes(check("Under 60 please.", ["budget"]))
+        )
+        from astra_eval.models import Fact, ShopperProfile
+
+        fact = Fact(
+            key="department",
+            kind="hard",
+            field="department",
+            op="eq",
+            value="women",
+            statement="It's for a woman.",
+            keywords=["who"],
+        )
+        women = ShopperProfile(
+            scenario_id="s", persona="p", facts=(fact,), opening_keys=()
+        )
+        said = check_reply(
+            ShopperReply(message="For my wife.", reveals=["department"]), women
+        )
+        self.assertIn("claimed_reveal_missing", codes(said))
+        ok = check_reply(
+            ShopperReply(message="It's for a woman.", reveals=["department"]), women
+        )
+        self.assertNotIn("claimed_reveal_missing", codes(ok))
+
     def test_an_attribute_the_assistant_just_mentioned_may_be_echoed(self):
         self.assertEqual(
             errors(

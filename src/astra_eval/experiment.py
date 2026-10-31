@@ -93,7 +93,26 @@ class ExperimentConfig:
     user_id: str = "eval-shopper"
 
 
-def shared_config(config, scenario_ids, truth_sha, scenarios_sha, catalogue_sha):
+def policy_descriptor(policy):
+    """Identity of the decision policy for audit; never includes credentials."""
+    from shopping_agent.context import PROMPT_VERSION
+
+    return {
+        "class": type(policy).__name__,
+        "model": getattr(policy, "model", None),
+        "prompt_version": PROMPT_VERSION,
+    }
+
+
+def shared_config(
+    config,
+    scenario_ids,
+    truth_sha,
+    scenarios_sha,
+    catalogue_sha,
+    policy=None,
+    index_sha=None,
+):
     """Everything that must be identical across conditions."""
     return {
         "harness": VERSION,
@@ -101,6 +120,8 @@ def shared_config(config, scenario_ids, truth_sha, scenarios_sha, catalogue_sha)
         "scenarios_sha256": scenarios_sha,
         "ground_truth_sha256": truth_sha,
         "catalogue_sha256": catalogue_sha,
+        "index_sha256": index_sha,
+        "decision_policy": policy_descriptor(policy) if policy is not None else None,
         "simulator": asdict(config.simulator),
         "score": asdict(config.score),
         "consistency": asdict(config.consistency),
@@ -134,11 +155,24 @@ def git_state():
         return {"commit": None, "dirty": None}
 
 
+def check_budget(config, scenarios):
+    """A turn budget longer than the conversation would be silently meaningless."""
+    longest = max((s.max_user_turns for s in scenarios), default=0)
+    if config.score.turn_budget and config.score.turn_budget > min(
+        (s.max_user_turns for s in scenarios), default=0
+    ):
+        raise ValueError(
+            f"turn_budget {config.score.turn_budget} exceeds a scenario's max_user_turns "
+            f"(shortest {min((s.max_user_turns for s in scenarios), default=0)}, longest {longest})"
+        )
+
+
 def plan(config):
     """What a run would do and its worst-case agent model calls (no model is contacted)."""
     scenarios, manifest = load_scenarios(config.scenarios_dir, config.split)
     if config.limit:
         scenarios = scenarios[: config.limit]
+    check_budget(config, scenarios)
     sessions = len(scenarios) * len(config.conditions)
     worst = (
         sum(s.max_user_turns for s in scenarios)
@@ -183,12 +217,17 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
     names = [c.name for c in config.conditions]
     if len(set(names)) != len(names):
         raise ValueError("Condition names must be unique")
+    if config.score.headline_k not in config.score.k_values:
+        raise ValueError("headline_k must be one of k_values")
+    check_budget(config, scenarios)
     shared = shared_config(
         config,
         [s.id for s in scenarios],
         manifest["ground_truth_sha256"],
         manifest["scenarios_sha256"],
         oracle.sha256,
+        policy,
+        file_hash(config.index),
     )
     shared_sha = digest(shared)
     output.mkdir(parents=True)
@@ -284,6 +323,7 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
                     "condition": condition.name,
                     "shared_config_sha256": shared_sha,
                     "astra_session_id": record.astra_session_id,
+                    "user_id": record.user_id,
                     "session_dir": str(directory.relative_to(output)),
                     "score": score,
                 }

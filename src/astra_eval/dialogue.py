@@ -57,6 +57,7 @@ class SessionRecord:
     ledger: dict = field(default_factory=dict)
     repeated_questions: int = 0
     unmatched_questions: int = 0
+    user_id: str = ""
     error: str | None = None
 
 
@@ -151,9 +152,8 @@ class DialogueRunner:
             violations = check_reply(
                 result.reply,
                 memory.profile,
-                shown_text=view.text
-                + " "
-                + " ".join(p.get("title", "") for p in view.products),
+                shown_text=view.text,
+                shown_titles=" ".join(p.get("title", "") for p in view.products),
                 shown_prices=[
                     p["price"]
                     for p in view.products
@@ -167,7 +167,10 @@ class DialogueRunner:
                 stats["violations"][v.code] = stats["violations"].get(v.code, 0) + 1
             hard = errors(violations)
             if not hard:
-                return result.reply, [v.code for v in violations]
+                unverified = [
+                    v.detail for v in violations if v.code == "claimed_reveal_missing"
+                ]
+                return result.reply, [v.code for v in violations], unverified
             stats["consistency_retries"] += 1
             feedback = [f"{v.code}: {v.detail}".strip(": ") for v in hard]
             last = [v.code for v in hard]
@@ -176,8 +179,10 @@ class DialogueRunner:
     def run(
         self, scenario, *, condition="memory_off", transcript_path=None, forbidden=()
     ):
-        sid = self.store.create(self.user_id)
-        record = SessionRecord(scenario.id, condition, sid)
+        # One ASTRA user per scenario: nothing user-scoped can ever leak between scenarios.
+        user = f"{self.user_id}-{scenario.id}"
+        sid = self.store.create(user)
+        record = SessionRecord(scenario.id, condition, sid, user_id=user)
         memory = ShopperMemory(
             scenario.profile,
             window_turns=self.simulator.config.window_turns,
@@ -201,7 +206,7 @@ class DialogueRunner:
             started = time.perf_counter()
             try:
                 response = self.agent.turn(
-                    self.user_id,
+                    user,
                     sid,
                     message,
                     request_id=f"{self.run_id}-{scenario.id}-{condition}-{turn}",
@@ -210,7 +215,7 @@ class DialogueRunner:
                 record.termination, record.error = "agent_exception", type(exc).__name__
                 break
             wall_ms = (time.perf_counter() - started) * 1000
-            with self.store.open(self.user_id, sid) as session:
+            with self.store.open(user, sid) as session:
                 agent_turn = extract_turn(
                     session.events, response["request_id"], response, turn, wall_ms
                 )
@@ -250,7 +255,9 @@ class DialogueRunner:
                 record.termination = "max_turns"
                 break
             try:
-                reply, flags = self.shopper_reply(memory, view, forbidden, stats)
+                reply, flags, unverified = self.shopper_reply(
+                    memory, view, forbidden, stats
+                )
             except SimulatorFailure as failure:
                 record.termination, record.error = (
                     "simulator_failure",
@@ -265,7 +272,7 @@ class DialogueRunner:
                     }
                 )
                 break
-            memory.apply(turn + 1, reply, flags)
+            memory.apply(turn + 1, reply, flags, unverified)
             if reply.action == "accept":
                 record.termination = "accepted"
                 break
@@ -275,7 +282,7 @@ class DialogueRunner:
             message = reply.message
         else:  # pragma: no cover - loop always breaks at max_turns
             record.termination = "max_turns"
-        with self.store.open(self.user_id, sid) as session:
+        with self.store.open(user, sid) as session:
             record.final_requirements = [
                 {"field": r.field, "op": r.op, "value": r.value, "strength": r.strength}
                 for r in session.state.requirements

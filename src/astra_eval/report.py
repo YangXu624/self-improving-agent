@@ -140,6 +140,35 @@ def feasible_cell(rows, k_values, headline):
             else None
             for k in k_values
         },
+        "strict_success_at_k_within_budget": {
+            str(k): rate(
+                sum(
+                    s["metrics"]["strict_success_at_k_within_budget"][str(k)]
+                    for s in scores
+                ),
+                n,
+            )
+            for k in k_values
+        },
+        "precision_first_recommendation_given_a_recommendation": {
+            str(k): mean([s["metrics"]["precision_first_at_k"][str(k)] for s in scores])
+            for k in k_values
+        },
+        "ndcg_final_recommendation_no_rec_as_zero": {
+            str(k): mean([s["metrics"]["ndcg_final"][str(k)] or 0.0 for s in scores])
+            if n
+            else None
+            for k in k_values
+        },
+        "terminations": dict(Counter(r["score"]["termination"] for r in rows)),
+        "invalid_by_reason": dict(
+            Counter(
+                r["score"]["failure_category"] for r in rows if not r["score"]["valid"]
+            )
+        ),
+        "success_headline_k_if_invalid_counted_as_failure": rate(
+            sum(r["score"]["outcome"] == "success" for r in rows), len(rows)
+        ),
         "ndcg_first_recommendation_given_a_recommendation": {
             str(k): mean([s["metrics"]["ndcg_first"][str(k)] for s in scores])
             for k in k_values
@@ -261,40 +290,72 @@ def mcnemar_exact(only_a, only_b):
 
 
 def paired(results, a, b):
-    """Per-scenario paired success and nDCG for two conditions (feasible, both valid)."""
+    """Per-scenario paired SUCCESS for two conditions on feasible scenarios (no nDCG pairing).
+
+    Pairs with an invalid session in either arm are dropped from the main comparison, and the
+    drop is reported with reasons because it can be non-random. The sensitivity row counts an
+    invalid session as a failure instead.
+    """
     table = {}
     for r in results:
-        if r["scenario"]["kind"] in FEASIBLE_KINDS and r["score"]["valid"]:
+        if r["scenario"]["kind"] in FEASIBLE_KINDS:
             table.setdefault(r["scenario"]["id"], {})[r["condition"]] = r["score"]
-    pairs = [(v[a], v[b]) for v in table.values() if a in v and b in v]
-    only_a = sum(
-        x["outcome"] == "success" and y["outcome"] != "success" for x, y in pairs
-    )
-    only_b = sum(
-        y["outcome"] == "success" and x["outcome"] != "success" for x, y in pairs
-    )
+    both = [(v[a], v[b]) for v in table.values() if a in v and b in v]
+    pairs = [(x, y) for x, y in both if x["valid"] and y["valid"]]
+    dropped = Counter()
+    for x, y in both:
+        for name, score in ((a, x), (b, y)):
+            if not score["valid"]:
+                dropped[f"{name}:{score['failure_category']}"] += 1
+
+    def wins(rows):
+        only_a = sum(
+            x["outcome"] == "success" and y["outcome"] != "success" for x, y in rows
+        )
+        only_b = sum(
+            y["outcome"] == "success" and x["outcome"] != "success" for x, y in rows
+        )
+        diff = (
+            (
+                sum(x["outcome"] == "success" for x, _ in rows)
+                - sum(y["outcome"] == "success" for _, y in rows)
+            )
+            / len(rows)
+            if rows
+            else None
+        )
+        return only_a, only_b, diff
+
+    only_a, only_b, diff = wins(pairs)
+    s_a, s_b, s_diff = wins(both)  # invalid sessions are not successes
     return {
         "treatment": a,
         "reference": b,
         "pairs": len(pairs),
+        "dropped_pairs": len(both) - len(pairs),
+        "dropped_reasons": dict(dropped),
         "only_treatment_succeeds": only_a,
         "only_reference_succeeds": only_b,
-        "success_rate_difference": (
-            (
-                sum(x["outcome"] == "success" for x, _ in pairs)
-                - sum(y["outcome"] == "success" for _, y in pairs)
-            )
-            / len(pairs)
-            if pairs
-            else None
-        ),
+        "success_rate_difference": diff,
         "mcnemar_exact_p": mcnemar_exact(only_a, only_b) if pairs else None,
+        "sensitivity_invalid_counted_as_failure": {
+            "pairs": len(both),
+            "only_treatment_succeeds": s_a,
+            "only_reference_succeeds": s_b,
+            "success_rate_difference": s_diff,
+        },
     }
 
 
-def build_report(directory, k_values=(1, 3, 5), headline=3):
+def build_report(directory, k_values=None, headline=None):
     results = read_results(directory)
     run = json.loads((Path(directory) / "run.json").read_text(encoding="utf-8"))
+    # The report must use the K values the run was scored with, not its own defaults.
+    scored = run["shared_config"]["score"]
+    k_values = tuple(k_values or scored["k_values"])
+    headline = headline or scored["headline_k"]
+    if headline not in k_values:
+        raise ValueError("headline K must be one of the scored K values")
     conditions = sorted({r["condition"] for r in results})
     report = {
         "run": {
@@ -393,6 +454,15 @@ def render_markdown(report):
             ]
             for k, v in feasible["success_at_k_within_budget"].items():
                 lines.append(f"| Success@{k} (within turn budget) | {fmt(v)} |")
+            for k, v in feasible["strict_success_at_k_within_budget"].items():
+                lines.append(
+                    f"| Strict success@{k} (every item in top {k} verified) | {fmt(v)} |"
+                )
+            lines.append(
+                f"| Success@headline if invalid sessions counted as failures | "
+                f"{fmt(feasible['success_headline_k_if_invalid_counted_as_failure'])} |"
+            )
+            lines.append(f"| Terminations | {feasible['terminations']} |")
             for k, v in feasible["first_recommendation_hit_at_k"].items():
                 lines.append(f"| First-recommendation Hit@{k} | {fmt(v)} |")
             for k, v in feasible["ndcg_first_recommendation_no_rec_as_zero"].items():

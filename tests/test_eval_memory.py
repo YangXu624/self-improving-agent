@@ -198,6 +198,20 @@ class MemoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ShopperMemory(profile(), window_turns=0)
 
+    def test_reveals_the_message_did_not_support_stay_out_of_the_ledger(self):
+        memory = ShopperMemory(profile(), window_turns=2)
+        memory.apply(
+            2,
+            ShopperReply(message="Sure.", reveals=["budget"]),
+            flags=["claimed_reveal_missing"],
+            unverified=["budget"],
+        )
+        self.assertNotIn("budget", memory.revealed)
+        self.assertEqual(memory.transcript.entries[-1]["reveals"], [])
+        self.assertEqual(
+            memory.transcript.entries[-1]["flags"], ["claimed_reveal_missing"]
+        )
+
     def test_apply_records_structured_reply(self):
         memory = ShopperMemory(profile(), window_turns=2)
         memory.apply(

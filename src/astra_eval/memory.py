@@ -253,7 +253,9 @@ class ShopperMemory:
             },
         )
 
-    def apply(self, turn, reply: ShopperReply, flags=()):
+    def apply(self, turn, reply: ShopperReply, flags=(), unverified=()):
+        """Record a reply. Keys the message did not actually state stay out of the ledger."""
+        confirmed = [k for k in reply.reveals if k not in set(unverified)]
         self.record_shopper(
-            turn, reply.message, reply.reveals, action=reply.action, flags=flags
+            turn, reply.message, confirmed, action=reply.action, flags=flags
         )

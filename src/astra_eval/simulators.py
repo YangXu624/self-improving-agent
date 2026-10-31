@@ -51,6 +51,11 @@ class SimulatorConfig:
     window_turns: int = 8
     max_malformed_retries: int = 1
 
+    def __post_init__(self):
+        # Validate at configuration time, not as a crash inside the first session.
+        if self.window_turns < 1 or self.max_malformed_retries < 0:
+            raise ValueError("window_turns must be >= 1 and retries >= 0")
+
     @classmethod
     def from_env(cls, environ=None, **overrides):
         """ASTRA_SIM_* variables; explicit overrides win. Unset values use defaults."""

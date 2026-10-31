@@ -131,17 +131,27 @@ def profile_words(profile):
     return words
 
 
+def numbers_in(text):
+    return {float(n) for n in re.findall(r"\d+(?:\.\d+)?", text)}
+
+
 def check_reply(
     reply: ShopperReply,
     profile: ShopperProfile,
     *,
     shown_text="",
+    shown_titles="",
     shown_prices=(),
     has_products=False,
     forbidden=(),
     config=ConsistencyConfig(),
 ):
-    """Return a list of Violations for one structured reply."""
+    """Return a list of Violations for one structured reply.
+
+    `shown_text` is ASTRA's message, `shown_titles` the product cards the shopper can see.
+    Echoing a card is fine; adopting an attribute that only ASTRA suggested is a warning;
+    contradicting a profile attribute is always an error, even if ASTRA mentioned it.
+    """
     out = []
     keys = {f.key for f in profile.facts}
     unknown = [k for k in reply.reveals if k not in keys]
@@ -157,29 +167,83 @@ def check_reply(
         if round(price, 2) not in allowed_prices:
             out.append(Violation("price_not_in_profile", "error", f"{price:g}"))
     if config.check_vocabulary:
-        allowed = profile_words(profile) | tokens(shown_text)
+        profile_w, title_w, assistant_w = (
+            profile_words(profile),
+            tokens(shown_titles),
+            tokens(shown_text),
+        )
         for name, vocabulary in (
             ("color", COLORS),
             ("material", MATERIALS),
             ("department", set(DEPARTMENT_WORDS)),
         ):
             if name == "department":
-                mentioned = departments_in(message_words) - departments_in(allowed)
+                mentioned, in_profile, in_titles, in_assistant = (
+                    departments_in(message_words),
+                    departments_in(profile_w),
+                    departments_in(title_w),
+                    departments_in(assistant_w),
+                )
             else:
-                mentioned = (message_words & vocabulary) - allowed
-            if mentioned:
-                have = [f for f in profile.facts if f.field == name]
-                code = "contradicts_profile" if have else "invented_attribute"
-                out.append(Violation(code, "error", f"{name}: {sorted(mentioned)}"))
+                mentioned, in_profile, in_titles, in_assistant = (
+                    message_words & vocabulary,
+                    profile_w & vocabulary,
+                    title_w & vocabulary,
+                    assistant_w & vocabulary,
+                )
+            if any(f.field == name for f in profile.facts):
+                bad = mentioned - in_profile - in_titles
+                if bad:
+                    out.append(
+                        Violation(
+                            "contradicts_profile", "error", f"{name}: {sorted(bad)}"
+                        )
+                    )
+                continue
+            bad = mentioned - in_titles
+            if bad - in_assistant:
+                out.append(
+                    Violation(
+                        "invented_attribute",
+                        "error",
+                        f"{name}: {sorted(bad - in_assistant)}",
+                    )
+                )
+            if bad & in_assistant:
+                out.append(
+                    Violation(
+                        "adopted_assistant_suggestion",
+                        "warning",
+                        f"{name}: {sorted(bad & in_assistant)}",
+                    )
+                )
     for key in reply.reveals:
         fact = profile.fact(key)
-        if fact is not None and fact.field in {"color", "material", "brand", "size"}:
-            wanted = fact_words(fact)
-            if wanted and not (wanted & message_words) and not prices_in(reply.message):
-                out.append(Violation("claimed_reveal_missing", "warning", key))
-    if ID_PATTERN.search(reply.message) or any(
-        s and s.lower() in reply.message.lower() for s in forbidden
-    ):
+        if fact is None or key in unknown:
+            continue
+        if fact.field in {"color", "material", "brand", "size"}:
+            stated = bool(fact_words(fact) & message_words)
+        elif fact.field == "price":
+            stated = any(
+                abs(n - float(v)) < 0.01
+                for n in numbers_in(reply.message)
+                for v in (fact.value if isinstance(fact.value, list) else [fact.value])
+            )
+        elif fact.field == "department":
+            stated = bool(
+                departments_in(fact_words(fact)) & departments_in(message_words)
+            )
+        else:
+            stated = True
+        if not stated:
+            out.append(Violation("claimed_reveal_missing", "warning", key))
+    shown = (shown_text + " " + shown_titles).lower()
+    leaked_titles = [
+        s
+        for s in forbidden
+        if s and s.lower() in reply.message.lower() and s.lower() not in shown
+    ]
+    if ID_PATTERN.search(reply.message) or leaked_titles:
         out.append(
             Violation("target_leak", "error", "product identifier or title in message")
         )
