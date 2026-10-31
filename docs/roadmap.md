@@ -17,8 +17,8 @@ by themselves evidence that the agent has learned something useful.
 | Phase | Status | Remaining gate |
 | --- | --- | --- |
 | 1. Frozen catalogue | Complete for the initial 50k scope | Future category expansion is a separate decision |
-| 2. Session-only conversational baseline | Implemented; automated verification complete | Live-model acceptance and review remain pending |
-| 3. Minimal UI | Implemented with Streamlit and an explicit mock policy | User review pending; live provider remains disabled |
+| 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance and deferred defects remain pending |
+| 3. Minimal UI | Streamlit UI connected to DeepSeek; runtime script removed | User review pending; five-request smoke is not a benchmark |
 | 4. Evaluation and baseline measurement | Design guidance documented; runner not implemented | Approve protocol, validate simulator and record baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
 | 6. Persistent user memory | Not started | Approve lifecycle and repeated-user evaluation |
@@ -30,11 +30,11 @@ Phase 1 catalogue. These roadmap phase numbers do not rename previous commits or
 The initial implementation and coding-guidance PRs were merged ([PR 1](https://github.com/YangXu624/self-improving-agent/pull/1),
 [PR 2](https://github.com/YangXu624/self-improving-agent/pull/2)). Future merges require approval.
 
-The Phase 2 checkpoint had 45 passing automated tests. Phase 3 adds 18 service/UI cases
-for 63 passing tests, with Ruff lint and format checks passing; see [UI evidence](phase-3-ui.md).
+The Phase 2 checkpoint had 45 passing automated tests. The current suite has 70 passing
+cases after UI/live integration; see [UI evidence](phase-3-ui.md).
 Prior full-catalogue smoke evidence is in [milestone notes](milestone-1.md).
-Those smoke decisions were test fixtures. No live-model quality, shopping-success benchmark
-or benefit from learning has been established.
+Those smoke decisions were test fixtures. No shopping-success benchmark or benefit from learning has been established. A small live
+integration check succeeded; it does not establish broad interpretation quality.
 
 ## Phase 1 — Freeze and audit the catalogue
 
@@ -79,17 +79,17 @@ fact in a long session is not established. Requirement extraction still depends 
 
 **Exit gate:** live acceptance report identifies completed checks, defects and remaining
 limitations; the user reviews the baseline before the next phase. Mocked tests alone do not
-satisfy this live-validation gate. The earlier instruction to finish with mocked tests remains
-in effect until the user authorises live requests.
+satisfy this live-validation gate. The user subsequently authorised live integration and a
+small check passed; the broader gate and two deferred defects remain pending.
 
 ## Phase 3 — Add a minimal visual interface
 
-**Current implementation:** the user explicitly authorised proceeding mock-first on 31 October
-2026, while deferring live Phase 2 validation and the two confirmed review defects. Streamlit
-now provides chat, product cards, owned session selection/resume, active needs/correction history
-and actual activity traces over the unchanged core. No live provider is exposed in this UI.
-See [Phase 3 evidence](phase-3-ui.md). This is an authorised sequencing exception, not evidence
-that the earlier live-validation/fix gate has passed.
+**Current implementation:** the initial mock-first UI was authorised before the pending
+Phase 2 fixes. The user then supplied a key and authorised removing scripted application
+decisions. Streamlit now uses DeepSeek for live decisions, retaining the same chat, product,
+session/state and trace views. Seventy offline tests and a five-request live smoke passed;
+see [Phase 3 evidence](phase-3-ui.md). Historical mock sessions remain separate. The two
+reviewed backend defects are still deferred; this is not a complete live-quality evaluation.
 
 **Purpose:** make conversation and decisions inspectable while preserving the existing core.
 
@@ -199,7 +199,7 @@ gaming or test contamination. This is deferred research, not a current implement
 
 ## Immediate next checkpoint
 
-The mock-first **Phase 3 UI is implemented for user review**; Phase 2 live validation and the
-two confirmed defects remain deferred by instruction. Next, review the UI and decide when to
-address those defects and explicitly enable the existing live provider. No live calls or
-memory/evaluation work are authorised merely by completing the mock UI.
+The live DeepSeek UI is implemented for review and running locally. Review its behaviour;
+then decide when to address the two deferred defects and broaden acceptance/evaluation. The
+small smoke is not the Phase 4 benchmark, and neither memory nor retrieval upgrades are part
+of this integration. Each submitted turn now makes paid API requests; display/inspection does not.

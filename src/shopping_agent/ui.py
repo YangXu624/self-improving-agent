@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from .provider import DeepSeekPolicy, ProviderError
 from .sessions import SessionError
 from .ui_service import ChatService
 
@@ -209,15 +210,34 @@ def _sidebar(service: ChatService) -> tuple[str, str, bool]:
         st.code(sid, language=None)
         show_images = st.checkbox("Show product images", value=True, key="show_images")
         st.caption(
-            "Local demo. Shopper names organise files; they are not accounts or authentication."
+            "Local app. Shopper names organise files; they are not accounts or authentication."
         )
     return owner, sid, show_images
 
 
 def run_app(project_root: Path) -> None:
-    """Mock-only composition root. No credential loading and no live-provider switch."""
+    """Live DeepSeek composition root; secrets stay server-side, no scripted fallback."""
     st.set_page_config(page_title="ASTRA · Shopping", page_icon="✦", layout="centered")
     st.html(CSS)
+    try:
+        policy = DeepSeekPolicy.from_env_file(
+            Path(os.environ.get("ASTRA_ENV_FILE", project_root / ".env"))
+        )
+    except ProviderError as error:
+        st.title("ASTRA")
+        st.error("DeepSeek is not configured: " + str(error))
+        st.caption(
+            "Set DEEPSEEK_API_KEY in this project's .env file. Keep it local; no key belongs in chat."
+        )
+        st.chat_input("Configure DeepSeek to start chatting", disabled=True)
+        return
+    except (ValueError, OSError):
+        st.title("ASTRA")
+        st.error(
+            "The local environment configuration could not be read. Check its syntax and file permissions."
+        )
+        st.chat_input("Configure DeepSeek to start chatting", disabled=True)
+        return
     try:
         service = ChatService(
             Path(
@@ -232,9 +252,10 @@ def run_app(project_root: Path) -> None:
             ),
             Path(
                 os.environ.get(
-                    "ASTRA_UI_SESSIONS", project_root / "data/ui-sessions/mock"
+                    "ASTRA_UI_SESSIONS", project_root / "data/ui-sessions/deepseek"
                 )
             ),
+            policy=policy,
         )
     except SAFE_ERRORS:
         st.title("ASTRA")
@@ -255,9 +276,7 @@ def run_app(project_root: Path) -> None:
         return
     st.caption("PERSONAL SHOPPING, ONE CONVERSATION AT A TIME")
     st.title("Find something that fits.")
-    st.caption(
-        "Mock mode · scripted decisions · real catalogue search · no LLM API calls"
-    )
+    st.caption("DeepSeek · live decisions · catalogue-backed recommendations")
     if notice := st.session_state.pop("send_error", None):
         st.error(notice)
     with st.sidebar:
@@ -286,7 +305,7 @@ def run_app(project_root: Path) -> None:
             if column.button(text, width="stretch"):
                 starter = text
         st.caption(
-            "This mock understands common product types, USD budgets, colour/material and simple corrections. It is a UI demo, not a live language model."
+            "Describe what matters to you. The agent can ask questions, search and recommend. Each turn allows up to 3 API attempts and 2 searches."
         )
     for message in view["messages"]:
         with st.chat_message(message["role"]):
@@ -297,9 +316,30 @@ def run_app(project_root: Path) -> None:
                 budget = message.get("budget_used", {})
                 searches = budget.get("searches", 0)
                 st.caption(
-                    f"{message['action'].capitalize()} · {budget.get('model_calls', 0)} mock steps · "
+                    f"{message['action'].capitalize()} · {budget.get('model_calls', 0)} API attempts · "
                     f"{searches} {'search' if searches == 1 else 'searches'}"
                 )
+                responses = [
+                    e
+                    for e in view["events"]
+                    if e["turn_id"] == message["request_id"]
+                    and e["type"] == "model_response"
+                ]
+                usages = [e["payload"]["metadata"].get("usage", {}) for e in responses]
+                if usages:
+                    input_tokens = sum(u.get("prompt_tokens", 0) for u in usages)
+                    output_tokens = sum(u.get("completion_tokens", 0) for u in usages)
+                    st.caption(
+                        f"Reported tokens: {input_tokens:,} input / {output_tokens:,} output"
+                    )
+                if len(
+                    [
+                        u
+                        for u in usages
+                        if "prompt_tokens" in u and "completion_tokens" in u
+                    ]
+                ) < budget.get("model_calls", 0):
+                    st.caption("Token usage is incomplete for this turn.")
                 if message.get("error"):
                     st.error("Turn error: " + message["error"])
                 render_activity(view["events"], message["request_id"])
@@ -311,7 +351,7 @@ def run_app(project_root: Path) -> None:
     if message := starter or prompt:
         if message.strip():
             try:
-                with st.spinner("Searching the catalogue…"):
+                with st.spinner("The shop agent is working…"):
                     service.send(owner, sid, message, uuid4().hex)
             except SAFE_ERRORS:
                 st.session_state["send_error"] = (

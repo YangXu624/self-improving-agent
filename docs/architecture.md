@@ -1,24 +1,31 @@
 # Current baseline architecture
 
-Status: session-only CLI baseline plus mock Streamlit UI, reviewed 31 October 2026. Live provider
-behaviour remains unverified. Future phases are in the [roadmap](roadmap.md).
+Status: session-only CLI and Streamlit UI use live DeepSeek decisions, reviewed 31 October
+2026. A bounded two-turn integration smoke passed; broad quality remains unmeasured.
 
-## Phase 3 mock UI boundary
+## Live UI boundary
 
-The user authorised a mock-first UI before the pending live Phase 2 acceptance/fixes.
-`ui_service.py` now adapts the existing ShoppingAgent and SessionStore for a visual client;
-`mock_policy.py` is an explicitly scripted DecisionPolicy, never a fallback for DeepSeek.
-It selects IDs from actual search results, not canned products, and supports a limited set
-of product types, USD upper budgets, colour/material preferences and explicit new goals.
-No core validator, executor, retrieval or storage implementation was changed. SQLite opens
-per request so a UI rerun thread never reuses another thread's connection. Persisted logs
-are the conversation source of truth. `ui.py`/`streamlit_app.py` render those persisted
-messages, product facts, active requirements/history and per-turn activity. No Streamlit
-import enters the agent/tool/storage modules. The UI never loads credentials or selects a
-live provider; policy injection keeps a later explicit provider swap local to composition.
-Mock sessions default to `data/ui-sessions/mock/`, separate from CLI sessions. Local shopper
-labels are organisational identity, not authentication. UI selection is distinct from transient
-widget state so browser reruns cannot silently replace the active conversation UUID.
+The user supplied a local key and authorised replacing the mock application policy. The
+runtime scripted module was removed. `ui.py` constructs DeepSeekPolicy from the explicit
+project env file, then passes it to ChatService. The service requires a policy; there is no
+implicit default/fallback. Only tests contain deterministic decision/HTTP fixtures.
+
+`configuration.py` parses the two supported settings without shell evaluation or value
+logging. Process settings take precedence. File secrets are not cached into os.environ.
+The CLI retains its compatible `load_env` interface; UI/provider composition uses fresh file
+resolution. Missing configuration disables the chat; provider errors stop a turn safely.
+The adapter retains JSON mode, disabled thinking, output/timeout bounds and no hidden retries.
+
+The existing ShoppingAgent owns validation, state commits, trusted search and recommendation
+gates. Its default context is versioned `shopping-baseline-v2`, adding an example JSON shape
+alongside the schema. No state/constraint checker, retrieval algorithm or storage lifecycle
+was changed. SQLite still opens per service request to avoid cross-thread connections.
+
+The renderer reads persisted messages, product facts, state/history and real activity.
+It shows API attempts and reported token usage, with missing usage explicit. Inspection and
+widget reruns make no model request. New live chats use `data/ui-sessions/deepseek/`; historical
+mock chats remain separate and untouched. Local shopper names are organisational labels,
+not hosted authentication. Session UUID selection remains separate from transient widgets.
 
 ## Execution and responsibilities
 
@@ -26,7 +33,7 @@ widget state so browser reruns cannot silently replace the active conversation U
 CLI or Streamlit UI message + user/session/request IDs
   → SessionStore: owner check, writer lock, event replay
   → context builder: active state + recent dialogue + current search + budgets/feedback
-  → decision policy: DeepSeek JSON proposal (CLI) or scripted mock (UI)
+  → decision policy: DeepSeek JSON proposal
   → trusted executor: schema/evidence/version checks, accepted state commit
       CLARIFY / RESPOND → assistant message → completed turn
       SEARCH → FTS5/BM25 + hard gates → actual result in next decision context
@@ -44,7 +51,8 @@ CLI or Streamlit UI message + user/session/request IDs
 | `src/shopping_agent/provider.py` | DeepSeek transport, token limit, safe errors; no automatic retries |
 | `src/shopping_agent/agent.py` | DecisionPolicy interface, bounded turn execution, validation, recommendations and tracing |
 | `src/shopping_agent/cli.py` | CLI index/chat/inspect composition and explicit local environment loading |
-| `src/shopping_agent/ui_service.py`, `mock_policy.py` | UI session boundary and explicit scripted demo decisions; real agent/tool execution |
+| `src/shopping_agent/ui_service.py` | UI session boundary with mandatory policy injection and real agent/tool execution |
+| `src/shopping_agent/configuration.py` | Shared explicit environment-file parsing; values never logged |
 | `src/shopping_agent/ui.py`, `streamlit_app.py` | Optional Streamlit chat, product cards, session controls, state and activity views |
 
 Policy, context construction, retrieval and storage are separate. Future guidance can enter
@@ -55,7 +63,8 @@ hard gates. These extension points do not constitute implemented experience/user
 
 - Catalogue: ignored `data/catalogue/catalog.jsonl`, image URL map and import manifest.
 - Generated retrieval index: ignored `data/index/catalogue.sqlite`, separate from memory.
-- Session data: ignored `data/sessions/<UUID>/events.jsonl` plus rebuildable `state.json`.
+- CLI session data: ignored `data/sessions/<UUID>/events.jsonl` plus rebuildable `state.json`.
+- UI session data: ignored `data/ui-sessions/deepseek/<UUID>/`; old mock histories are separate.
   Owner association does not automatically transfer facts into another session.
 - Credentials: ignored local environment; never in prompts or authorization-header traces.
 - No persistent user profile, agent-experience store, shopper simulator or scoring service.

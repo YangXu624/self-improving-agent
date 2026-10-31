@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from deepseek_fixtures import TEST_KEY, completion, service
 from test_retrieval import product
 
 from shopping_agent.retrieval import build_index
-from shopping_agent.ui_service import ChatService
 
 HAS_STREAMLIT = importlib.util.find_spec("streamlit") is not None
 if HAS_STREAMLIT:
@@ -53,16 +53,18 @@ class StreamlitTests(unittest.TestCase):
                 "ASTRA_CATALOGUE": str(self.catalogue),
                 "ASTRA_INDEX": str(self.index),
                 "ASTRA_UI_SESSIONS": str(self.sessions),
-                "DEEPSEEK_API_KEY": "not-used-by-mock-ui",
+                "DEEPSEEK_API_KEY": TEST_KEY,
+                "DEEPSEEK_MODEL": "deepseek-flash",
+                "ASTRA_ENV_FILE": str(self.root / "absent.env"),
             },
         )
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.network = patch(
             "shopping_agent.provider.urlopen",
-            side_effect=AssertionError("No shopping API allowed"),
+            side_effect=completion,
         )
-        self.network.start()
+        self.transport = self.network.start()
         self.addCleanup(self.network.stop)
         self.app = AppTest.from_file(str(APP), default_timeout=15).run()
         self.assertFalse(self.app.exception)
@@ -72,8 +74,8 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(self.app.exception)
 
     def view(self):
-        service = ChatService(self.catalogue, self.index, self.sessions)
-        return service.view(
+        chat = service(self.catalogue, self.index, self.sessions)
+        return chat.view(
             self.app.session_state["owner"], self.app.session_state["conversation"]
         )
 
@@ -143,13 +145,13 @@ class StreamlitTests(unittest.TestCase):
         self.assertTrue(any("Image unavailable" in c.value for c in self.app.caption))
         self.assertTrue(any("USD 45.00" in m.value for m in self.app.markdown))
 
-    def test_untrusted_input_rendered_as_text_and_mock_usage_labelled(self):
+    def test_untrusted_input_rendered_as_text_and_live_usage_labelled(self):
         self.send('<img src=x onerror="alert(1)"> boots under $60')
         self.assertTrue(any("<img src=x" in t.value for t in self.app.text))
-        self.assertTrue(any("Mock mode" in c.value for c in self.app.caption))
+        self.assertTrue(any("DeepSeek" in c.value for c in self.app.caption))
         responses = [e for e in self.view()["events"] if e["type"] == "model_response"]
         self.assertTrue(
-            all(e["payload"]["metadata"]["provider"] == "mock" for e in responses)
+            all(e["payload"]["metadata"]["provider"] == "deepseek" for e in responses)
         )
 
     def test_missing_index_shows_setup_and_disables_input(self):
@@ -187,3 +189,42 @@ class StreamlitTests(unittest.TestCase):
         self.send("boots under $60")
         self.assertTrue(any("Image unavailable" in c.value for c in self.app.caption))
         self.assertTrue(any("USD 45.00" in m.value for m in self.app.markdown))
+
+    def test_missing_key_disables_chat_without_creating_a_session(self):
+        fresh_root = self.root / "no-key-sessions"
+        with patch.dict(
+            os.environ, {"DEEPSEEK_API_KEY": "", "ASTRA_UI_SESSIONS": str(fresh_root)}
+        ):
+            app = AppTest.from_file(str(APP), default_timeout=15).run()
+        self.assertFalse(app.exception)
+        self.assertTrue(app.chat_input[0].disabled)
+        self.assertTrue(any("missing_DEEPSEEK_API_KEY" in e.value for e in app.error))
+        self.assertFalse(fresh_root.exists())
+
+    def test_auth_error_is_reported_without_scripted_fallback_or_key_leak(self):
+        from urllib.error import HTTPError
+
+        self.transport.side_effect = HTTPError(
+            "https://api.deepseek.com", 401, "private-header-content", {}, None
+        )
+        self.send("boots under $60")
+        response = self.view()["messages"][-1]
+        self.assertEqual(response["status"], "error")
+        self.assertEqual(response["error"], "provider_http_401")
+        self.assertEqual(self.transport.call_count, 1)
+        self.assertTrue(any("provider_http_401" in e.value for e in self.app.error))
+        encoded = json.dumps(self.view())
+        self.assertNotIn(TEST_KEY, encoded)
+        self.assertNotIn("private-header-content", encoded)
+
+    def test_reported_usage_is_visible_without_api_calls_on_widget_reruns(self):
+        self.send("boots under $60")
+        self.assertTrue(
+            any(
+                "Reported tokens: 200 input / 60 output" in c.value
+                for c in self.app.caption
+            )
+        )
+        calls = self.transport.call_count
+        self.app.checkbox(key="show_images").uncheck().run()
+        self.assertEqual(self.transport.call_count, calls)

@@ -6,7 +6,9 @@ mechanics with fixtures/mocked policies; additional UI cases are recorded in [Ph
 These checks are not an end-to-end model-quality benchmark.
 Prior real-catalogue smoke runs used test-only decisions; Phase 3 UI browser checks use an
 explicitly scripted mock policy. Neither is evidence of live interpretation, shopping success
-or learning. The user deferred the two Phase 2 review defects while authorising UI work.
+or learning. A later two-turn live DeepSeek smoke succeeded in five requests; this confirms
+integration only, not comparative shopping quality or transfer. The two Phase 2 defects remain
+deferred, and offline UI tests use mocked HTTP rather than the local key.
 See [roadmap Phase 4](roadmap.md#phase-4--build-evaluation-and-measure-the-baseline).
 
 ## Task truth, dialogue and scoring
