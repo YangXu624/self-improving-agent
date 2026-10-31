@@ -102,3 +102,14 @@ message content shrank 49.6%; no live quality, latency or billed-token improveme
 Exact event roundtrips, replay, product order, correction history, ownership and failure
 handling are checked independently of the model through automated tests. This adds no
 shopper simulator, scoring infrastructure or learning/evaluation tasks.
+
+## Proposed retrieval comparison
+
+The [multi-stage retrieval investigation](reviews/multistage-retrieval-proposal.md) proposes
+36 fixed, source-judged tasks (12 development/24 held out), separate retrieval/card-format/
+DETAILS/strategy-selection ablations, and a small optional grounded recommendation study.
+No query manifest, verified qrels or comparative relevance scores exist yet. Historical
+BM25 replay timings and product-token counts in that report are diagnostic measurements,
+not retrieval-quality results. Confirm the serving prompt version, preserve the original
+BM25 path and freeze gate/presentation/model conditions before making comparisons. No
+embedding model, reranker, evaluation runner or additional dependency has been implemented.
