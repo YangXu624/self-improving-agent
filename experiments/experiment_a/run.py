@@ -34,6 +34,42 @@ from shopping_agent.sessions import dumps
 from .metrics import outcome_metrics, shortlist_metrics
 from .prepare import ROOT, write_json
 
+# DeepSeek's published V4 tokenizer.json (deepseek_v4_tokenizer.zip); see the README.
+TOKENIZER_SHA256 = "89085f12ef79460ac5f66d1119325ddfc694b4ab209d80bbd81d35f081dc9614"
+BM25_RELATIVE_TOLERANCE = 1e-9
+
+
+def load_tokenizer(path):
+    """Load only the pinned tokenizer asset; token counts must be comparable across runs."""
+    if file_hash(path) != TOKENIZER_SHA256:
+        raise ValueError("Tokenizer is not the pinned DeepSeek V4 tokenizer.json")
+    from tokenizers import Tokenizer
+
+    return Tokenizer.from_file(str(path))
+
+
+def same_search(fresh, original):
+    """Exact counts, IDs, order and evidence; BM25 floats only within SQLite rounding noise.
+
+    Different SQLite builds can differ in the last float digit of a BM25 score. Anything
+    larger, or any other changed field, is still drift.
+    """
+    if fresh["counts"] != original["counts"]:
+        return False
+    a, b = fresh["candidates"], original["candidates"]
+    if len(a) != len(b):
+        return False
+    for x, y in zip(a, b):
+        if not math.isclose(
+            x["bm25"], y["bm25"], rel_tol=BM25_RELATIVE_TOLERANCE, abs_tol=0.0
+        ):
+            return False
+        if dumps({k: v for k, v in x.items() if k != "bm25"}) != dumps(
+            {k: v for k, v in y.items() if k != "bm25"}
+        ):
+            return False
+    return True
+
 
 def load_frozen(directory):
     directory = Path(directory)
@@ -171,9 +207,7 @@ def offline(directory, index, output, tokenizer):
             )
             fresh = tool.search(action, state)
             original = entry["search_result"]
-            if fresh["counts"] != original["counts"] or dumps(
-                fresh["candidates"]
-            ) != dumps(original["candidates"]):
+            if not same_search(fresh, original):
                 raise ValueError("Frozen BM25 replay drift")
             samples = []
             for _ in range(5):
@@ -274,6 +308,21 @@ def append_line(path, value):
         __import__("os").fsync(handle.fileno())
 
 
+def build_schedule(tasks, baseline, seed):
+    """Seed-fixed held-out schedule: shuffled tasks, each with its own shuffled profiles."""
+    eligible_tasks = [task for task in tasks if task["split"] == "held_out"]
+    rng = random.Random(seed)
+    rng.shuffle(eligible_tasks)
+    schedule = []
+    for task in eligible_tasks:
+        profiles = list(EXPERIMENT_PROFILES)
+        rng.shuffle(profiles)
+        for profile in profiles:
+            bundle = decision_context(task, baseline[task["id"]], profile)
+            schedule.append((task, profile, bundle))
+    return schedule
+
+
 def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
     manifest, tasks, baseline, qrels = load_frozen(directory)
     if subprocess.check_output(
@@ -285,16 +334,7 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
         raise FileExistsError(
             "Use a new run; interrupted paid trials are not automatically retried"
         )
-    eligible_tasks = [task for task in tasks if task["split"] == "held_out"]
-    rng = random.Random(seed)
-    rng.shuffle(eligible_tasks)
-    schedule = []
-    for task in eligible_tasks:
-        profiles = list(EXPERIMENT_PROFILES)
-        rng.shuffle(profiles)
-        for profile in profiles:
-            bundle = decision_context(task, baseline[task["id"]], profile)
-            schedule.append((task, profile, bundle))
+    schedule = build_schedule(tasks, baseline, seed)
     policy = DeepSeekPolicy.from_env_file(env_file)
     search = LexicalSearch(index, expected_catalogue_hash=manifest["catalogue_sha256"])
     output.mkdir(parents=True)
@@ -407,13 +447,23 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
     return {"trials": len(schedule), "usage": budget.snapshot()}
 
 
+def read_lines(path):
+    """Physical JSONL lines only: U+2028/2029 may appear unescaped inside JSON strings."""
+    return [line for line in Path(path).read_text(encoding="utf-8").split("\n") if line]
+
+
 def replay(directory, run, index):
     manifest, tasks, baseline, qrels = load_frozen(directory)
     task_map = {task["id"]: task for task in tasks}
     requests = {
-        r["trial_id"]: r for r in map(json.loads, (Path(run) / "requests.jsonl").open())
+        r["trial_id"]: r
+        for r in map(
+            json.loads, (Path(run) / "requests.jsonl").read_text().splitlines()
+        )
     }
-    results = list(map(json.loads, (Path(run) / "outcomes.jsonl").open()))
+    results = list(
+        map(json.loads, (Path(run) / "outcomes.jsonl").read_text().splitlines())
+    )
     tool = LexicalSearch(index, expected_catalogue_hash=manifest["catalogue_sha256"])
     try:
         for result in results:
@@ -459,9 +509,7 @@ def main():
         parser.error(
             "Offline/live token measurement requires the pinned audit tokenizer"
         )
-    from tokenizers import Tokenizer
-
-    tokenizer = Tokenizer.from_file(str(args.tokenizer))
+    tokenizer = load_tokenizer(args.tokenizer)
     if args.mode == "offline":
         result = offline(args.frozen, args.index, args.output, tokenizer)
     else:
