@@ -22,8 +22,10 @@ image-URL references were reused as local, ignored data.
 The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. The user
 subsequently supplied a local key and authorised live DeepSeek integration. A bounded two-turn
 live check succeeded with five API requests, including a budget correction and fresh verified
-recommendations. This is integration evidence, not a quality benchmark. The two deferred
-[review findings](docs/reviews/phase-2-subagent-review.md) remain unchanged. See
+recommendations. This is integration evidence, not a quality benchmark. The two
+[review findings](docs/reviews/phase-2-subagent-review.md) (blank evidence, false
+conflicts) and the exhausted-search closure are now fixed; watch/wristwatch type
+vocabulary remains an open limitation. See
 [Phase 3 evidence and limitations](docs/phase-3-ui.md).
 See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
 and [decision record](docs/decisions.md).
@@ -218,6 +220,11 @@ the previous entry and appends a new one. Retraction removes an exclusion withou
 a positive preference. An explicit new goal retires the old active requirements. A state or
 retrieval-strategy change invalidates previous search results. Recommendations must use the
 result provided to their decision and pass a current hard-constraint recheck.
+Quotes must be nonblank excerpts of the current message. Conflicts are flagged only when
+no product could satisfy the stored requirements under the gate's own semantics (department
+aliases; product-type token containment). If the final decision proposes a SEARCH that cannot
+run, the turn closes with a fixed, product-free RESPOND (`closure` field, `turn_closed_safely`
+event) instead of an error. The CLI exits 0 for it; scripted callers should check `closure`.
 
 Policy, context builder, retrieval tool and storage are separate interfaces. Future scoped
 experience can be added to context construction without replacing the executor. There is

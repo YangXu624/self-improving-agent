@@ -92,8 +92,8 @@ The [31 October watch audit](reviews/watch-decision-budget-audit.md) reproduces 
 failure with recorded decisions and synthetic fixtures. All four real searches reproduce;
 the type filter, rather than lack of catalogue watches, explains the empty results. A final
 terminal-response counterfactual completes within the same budget. This is diagnosis, not a
-benchmark or proof of a live-policy improvement. The test suite adds three passing controls
-and three explicitly expected failures for unresolved behavior. No held-out tasks, scoring
+benchmark or proof of a live-policy improvement. At the time of that audit the test suite added three passing controls
+and three explicitly expected failures; one has since been fixed (see the roadmap). No held-out tasks, scoring
 rules or learning stores were introduced or modified.
 
 The [compaction checkpoint](reviews/context-and-storage-compaction.md) measures serialized

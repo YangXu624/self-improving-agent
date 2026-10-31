@@ -81,3 +81,20 @@ usage. There is no fallback policy after API failure. The request shape follows
 [JSON Output](https://api-docs.deepseek.com/guides/json_mode/); the prompt version advances to
 v2 for its explicit JSON-shape example. The live smoke used five requests, within a cap of six,
 and confirmed budget correction and checked recommendations. This is not a quality study.
+
+## Correctness fixes (31 October 2026)
+
+The user prioritised three confirmed defects before retrieval work. All are enforced in the
+trusted executor, not the prompt, and adds only the optional `closure` response key and `turn_closed_safely` event; no existing field, contract or `retrieval.py` changes.
+
+- **Blank evidence:** `apply_updates` rejects a quote whose normalised text is empty. The
+  check is in `state.py`, not the pydantic contract, so old logs still replay and the
+  prompt schema is unchanged.
+- **Conflicts:** detection reuses the gate's semantics instead of a separate scalar-set
+  model. Trade-off: `product_type eq boots` plus `eq shoes` is no longer a conflict because
+  one category path can contain both tokens. The alias table is copied to `state.py` and
+  pinned by a test to avoid editing the frozen BM25 baseline.
+- **Exhausted search:** a final unexecutable SEARCH closes the turn with a fixed RESPOND
+  rather than `decision_budget_exhausted`. This deliberately changes the prior
+  `test_repeated_search_cannot_loop_or_exceed_budget` status from `error` to `ok`; budgets are
+  unchanged. The message is deterministic so it cannot assert catalogue facts.

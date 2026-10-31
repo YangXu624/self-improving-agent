@@ -240,7 +240,9 @@ class AgentTests(unittest.TestCase):
     def test_repeated_search_cannot_loop_or_exceed_budget(self):
         a = self.agent(search, search, search)
         out = a.turn("alice", self.sid, "boots")
-        self.assertEqual(out["status"], "error")
+        # A final unexecutable SEARCH now closes safely (see test_search_closure).
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["closure"], "search_budget_exhausted")
         self.assertEqual(out["budget_used"], {"model_calls": 3, "searches": 2})
         self.assertEqual(
             len([e for e in self.events() if e.type == "search_result"]), 2
