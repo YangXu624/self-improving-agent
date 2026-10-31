@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .configuration import read_env_file
+
 MAX_RESPONSE_BYTES = 128000
 
 
@@ -22,16 +24,32 @@ class PolicyReply:
 
 class DeepSeekPolicy:
     def __init__(self, *, api_key=None, model=None, timeout=25):
-        self._key = api_key or os.environ.get("DEEPSEEK_API_KEY", "")
+        self._key = (
+            api_key if api_key is not None else os.environ.get("DEEPSEEK_API_KEY", "")
+        )
         if not self._key.strip():
             raise ProviderError("missing_DEEPSEEK_API_KEY")
         self._key = self._key.strip()
         if len(self._key) > 512 or any(not 33 <= ord(c) <= 126 for c in self._key):
             raise ProviderError("invalid_DEEPSEEK_API_KEY_format")
-        self.model = model or os.environ.get("DEEPSEEK_MODEL", "deepseek-flash")
+        self.model = (
+            model
+            if model is not None
+            else os.environ.get("DEEPSEEK_MODEL", "deepseek-flash")
+        )
         if not re.fullmatch(r"[A-Za-z0-9._/-]{1,100}", self.model):
             raise ProviderError("invalid_model_name")
         self.timeout = timeout
+
+    @classmethod
+    def from_env_file(cls, path):
+        """Resolve fresh local settings without caching a file secret in os.environ."""
+        settings = read_env_file(path)
+        key = os.environ.get("DEEPSEEK_API_KEY", settings.get("DEEPSEEK_API_KEY", ""))
+        model = os.environ.get(
+            "DEEPSEEK_MODEL", settings.get("DEEPSEEK_MODEL", "deepseek-flash")
+        )
+        return cls(api_key=key, model=model)
 
     def complete(self, messages):
         payload = {

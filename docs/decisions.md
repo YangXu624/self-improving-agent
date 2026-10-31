@@ -26,3 +26,13 @@ reuses the Python application and supports headless UI testing without a separat
 stack. Core CLI dependencies remain separate; UI dependency versions have their own lock file.
 This does not authorise live provider calls, memory layers, evaluation or merging the UI PR.
 No embedding model, user-memory schema, simulator model or code sandbox has been selected.
+
+## Fresh DeepSeek configuration (31 October 2026)
+
+The user supplied a local key and authorised replacing the scripted UI policy. Configuration
+parsing is shared between CLI and provider composition. `DeepSeekPolicy.from_env_file` reads
+only the explicit project file, with process settings taking precedence, without copying file
+secrets into the process environment. This allows a later UI rerun to pick up a changed file
+key. The CLI's `load_env` interface remains compatible. Explicit blank credentials fail closed.
+The UI connection/removal of the scripted application policy is the next checkpoint; test
+fixtures remain offline and never require the local key.

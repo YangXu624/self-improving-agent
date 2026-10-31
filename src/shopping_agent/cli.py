@@ -2,42 +2,14 @@
 
 import argparse
 import json
-import os
 import sqlite3
 import sys
-from pathlib import Path
 
 from .agent import ShoppingAgent
+from .configuration import load_env
 from .provider import DeepSeekPolicy, ProviderError
 from .retrieval import LexicalSearch, build_index, file_hash
 from .sessions import SessionError, SessionStore
-
-
-def load_env(path):
-    """Read only this explicitly selected file; no shell evaluation/interpolation."""
-    path = Path(path)
-    if not path.exists():
-        return
-    if path.stat().st_size > 16000:
-        raise ValueError("Environment file too large")
-    settings = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, sep, value = line.partition("=")
-        key, value = key.strip(), value.strip()
-        if not sep or key not in {"DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"}:
-            raise ValueError("Unsupported environment file syntax or setting")
-        if value[:1] in {"'", '"'}:
-            if len(value) < 2 or value[-1] != value[0]:
-                raise ValueError("Unclosed environment value")
-            value = value[1:-1]
-        if "\x00" in value or "\n" in value or "\r" in value:
-            raise ValueError("Invalid environment value")
-        settings[key] = value
-    for key, value in settings.items():
-        os.environ.setdefault(key, value)
 
 
 def parser():
