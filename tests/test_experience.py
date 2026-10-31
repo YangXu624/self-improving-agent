@@ -590,13 +590,295 @@ class UnmodifiedLessonRetrievalTests(unittest.TestCase):
         self.store.confirm(lesson_p3.lesson_id, review_notes="Confirmed pattern 3")
 
         # Cues supplied by ShoppingAgent before search on an opening message:
+        cues_underspecified = dict(
+            cues_initial, is_underspecified=True, category_only=True
+        )
         retrieved_p3 = self.store.retrieve(
             trigger_type="attribute_clarification",
             scope="*",
-            context_cues=cues_initial,
+            context_cues=cues_underspecified,
         )
         self.assertEqual(len(retrieved_p3), 1)
         self.assertEqual(retrieved_p3[0].lesson_id, lesson_p3.lesson_id)
+
+        # Well-specified request does NOT retrieve pattern 3:
+        cues_specified = dict(
+            cues_initial, is_underspecified=False, category_only=False
+        )
+        retrieved_specified = self.store.retrieve(
+            trigger_type="attribute_clarification",
+            scope="*",
+            context_cues=cues_specified,
+        )
+        self.assertEqual(retrieved_specified, [])
+
+
+class ScopedTriggerTests(unittest.TestCase):
+    """Focused tests for scoped trigger behavior: category-only vs well-specified openings,
+    prevention of repetitive clarifications, and coordination with asked-attributes ledger."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.db_path = self.root / "test_experience.sqlite"
+        self.store = ExperienceStore(self.db_path)
+        self.addCleanup(self.store.close)
+
+        src, db = self.root / "catalog.jsonl", self.root / "index.sqlite"
+        from test_retrieval import product
+
+        src.write_text(
+            "".join(
+                json.dumps(p) + "\n"
+                for p in [
+                    product("bangle-1", 15, Material="Metal", Color="Pink"),
+                    product("boots-1", 45, Material="Leather", Color="Black"),
+                ]
+            )
+        )
+        from shopping_agent.retrieval import LexicalSearch, build_index
+        from shopping_agent.sessions import SessionStore
+
+        build_index(src, db)
+        self.search = LexicalSearch(db)
+        self.addCleanup(self.search.close)
+        self.sessions = SessionStore(self.root / "sessions")
+
+        # Set up confirmed Lesson 1 in experience store
+        directive = (
+            "When the opening request contains only an underspecified category, "
+            "clarify key constraints (such as budget or department) before searching."
+        )
+        self.lesson1 = Lesson(
+            lesson_id="exp-e23002ac6fd9",
+            version=1,
+            scope="*",
+            trigger_type="attribute_clarification",
+            trigger_condition={"is_initial": True, "is_underspecified": True},
+            directive=directive,
+            expected_action="CLARIFY",
+            action_signature={
+                "attribute_in": ["budget", "department", "product_subtype", "price"]
+            },
+            observed_outcome="unclarified_broad_search_failure",
+            hypothesized_cause="Broad search on underspecified category.",
+            evidence={
+                "source_scenario_id": "lea-02dffff4fde9f291",
+                "source_split": "learning",
+            },
+            status="candidate",
+        )
+        self.store.add_candidate(self.lesson1)
+        self.store.confirm(
+            self.lesson1.lesson_id, review_notes="Confirmed scoped trigger"
+        )
+
+    def test_category_only_opening_activates_clarification_lesson(self):
+        from test_agent import ScriptedPolicy, decision
+        from test_sessions import add
+
+        from shopping_agent.agent import ShoppingAgent
+
+        sid = self.sessions.create("shopper_cat_only")
+        policy = ScriptedPolicy(
+            lambda ctx: decision(
+                ctx,
+                {
+                    "type": "CLARIFY",
+                    "attribute": "price",
+                    "question": "What is your budget for the bangles?",
+                },
+                updates=[
+                    add(
+                        field="product_type",
+                        op="contains",
+                        value="bangle",
+                        quote="I am looking for bangles",
+                    ).model_dump()
+                ],
+            )
+        )
+        agent = ShoppingAgent(self.sessions, self.search, policy, experience=self.store)
+        res = agent.turn("shopper_cat_only", sid, "I am looking for bangles")
+
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["action"], "CLARIFY")
+        self.assertEqual(res["attribute"], "price")
+        # Check experience audit in response
+        self.assertIn("exp-e23002ac6fd9", res["experience"]["retrieved"])
+        self.assertIn("exp-e23002ac6fd9", res["experience"]["applied"])
+
+    def test_well_specified_opening_does_not_activate_clarification_lesson(self):
+        from test_agent import ScriptedPolicy, search
+        from test_sessions import add
+
+        from shopping_agent.agent import ShoppingAgent
+
+        sid = self.sessions.create("shopper_well_specified")
+        policy = ScriptedPolicy(
+            lambda ctx: search(
+                ctx,
+                updates=[
+                    add(
+                        field="product_type",
+                        op="contains",
+                        value="boots",
+                        quote="black boots",
+                    ).model_dump(),
+                    add(
+                        field="color",
+                        op="eq",
+                        value="black",
+                        quote="black boots",
+                    ).model_dump(),
+                    add(
+                        field="price",
+                        op="lt",
+                        value=50.0,
+                        quote="under $50",
+                    ).model_dump(),
+                ],
+            ),
+            lambda ctx: {
+                "based_on_state_version": ctx["state"]["version"],
+                "updates": [],
+                "action": {
+                    "type": "RECOMMEND",
+                    "search_id": ctx["latest_search"]["search_id"],
+                    "product_ids": [ctx["latest_search"]["candidates"][0]["id"]],
+                },
+                "reason": "Recommend matches",
+            },
+        )
+        agent = ShoppingAgent(self.sessions, self.search, policy, experience=self.store)
+        res = agent.turn(
+            "shopper_well_specified",
+            sid,
+            "I am looking for black boots under $50",
+        )
+
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["action"], "RECOMMEND")
+        # Since the opening was well-specified, Lesson 1 should NOT be retrieved
+        self.assertEqual(res["experience"]["retrieved"], [])
+        self.assertEqual(res["experience"]["applied"], [])
+
+    def test_disclosed_attribute_prevents_repetitive_clarification(self):
+        from test_agent import ScriptedPolicy, decision
+        from test_sessions import add
+
+        from shopping_agent.agent import ShoppingAgent
+
+        sid = self.sessions.create("shopper_multi_turn")
+
+        # Turn 1: category-only -> triggers Lesson 1 and clarifies price
+        policy1 = ScriptedPolicy(
+            lambda ctx: decision(
+                ctx,
+                {
+                    "type": "CLARIFY",
+                    "attribute": "price",
+                    "question": "What is your budget for bangles?",
+                },
+                updates=[
+                    add(
+                        field="product_type",
+                        op="contains",
+                        value="bangle",
+                        quote="I am looking for bangles",
+                    ).model_dump()
+                ],
+            )
+        )
+        agent1 = ShoppingAgent(
+            self.sessions, self.search, policy1, experience=self.store
+        )
+        res1 = agent1.turn("shopper_multi_turn", sid, "I am looking for bangles")
+        self.assertEqual(res1["action"], "CLARIFY")
+        self.assertIn("exp-e23002ac6fd9", res1["experience"]["retrieved"])
+
+        # Turn 2: Shopper answers with budget -> Lesson 1 must NOT re-trigger
+        policy2 = ScriptedPolicy(
+            lambda ctx: decision(
+                ctx,
+                {
+                    "type": "RESPOND",
+                    "message": "Looking for bangles under $20.",
+                },
+                updates=[
+                    add(
+                        field="price",
+                        op="lt",
+                        value=20.0,
+                        quote="under $20",
+                    ).model_dump()
+                ],
+            )
+        )
+        agent2 = ShoppingAgent(
+            self.sessions, self.search, policy2, experience=self.store
+        )
+        res2 = agent2.turn("shopper_multi_turn", sid, "My budget is under $20")
+
+        self.assertEqual(res2["status"], "ok")
+        self.assertEqual(res2["action"], "RESPOND")
+        # Lesson 1 must NOT be retrieved on turn 2 after attribute disclosed
+        self.assertEqual(res2["experience"]["retrieved"], [])
+
+    def test_no_preference_disposition_prevents_repetitive_clarification(self):
+        from test_agent import ScriptedPolicy, decision
+        from test_sessions import add
+
+        from shopping_agent.agent import ShoppingAgent
+
+        sid = self.sessions.create("shopper_no_pref")
+
+        # Turn 1: category-only -> clarifies price
+        policy1 = ScriptedPolicy(
+            lambda ctx: decision(
+                ctx,
+                {
+                    "type": "CLARIFY",
+                    "attribute": "price",
+                    "question": "What is your budget for bangles?",
+                },
+                updates=[
+                    add(
+                        field="product_type",
+                        op="contains",
+                        value="bangle",
+                        quote="I am looking for bangles",
+                    ).model_dump()
+                ],
+            )
+        )
+        agent1 = ShoppingAgent(
+            self.sessions, self.search, policy1, experience=self.store
+        )
+        agent1.turn("shopper_no_pref", sid, "I am looking for bangles")
+
+        # Turn 2: Shopper expresses no preference -> attribute_ledger records no_preference disposition
+        policy2 = ScriptedPolicy(
+            lambda ctx: decision(
+                ctx,
+                {
+                    "type": "RESPOND",
+                    "message": "Understood, no budget preference.",
+                },
+            )
+        )
+        agent2 = ShoppingAgent(
+            self.sessions, self.search, policy2, experience=self.store
+        )
+        res2 = agent2.turn(
+            "shopper_no_pref", sid, "I don't have a preference about budget."
+        )
+
+        self.assertEqual(res2["status"], "ok")
+        self.assertEqual(res2["action"], "RESPOND")
+        # Lesson 1 must NOT be retrieved after no_preference disposition
+        self.assertEqual(res2["experience"]["retrieved"], [])
 
 
 if __name__ == "__main__":

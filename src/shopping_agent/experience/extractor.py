@@ -141,7 +141,7 @@ def extract_candidate_lesson(
             version=1,
             scope="*",
             trigger_type="attribute_clarification",
-            trigger_condition={"is_initial": True},
+            trigger_condition={"is_initial": True, "is_underspecified": True},
             directive=directive,
             expected_action="CLARIFY",
             action_signature={

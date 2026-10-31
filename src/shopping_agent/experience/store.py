@@ -102,7 +102,11 @@ class ExperienceStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(lesson_id) DO UPDATE SET
                     version=excluded.version,
+                    scope=excluded.scope,
+                    trigger_type=excluded.trigger_type,
+                    trigger_condition=excluded.trigger_condition,
                     directive=excluded.directive,
+                    expected_action=excluded.expected_action,
                     action_signature=excluded.action_signature,
                     observed_outcome=excluded.observed_outcome,
                     hypothesized_cause=excluded.hypothesized_cause,
@@ -156,27 +160,39 @@ class ExperienceStore:
             )
         return self.get(lesson_id)  # type: ignore
 
-    def reject(self, lesson_id: str, reason: str) -> Lesson:
+    def reject(
+        self,
+        lesson_id: str,
+        reason: str = "Rejected during review",
+        review_notes: str | None = None,
+    ) -> Lesson:
         """Reject a candidate lesson; retains historical record and provenance."""
         current = self.get(lesson_id)
         if not current:
             raise KeyError(f"Lesson not found: {lesson_id}")
+        notes = review_notes or reason
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'rejected', review_notes = ? WHERE lesson_id = ?",
-                (reason, lesson_id),
+                (notes, lesson_id),
             )
         return self.get(lesson_id)  # type: ignore
 
-    def retract(self, lesson_id: str, reason: str) -> Lesson:
+    def retract(
+        self,
+        lesson_id: str,
+        reason: str = "Retracted during review",
+        review_notes: str | None = None,
+    ) -> Lesson:
         """Retract an active lesson; excluded from future retrieval while preserving provenance."""
         current = self.get(lesson_id)
         if not current:
             raise KeyError(f"Lesson not found: {lesson_id}")
+        notes = review_notes or reason
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'retracted', review_notes = ? WHERE lesson_id = ?",
-                (reason, lesson_id),
+                (notes, lesson_id),
             )
         return self.get(lesson_id)  # type: ignore
 

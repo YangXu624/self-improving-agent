@@ -34,6 +34,8 @@ SUPPORTED_TRIGGER_CONDITIONS = {
     "has_candidates",
     "candidate_count",
     "empty_search",
+    "is_underspecified",
+    "category_only",
 }
 
 

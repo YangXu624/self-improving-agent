@@ -1,13 +1,18 @@
 """Bounded orchestration. Policies propose; trusted state/search guards execute."""
 
 import hashlib
+import re
 import time
 from typing import Protocol
 from uuid import uuid4
 
 from pydantic import ValidationError
 
-from .attributes import attribute_ledger, redundant_clarification
+from .attributes import (
+    attribute_ledger,
+    canonical_attribute,
+    redundant_clarification,
+)
 from .context import (
     PROMPT_VERSION,
     BuiltContext,
@@ -160,6 +165,53 @@ class ShoppingAgent:
                             scope = str(req.value)
                             break
                     has_cand = bool(result and result.get("candidates"))
+                    active_fields = {
+                        canonical_attribute(r.field)
+                        for r in session.state.requirements
+                        if r.status == "active"
+                    }
+                    ledger = attribute_ledger(session)
+                    disclosed = ledger.get("disclosed_attributes", {})
+                    asked_dict = ledger.get("asked_attributes", {})
+                    resolved_attrs = {
+                        canonical_attribute(k)
+                        for k, v in disclosed.items()
+                        if v.get("status") in {"answered", "declined", "no_preference"}
+                    }
+                    asked_attrs = {canonical_attribute(k) for k in asked_dict.keys()}
+                    non_cat_fields = active_fields - {"product_type", "type"}
+                    non_cat_disclosed = resolved_attrs - {"product_type", "type"}
+                    non_cat_asked = asked_attrs - {"product_type", "type"}
+                    has_non_cat_message = bool(
+                        re.search(
+                            r"\b(?:under|below|less than|max|budget|price|\$)\s*\$?\d+|\b\d+\s*(?:dollars?|usd|eur|gbp)\b"
+                            r"|\b(?:women'?s?|men'?s?|girls?|boys?|unisex|kids?)\b"
+                            r"|\b(?:black|white|red|blue|green|yellow|pink|purple|brown|grey|gray|silver|gold|navy)\b"
+                            r"|\b(?:leather|cotton|wool|silk|metal|copper|canvas|denim|linen)\b"
+                            r"|\b(?:size\s+\d+|extra wide|wide|narrow)\b",
+                            message,
+                            re.I,
+                        )
+                    )
+                    cat_only = (
+                        (
+                            len(active_fields) > 0
+                            or re.search(
+                                r"\b(?:looking for|shopping for|want|need|find)\s+[a-z\s&]+",
+                                message,
+                                re.I,
+                            )
+                        )
+                        and len(non_cat_fields) == 0
+                        and len(non_cat_disclosed) == 0
+                        and not has_non_cat_message
+                    )
+                    underspecified = (
+                        len(non_cat_fields) == 0
+                        and len(non_cat_disclosed) == 0
+                        and len(non_cat_asked) == 0
+                        and not has_non_cat_message
+                    )
                     cues = {
                         "is_initial": searches == 0,
                         "searches": searches,
@@ -170,6 +222,8 @@ class ShoppingAgent:
                         if result
                         else 0,
                         "empty_search": result is not None and not has_cand,
+                        "is_underspecified": underspecified,
+                        "category_only": cat_only,
                     }
                     if result is None:
                         possible_triggers = [
