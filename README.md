@@ -173,7 +173,14 @@ data/sessions/<session UUID>/
 
 The log records full user/assistant messages, actual bounded model prompts, JSON decisions,
 validation failures, state transitions, tool calls/results, recommendations, reported token
-usage and durations. It excludes authorization headers and provider reasoning fields. Logs
+usage and durations. New records use lossless references for repeated data, state deltas and
+bounded stdlib compression for long prompt strings. The inspect commands and UI expand these
+into complete events; raw JSONL is a storage format, not the model context. Snapshots omit
+default/empty fields while retaining correction history and provenance. Old logs remain
+readable and are never rewritten; new turns append compact records. Use the current reader
+for new logs, as older application versions cannot decode storage version 2. See the
+[compaction evidence and reproduction instructions](docs/reviews/context-and-storage-compaction.md).
+The log excludes authorization headers and provider reasoning fields. Logs
 contain private conversation data and remain ignored by Git. Owner checks isolate sessions
 but are not authentication: the CLI assumes a trusted local operator. Do not host it as a
 multi-user service without adding authentication and a suitable storage/security design.
@@ -192,6 +199,7 @@ User turn → owned session/event log → bounded context → LLM JSON decision
 | --- | --- |
 | `contracts.py`, `state.py` | Closed action schemas; evidence-linked ADD/REPLACE/RETRACT/NEW_GOAL edits; simple conflict detection |
 | `sessions.py` | Owner checks, JSONL replay, atomic snapshot replacement, process/thread locks |
+| `event_codec.py` | Lossless event references, state deltas and bounded prompt-string compression |
 | `retrieval.py` | Source-hashed SQLite FTS5 index, literal queries, BM25, hard gates and soft-match evidence |
 | `context.py` | Active state/current results/recent dialogue under a context cap; separate from execution |
 | `provider.py` | DeepSeek JSON-mode transport; sanitized failures; no hidden fallback |
@@ -229,8 +237,10 @@ no future-memory placeholder implementation or persistent cross-session preferen
   current price or purchasable size/color combinations. Availability is unverified.
 - BM25 is a retrieval baseline; it does not establish recommendation quality. Sparse fields
   can produce few or zero verified candidates. No live crawling or attribute imputation occurs.
-- Full history is stored; prompts use active requirements, current results and up to twelve
-  recent dialogue messages. Old dialogue is trimmed first under 40,000 characters. Essential
+- Full history is stored; compact prompts use active requirement IDs/predicates, current
+  candidate facts/provenance and up to twelve prior dialogue messages. Product images, ranking
+  floats and repeated title/category text stay outside the prompt. Omitted facts mean unknown;
+  no candidate IDs are dropped. Old dialogue is trimmed first under 40,000 characters. Essential
   context is never silently truncated; oversized essential context fails before a paid call.
 - Schema/quote checks do not prove semantic entailment. RESPOND/CLARIFY natural-language
   factual accuracy and resistance to prompt injection remain unverified. Recommendation

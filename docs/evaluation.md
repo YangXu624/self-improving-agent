@@ -95,3 +95,10 @@ terminal-response counterfactual completes within the same budget. This is diagn
 benchmark or proof of a live-policy improvement. The test suite adds three passing controls
 and three explicitly expected failures for unresolved behavior. No held-out tasks, scoring
 rules or learning stores were introduced or modified.
+
+The [compaction checkpoint](reviews/context-and-storage-compaction.md) measures serialized
+prompt tokens and lossless log size on existing local traces. The saved second boots turn's
+message content shrank 49.6%; no live quality, latency or billed-token improvement is claimed.
+Exact event roundtrips, replay, product order, correction history, ownership and failure
+handling are checked independently of the model through automated tests. This adds no
+shopper simulator, scoring infrastructure or learning/evaluation tasks.

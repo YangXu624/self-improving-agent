@@ -206,7 +206,9 @@ of this integration. Each submitted turn now makes paid API requests; display/in
 
 The [watch failure audit](reviews/watch-decision-budget-audit.md) now identifies an additional
 product-type representation limitation and exhausted-search recovery issue. Its independent
-replays, token accounting and synthetic regressions are complete; production fixes remain
-proposals for review. Resolve bounded completion and catalogue-grounded type semantics before
+replays, token accounting and synthetic regressions are complete. Prompt and lossless event
+compaction are implemented in a separate [checkpoint](reviews/context-and-storage-compaction.md);
+retrieval semantics and exhausted-turn recovery remain proposals for review.
+Resolve bounded completion and catalogue-grounded type semantics before
 assuming that a larger budget or semantic search is needed. Three regression cases currently
 remain explicit expected failures.
