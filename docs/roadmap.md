@@ -2,7 +2,8 @@
 
 Status reviewed: **31 October 2026**. This roadmap organises the agreed direction; it does
 not authorise starting every future phase. Complete and review one phase before approving
-the next. No application changes or paid API calls accompany this documentation update.
+the next. This roadmap is a plan; implementation evidence is recorded at the corresponding
+checkpoints.
 
 ## Objective
 
@@ -17,7 +18,7 @@ by themselves evidence that the agent has learned something useful.
 | --- | --- | --- |
 | 1. Frozen catalogue | Complete for the initial 50k scope | Future category expansion is a separate decision |
 | 2. Session-only conversational baseline | Implemented; automated verification complete | Live-model acceptance and review remain pending |
-| 3. Minimal UI | Not started | Approve UI scope/stack after baseline review |
+| 3. Minimal UI | Implemented with Streamlit and an explicit mock policy | User review pending; live provider remains disabled |
 | 4. Evaluation and baseline measurement | Design guidance documented; runner not implemented | Approve protocol, validate simulator and record baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
 | 6. Persistent user memory | Not started | Approve lifecycle and repeated-user evaluation |
@@ -26,11 +27,12 @@ by themselves evidence that the agent has learned something useful.
 
 Historical **Milestone 1** covers the session/retrieval/CLI baseline in Phase 2, using the
 Phase 1 catalogue. These roadmap phase numbers do not rename previous commits or milestones.
-The implementation and coding-guidance PRs were merged ([PR 1](https://github.com/YangXu624/self-improving-agent/pull/1),
+The initial implementation and coding-guidance PRs were merged ([PR 1](https://github.com/YangXu624/self-improving-agent/pull/1),
 [PR 2](https://github.com/YangXu624/self-improving-agent/pull/2)). Future merges require approval.
 
-Current evidence: 45 automated tests passed when rerun on the review date, with Ruff lint
-and format checks passing. Prior full-catalogue smoke evidence is in [milestone notes](milestone-1.md).
+The Phase 2 checkpoint had 45 passing automated tests. Phase 3 adds 18 service/UI cases
+for 63 passing tests, with Ruff lint and format checks passing; see [UI evidence](phase-3-ui.md).
+Prior full-catalogue smoke evidence is in [milestone notes](milestone-1.md).
 Those smoke decisions were test fixtures. No live-model quality, shopping-success benchmark
 or benefit from learning has been established.
 
@@ -82,15 +84,22 @@ in effect until the user authorises live requests.
 
 ## Phase 3 — Add a minimal visual interface
 
+**Current implementation:** the user explicitly authorised proceeding mock-first on 31 October
+2026, while deferring live Phase 2 validation and the two confirmed review defects. Streamlit
+now provides chat, product cards, owned session selection/resume, active needs/correction history
+and actual activity traces over the unchanged core. No live provider is exposed in this UI.
+See [Phase 3 evidence](phase-3-ui.md). This is an authorised sequencing exception, not evidence
+that the earlier live-validation/fix gate has passed.
+
 **Purpose:** make conversation and decisions inspectable while preserving the existing core.
 
 Show chat, session selection/resumption, product cards/image URLs, active requirements and
 corrections. Include a collapsible trace for actions, search counts, failures and resource use.
 Provide a visible session ID and make a new session distinct from resuming an old one.
 
-Reuse the decision loop and tools; do not reimplement business logic in UI callbacks. Choose
-the simplest UI stack after discussion. Do not add memory learning, embeddings or hosted
-multi-user authentication as incidental UI features. A hosted service needs a separate design.
+Reuse the decision loop and tools; do not reimplement business logic in UI callbacks.
+Streamlit was chosen as an optional dependency to retain the Python architecture. Do not add
+memory learning, embeddings or hosted multi-user authentication as incidental UI features. A hosted service needs a separate design.
 
 **Exit gate:** reviewed end-to-end UI demo and relevant regression tests, including session
 isolation and corrections. A failed image URL must not prevent viewing product facts.
@@ -190,7 +199,7 @@ gaming or test contamination. This is deferred research, not a current implement
 
 ## Immediate next checkpoint
 
-We are **after Phase 2 implementation and before live validation or Phase 3**. The next
-proposed work is a small, explicitly authorised live acceptance session, then any necessary
-fixes and a baseline review. UI scope/stack can be discussed next; no frontend has been chosen.
-Do not begin persistent memory or the evaluation framework as part of this documentation task.
+The mock-first **Phase 3 UI is implemented for user review**; Phase 2 live validation and the
+two confirmed defects remain deferred by instruction. Next, review the UI and decide when to
+address those defects and explicitly enable the existing live provider. No live calls or
+memory/evaluation work are authorised merely by completing the mock UI.

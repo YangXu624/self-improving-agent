@@ -7,7 +7,9 @@ chosen contracts, limitations and verification. No agent framework or frontend w
 Persistent user memory, agent experience and evaluation remain outside the approved baseline.
 The [roadmap](roadmap.md) now supplies proposed sequencing and exit gates; the
 [evaluation plan](evaluation.md) records candidate metrics and controls. Those documents do
-not select a UI/simulator stack, authorise live calls or implement future layers.
+not authorise live calls or implement future layers. The subsequently authorised Phase 3
+UI uses optional Streamlit and mock decisions; a live UI mode, simulator and memory design
+remain open. See [Phase 3 evidence](phase-3-ui.md).
 
 ## Task scope and decision-making workflow
 
@@ -56,7 +58,8 @@ not select a UI/simulator stack, authorise live calls or implement future layers
 
 - Whether future complexity justifies a framework beyond the current direct orchestration.
 - Later provider adapters and retrieval strategies beyond the DeepSeek/FTS5 baseline.
-- Frontend stack, hosted deployment, authentication and operating costs.
+- Live UI integration, hosted deployment, authentication and operating costs (the local
+  mock UI now uses Streamlit).
 - Acceptance criteria for Level 2, Level 3 and controlled memory evaluation.
 
 Future memory and evaluation work requires further design discussion and approval. The

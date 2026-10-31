@@ -20,5 +20,9 @@ it does not approve implementation of future phases. See [open questions](open-d
 
 Milestone implementation was merged in [PR 1](https://github.com/YangXu624/self-improving-agent/pull/1);
 user-supplied coding guidance was merged in [PR 2](https://github.com/YangXu624/self-improving-agent/pull/2).
-Subsequent phases and merges require separate approval. No UI stack, embedding model, user
-memory schema, simulator model or code-experiment sandbox has been chosen here.
+On 31 October 2026 the user authorised Phase 3 with a mock policy and deferred the two
+reviewed Phase 2 defects and live validation. Streamlit is the optional UI dependency: it
+reuses the Python application and supports headless UI testing without a separate frontend
+stack. Core CLI dependencies remain separate; UI dependency versions have their own lock file.
+This does not authorise live provider calls, memory layers, evaluation or merging the UI PR.
+No embedding model, user-memory schema, simulator model or code sandbox has been selected.
