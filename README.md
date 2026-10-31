@@ -5,11 +5,12 @@ future decisions. The intended research cycle is: complete a task, independently
 its outcome, distil applicable experience, and compare future behaviour with/without it.
 Memory is not assumed to improve performance; negative transfer is an outcome to measure.
 
-## Current status: Milestone 1 baseline
+## Current status: baseline and mock chat UI
 
 Implemented: session-only memory, lexical product retrieval, a bounded DeepSeek decision
-loop, local tracing, CLI and automated acceptance tests. **No long-term user memory, agent
-experience learning, evaluator, frontend or code self-optimisation is implemented.**
+loop, local tracing, CLI and automated acceptance tests. Phase 3 adds a minimal Streamlit
+chat UI using explicitly scripted mock decisions with real catalogue retrieval. **No long-term
+user memory, agent experience learning, evaluator or code self-optimisation is implemented.**
 
 This is a new implementation inspired by
 [ASTRA](https://devpost.com/software/reimagining-the-digital-experience). ASTRA and the earlier
@@ -17,11 +18,11 @@ AutoML project remain separate. No reference code, weights, configuration, sessi
 historical evaluation cases were copied. Only the user-approved frozen 50k catalogue and
 image-URL references were reused as local, ignored data.
 
-The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. We are after
-baseline implementation and before live-model validation or UI work. All 45 automated tests
-passed when rerun on 31 October 2026; they use mocked policies/transport, not live model
-validation. The next proposed checkpoint is a small explicitly authorised live acceptance
-session, followed by review before choosing the UI. No later phase is implemented by the plan.
+The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. The user
+approved mock-first UI work while deferring live Phase 2 validation and the two documented
+[review findings](docs/reviews/phase-2-subagent-review.md). Those defects remain unchanged.
+UI tests/demo do not establish live interpretation or shopping quality. See the
+[Phase 3 evidence and limitations](docs/phase-3-ui.md).
 See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
 and [decision record](docs/decisions.md).
 
@@ -37,14 +38,15 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --no-deps -e .
 ```
 
-Pydantic is the only direct runtime dependency; Ruff is a development tool. The lock file
+Pydantic is the only direct core runtime dependency; Ruff is a development tool. The lock file
 records exact tested versions; the editable build also uses isolated setuptools. No agent
-framework, model SDK, embedding service or frontend runtime is needed.
+framework, model SDK or embedding service is needed. Streamlit is an optional UI dependency.
 
 The ignored `data/catalogue/` directory must already contain the imported `catalog.jsonl`
 and `product_images.json`; a GitHub clone alone does not contain these assets. The catalogue
 has 50,000 unique parent products. The URL map covers 49,944 products; 56 have no image entry.
-No image binaries were downloaded and remote URL reachability has not been checked.
+No image binaries were imported into the dataset. Browser checks loaded some images;
+bulk remote URL reachability remains unverified.
 `manifest.json` records local import provenance and checksums.
 
 Build the index (no API key needed):
@@ -58,6 +60,41 @@ Build the index (no API key needed):
 The index is generated at `data/index/catalogue.sqlite`; it is not session memory. Source
 hashes and index version are recorded. Chat checks the source hash and refuses a stale index.
 The measured local index size is about 173 MB, in addition to about 61 MB of raw catalogue.
+
+## Mock chat UI (no API key)
+
+From this repository, install the optional UI dependencies and launch the local app:
+
+```bash
+.venv/bin/python -m pip install -r requirements-ui-lock.txt
+.venv/bin/python -m pip install --no-deps -e .
+.venv/bin/python -m streamlit run streamlit_app.py
+```
+
+Open [the local chat UI](http://127.0.0.1:8501). If the catalogue index is not built yet,
+run `.venv/bin/python -m shopping_agent index` first. The UI is bound to loopback by default;
+it is for a trusted local operator, with no hosted authentication.
+
+Try `hello`, `boots under $100`, `actually under $30`, `prefer red`, `no leather`,
+`leather is okay`, or `new goal: backpack`. The mock recognises a limited vocabulary and
+simple phrase patterns; compound/unrecognised requirements may not be interpreted correctly.
+The interface clearly labels mock mode. Recommendations come from the actual catalogue,
+with deterministic hard gates; no product IDs or search results are canned.
+
+Use the sidebar to start/select/resume a chat, inspect active needs/preferences and previous
+requirements, or switch the local shopper label. Each response has a **View activity**
+expander showing actual state edits, searches, candidate counts and recommendation actions.
+Product cards keep text/facts available when images are missing; remote image reachability
+is not guaranteed. The default UI sessions live separately in ignored `data/ui-sessions/mock/`.
+Refresh creates a fresh UI session; select a saved chat or resume its UUID to recover history.
+The browser does not maintain a second authoritative transcript.
+
+The UI does not load `.env`, read keys or call DeepSeek. Adding a key does **not** silently
+switch modes. `ChatService(policy=...)` can receive the existing `DeepSeekPolicy` when live UI
+integration is explicitly enabled later. The existing live CLI below remains available.
+For local tests/custom paths, process variables `ASTRA_CATALOGUE`, `ASTRA_INDEX` and
+`ASTRA_UI_SESSIONS` override UI paths; they are not additional `.env` loader settings.
+The UI lock records the complete tested UI/dev environment; the core lock remains separate.
 
 ## Chat with DeepSeek
 
@@ -193,12 +230,15 @@ no future-memory placeholder implementation or persistent cross-session preferen
 ```bash
 .venv/bin/python -W error::ResourceWarning -m unittest discover -s tests -v
 .venv/bin/ruff check .
-.venv/bin/ruff format --check src tests
+.venv/bin/ruff format --check src tests streamlit_app.py
 .venv/bin/python -m pip check
 ```
 
-The test suite uses generated catalogue fixtures, scripted **test-only** policies and mocked
-HTTP transport. It covers corrections, retractions, unknown data, real SQLite search/filtering,
+The baseline test suite uses generated catalogue fixtures, scripted **test-only** policies
+and mocked HTTP transport. The UI has its own explicitly labelled scripted demo policy and
+Streamlit AppTest acceptance tests. UI tests are explicitly skipped without the optional
+`[ui]` extra; install the UI lock to run them. Coverage includes corrections, retractions,
+unknown data, real SQLite search/filtering,
 owner/session isolation, restart recovery, a second-process writer lock, bounded repairs,
 unseen/stale IDs, failed eligibility rechecks, request replay and CLI execution. These tests
 are acceptance checks, not the future simulated-shopper evaluation framework.

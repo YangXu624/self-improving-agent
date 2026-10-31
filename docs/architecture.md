@@ -1,9 +1,9 @@
 # Current baseline architecture
 
-Status: implemented session-only CLI baseline, reviewed 31 October 2026. Live provider
+Status: session-only CLI baseline plus mock Streamlit UI, reviewed 31 October 2026. Live provider
 behaviour remains unverified. Future phases are in the [roadmap](roadmap.md).
 
-## Phase 3 mock UI boundary (in progress)
+## Phase 3 mock UI boundary
 
 The user authorised a mock-first UI before the pending live Phase 2 acceptance/fixes.
 `ui_service.py` now adapts the existing ShoppingAgent and SessionStore for a visual client;
@@ -12,15 +12,21 @@ It selects IDs from actual search results, not canned products, and supports a l
 of product types, USD upper budgets, colour/material preferences and explicit new goals.
 No core validator, executor, retrieval or storage implementation was changed. SQLite opens
 per request so a UI rerun thread never reuses another thread's connection. Persisted logs
-are the conversation source of truth. The visual renderer is the next checkpoint.
+are the conversation source of truth. `ui.py`/`streamlit_app.py` render those persisted
+messages, product facts, active requirements/history and per-turn activity. No Streamlit
+import enters the agent/tool/storage modules. The UI never loads credentials or selects a
+live provider; policy injection keeps a later explicit provider swap local to composition.
+Mock sessions default to `data/ui-sessions/mock/`, separate from CLI sessions. Local shopper
+labels are organisational identity, not authentication. UI selection is distinct from transient
+widget state so browser reruns cannot silently replace the active conversation UUID.
 
 ## Execution and responsibilities
 
 ```text
-CLI user message + user/session/request IDs
+CLI or Streamlit UI message + user/session/request IDs
   → SessionStore: owner check, writer lock, event replay
   → context builder: active state + recent dialogue + current search + budgets/feedback
-  → decision policy: DeepSeek JSON proposal
+  → decision policy: DeepSeek JSON proposal (CLI) or scripted mock (UI)
   → trusted executor: schema/evidence/version checks, accepted state commit
       CLARIFY / RESPOND → assistant message → completed turn
       SEARCH → FTS5/BM25 + hard gates → actual result in next decision context
@@ -37,7 +43,9 @@ CLI user message + user/session/request IDs
 | `src/shopping_agent/context.py` | Bounded prompt construction and current-search selection |
 | `src/shopping_agent/provider.py` | DeepSeek transport, token limit, safe errors; no automatic retries |
 | `src/shopping_agent/agent.py` | DecisionPolicy interface, bounded turn execution, validation, recommendations and tracing |
-| `src/shopping_agent/cli.py` | Index build, chat/resume, state/history inspection and local environment loading |
+| `src/shopping_agent/cli.py` | CLI index/chat/inspect composition and explicit local environment loading |
+| `src/shopping_agent/ui_service.py`, `mock_policy.py` | UI session boundary and explicit scripted demo decisions; real agent/tool execution |
+| `src/shopping_agent/ui.py`, `streamlit_app.py` | Optional Streamlit chat, product cards, session controls, state and activity views |
 
 Policy, context construction, retrieval and storage are separate. Future guidance can enter
 through context construction; future search implementations must keep tool contracts and
