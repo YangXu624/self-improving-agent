@@ -60,8 +60,9 @@ apply, including review/approval between phases and protected reference material
 
 ## Demonstration and verification limits
 
-The requested Phase 2 demonstration runs as two independent subagent tasks. Its consolidated
-evidence will be recorded after both reports are checked; no findings are prewritten.
+The [Phase 2 review report](reviews/phase-2-subagent-review.md) consolidates both independent
+reports, parent-verified reproductions, successful checks and unverified areas. It records
+two confirmed baseline defects without changing production code.
 
 This chat's available spawn tool accepts a task name and instructions, not a custom-agent
 selector. For this demonstration, each task explicitly reads and follows its committed TOML
