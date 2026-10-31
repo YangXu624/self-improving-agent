@@ -39,6 +39,8 @@ class ExperienceStore:
 
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
+        if self.path != ":memory:":
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path, autocommit=False)
         self.conn.row_factory = sqlite3.Row
         self._init_db()
