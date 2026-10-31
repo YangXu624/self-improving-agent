@@ -17,6 +17,10 @@ AutoML project remain separate. No reference code, weights, configuration, sessi
 historical evaluation cases were copied. Only the user-approved frozen 50k catalogue and
 image-URL references were reused as local, ignored data.
 
+The [development review roles](docs/subagents.md) define `qa_tester` and
+`architecture_reviewer`, when to use them, their review-only boundaries and future roles.
+These Codex helpers are separate from the application agent.
+
 ## Setup
 
 Use macOS/Linux and Python 3.11+ with SQLite FTS5. Tested locally on Python 3.14.3 /
