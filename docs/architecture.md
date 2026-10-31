@@ -17,9 +17,11 @@ resolution. Missing configuration disables the chat; provider errors stop a turn
 The adapter retains JSON mode, disabled thinking, output/timeout bounds and no hidden retries.
 
 The existing ShoppingAgent owns validation, state commits, trusted search and recommendation
-gates. Its default context is versioned `shopping-baseline-v2`, adding an example JSON shape
-alongside the schema. No state/constraint checker, retrieval algorithm or storage lifecycle
-was changed. SQLite still opens per service request to avoid cross-thread connections.
+gates. Its default context is `shopping-baseline-v3-compact`: active requirement IDs and
+predicates, concise dialogue, and all current candidates with facts, provenance and distinct
+supporting text. Generated schema titles, presentation fields and repeated fact values are
+omitted; omitted facts mean unknown. Candidate IDs/order and deterministic gates are retained.
+SQLite opens per service request to avoid cross-thread connections.
 
 The renderer reads persisted messages, product facts, state/history and real activity.
 It shows API attempts and reported token usage, with missing usage explicit. Inspection and
@@ -32,9 +34,10 @@ not hosted authentication. Session UUID selection remains separate from transien
 A subsequent live watch conversation exposed a product-type vocabulary mismatch and a
 final SEARCH request after search slots were exhausted. The executor stayed within its
 bounds, but the user received `decision_budget_exhausted`. See the
-[trace diagnosis and proposed remedies](reviews/watch-decision-budget-audit.md). No loop,
-prompt, matching or budget fix has been applied; diagnostic tests include explicit expected
-failures pending review. The earlier successful smoke does not establish general reliability.
+[trace diagnosis and proposed remedies](reviews/watch-decision-budget-audit.md). Prompt
+compaction is implemented separately; matching and exhausted-turn recovery remain unfixed,
+with explicit expected-failure regressions. The earlier successful smoke does not establish
+general reliability.
 
 ```text
 CLI or Streamlit UI message + user/session/request IDs

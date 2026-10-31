@@ -27,6 +27,24 @@ stack. Core CLI dependencies remain separate; UI dependency versions have their 
 This does not authorise live provider calls, memory layers, evaluation or merging the UI PR.
 No embedding model, user-memory schema, simulator model or code sandbox has been selected.
 
+## Compact context (31 October 2026)
+
+The user authorised shrinking state and events after inspection of the boots/women trace.
+Prompt v3 projects active requirements to stable ID, field, operator, value and strength.
+Full quotes/correction provenance remain in session storage. All search candidate IDs and
+their order are retained; facts, fact sources and distinct supporting text stay visible,
+with missing facts explicitly unknown. Prior recommendation order and evidence remain in
+history, but transport metadata and duplicated product fields are omitted. The generated
+Decision schema keeps its constraints and examples while omitting generated titles. This
+is deterministic projection, not LLM summarisation or a change to retrieval semantics.
+
+Offline reconstruction of the recorded second boots turn reduced encoded message-content
+tokens from 24,878 to 12,531 (49.6%). The recorded API input was 24,959, with 81 additional
+tokens across three calls. No new live call was made; changed-policy quality and actual
+provider billing remain unverified. Six projection tests plus the existing suite passed
+(82 executed, three existing expected failures). Durable-event compaction is the next
+authorised checkpoint.
+
 ## Fresh DeepSeek configuration (31 October 2026)
 
 The user supplied a local key and authorised replacing the scripted UI policy. Configuration

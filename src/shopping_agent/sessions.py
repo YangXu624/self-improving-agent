@@ -17,8 +17,14 @@ from .contracts import Event, ShoppingState
 MAX_EVENT_BYTES = 512_000
 
 
-def dumps(value):
-    return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True)
+def dumps(value, *, compact=False):
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        **({"separators": (",", ":")} if compact else {}),
+    )
 
 
 class SessionError(ValueError):

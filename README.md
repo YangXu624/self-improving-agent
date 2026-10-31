@@ -229,8 +229,10 @@ no future-memory placeholder implementation or persistent cross-session preferen
   current price or purchasable size/color combinations. Availability is unverified.
 - BM25 is a retrieval baseline; it does not establish recommendation quality. Sparse fields
   can produce few or zero verified candidates. No live crawling or attribute imputation occurs.
-- Full history is stored; prompts use active requirements, current results and up to twelve
-  recent dialogue messages. Old dialogue is trimmed first under 40,000 characters. Essential
+- Full history is stored; compact prompts use active requirement IDs/predicates, current
+  candidate facts/provenance and up to twelve prior dialogue messages. Product images, ranking
+  floats and repeated title/category text stay outside the prompt. Omitted facts mean unknown;
+  no candidate IDs are dropped. Old dialogue is trimmed first under 40,000 characters. Essential
   context is never silently truncated; oversized essential context fails before a paid call.
 - Schema/quote checks do not prove semantic entailment. RESPOND/CLARIFY natural-language
   factual accuracy and resistance to prompt injection remain unverified. Recommendation
