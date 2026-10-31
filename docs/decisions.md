@@ -42,8 +42,23 @@ Offline reconstruction of the recorded second boots turn reduced encoded message
 tokens from 24,878 to 12,531 (49.6%). The recorded API input was 24,959, with 81 additional
 tokens across three calls. No new live call was made; changed-policy quality and actual
 provider billing remain unverified. Six projection tests plus the existing suite passed
-(82 executed, three existing expected failures). Durable-event compaction is the next
-authorised checkpoint.
+(82 executed, three existing expected failures).
+
+## Compact durable events (31 October 2026)
+
+New JSONL records use optional storage version 2. State commits encode changed requirement
+entries; accepted decisions/updates, recommendation products, completed responses and repeated
+prompt messages refer only to earlier events in the same session. Long prompt strings use
+bounded stdlib zlib/base64 encoding. Exact prompt strings, facts, source quotes, timestamps,
+usage, rejection reasons, state versions and product order remain recoverable. In-memory
+events and CLI/UI inspection retain their canonical interfaces. Snapshots omit default/null
+fields and restore them through the existing strict state model.
+
+No legacy log is migrated or truncated. A session may contain both formats; current readers
+expand records before ownership/sequence/state checks and reject invalid references or
+oversized compressed streams. Older application readers cannot consume version-2 records.
+This format is not tamper-proof storage, a database or long-term memory. Detailed measurements,
+limits and reproduction commands are in the [compaction report](reviews/context-and-storage-compaction.md).
 
 ## Fresh DeepSeek configuration (31 October 2026)
 

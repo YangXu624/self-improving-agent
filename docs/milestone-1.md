@@ -12,7 +12,10 @@ goals retire prior active requirements. Duplicate additions are no-ops. Simple n
 contradictions are recorded and block search/recommendation until resolved.
 
 Sessions use opaque UUIDs, owner checks, append-only JSONL records and a rebuildable snapshot.
-State-commit events contain complete post-state versions and edit provenance. A process/thread
+Decoded state-commit events contain complete post-state versions and edit provenance. New
+disk records store only changed requirement entries and reference accepted edits; legacy
+full-state events remain readable. See the [compaction checkpoint](reviews/context-and-storage-compaction.md).
+A process/thread
 lock allows one writer per session; snapshots use flushed temporary files and atomic replacement.
 Malformed/truncated logs fail closed and are preserved for manual repair; they are not silently
 rewritten. The event log overrides a stale or corrupt snapshot. Valid state changes can survive
@@ -72,7 +75,8 @@ user-memory implementation has been added. Full dialogue/events are durable; the
 active state, current message, current search and up to twelve recent conversation messages.
 Old dialogue is trimmed first under a 40,000-character cap. Essential context is never silently
 truncated: an oversized essential context fails before a paid call. Long sessions may need a
-new session. No summarizer or session compaction is implemented.
+new session. Deterministic prompt projections and lossless event compaction were added in
+the later checkpoint above. No LLM summarizer is used.
 
 The DeepSeek adapter uses stdlib HTTP, JSON mode, disabled thinking, a 2,000-output-token cap
 and 25-second socket timeout; no automatic retries. Model/usage/duration and full actual prompt,

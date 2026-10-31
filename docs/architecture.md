@@ -56,6 +56,7 @@ CLI or Streamlit UI message + user/session/request IDs
 | `src/shopping_agent/contracts.py` | Closed state/edit/action schemas |
 | `src/shopping_agent/state.py` | ADD/REPLACE/RETRACT/NEW_GOAL, quoted evidence, history and simple conflicts |
 | `src/shopping_agent/sessions.py` | User/session ownership, JSONL replay, snapshots and thread/process locks |
+| `src/shopping_agent/event_codec.py` | Lossless compact disk records; expands to canonical events before replay/presentation |
 | `src/shopping_agent/retrieval.py` | ProductSearch interface, versioned index, literal queries, BM25 and constraint assessment |
 | `src/shopping_agent/context.py` | Bounded prompt construction and current-search selection |
 | `src/shopping_agent/provider.py` | DeepSeek transport, token limit, safe errors; no automatic retries |

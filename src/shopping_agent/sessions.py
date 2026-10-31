@@ -13,6 +13,7 @@ from typing import ClassVar
 from uuid import uuid4
 
 from .contracts import Event, ShoppingState
+from .event_codec import decode_event, encode_event
 
 MAX_EVENT_BYTES = 512_000
 
@@ -45,8 +46,20 @@ class Session:
                             "incomplete_or_oversized_event_log; preserve file for repair"
                         )
                     try:
-                        event = Event.model_validate_json(line)
-                    except ValueError as exc:
+                        raw = json.loads(line)
+                        if not isinstance(raw, dict):
+                            raise ValueError("invalid_event_record")
+                        if "session_id" not in raw or "user_id" not in raw:
+                            raise ValueError("missing_event_identity")
+                        if (
+                            raw.get("session_id") != session_id
+                            or raw.get("user_id") != user_id
+                        ):
+                            raise PermissionError("Session owner mismatch")
+                        event = decode_event(raw, self.events, self.state)
+                        if len(dumps(event.model_dump()).encode()) > MAX_EVENT_BYTES:
+                            raise ValueError("expanded_event_size_limit")
+                    except (ValueError, KeyError, TypeError, IndexError) as exc:
                         raise SessionError("corrupt_event_log") from exc
                     if event.session_id != session_id or event.user_id != user_id:
                         raise PermissionError("Session owner mismatch")
@@ -90,7 +103,11 @@ class Session:
             type=type,
             payload=payload,
         )
-        encoded = (dumps(event.model_dump()) + "\n").encode()
+        if len((dumps(event.model_dump()) + "\n").encode()) > MAX_EVENT_BYTES:
+            raise SessionError("event_size_limit")
+        encoded = (
+            dumps(encode_event(event, self.events, self.state), compact=True) + "\n"
+        ).encode()
         if len(encoded) > MAX_EVENT_BYTES:
             raise SessionError("event_size_limit")
         with (self.directory / "events.jsonl").open("ab") as handle:
@@ -121,12 +138,12 @@ class Session:
             "session_id": self.id,
             "user_id": self.user_id,
             "last_event_seq": len(self.events),
-            "state": self.state.model_dump(),
+            "state": self.state.model_dump(exclude_defaults=True, exclude_none=True),
         }
         fd, temp = tempfile.mkstemp(dir=self.directory, prefix=".state-", suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as handle:
-                handle.write(dumps(value) + "\n")
+                handle.write(dumps(value, compact=True) + "\n")
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, self.directory / "state.json")
@@ -160,7 +177,11 @@ class SessionStore:
             payload={"state": ShoppingState().model_dump()},
         )
         with (directory / "events.jsonl").open("xb") as handle:
-            handle.write((dumps(event.model_dump()) + "\n").encode())
+            handle.write(
+                (
+                    dumps(event.model_dump(exclude_defaults=True), compact=True) + "\n"
+                ).encode()
+            )
             handle.flush()
             os.fsync(handle.fileno())
         with self.open(user_id, session_id):
