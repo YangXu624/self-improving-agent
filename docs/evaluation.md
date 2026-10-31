@@ -85,3 +85,13 @@ record manual/subjective judgement separately.
 Outstanding approval decisions: exact local simulator/model, task counts and splits, success
 utility criteria, metrics/thresholds, budgets, repetition/statistical plan and privacy/retention.
 No simulator, new dependency or evaluation infrastructure is selected by this document alone.
+
+## Watch incident diagnostic evidence
+
+The [31 October watch audit](reviews/watch-decision-budget-audit.md) reproduces one live
+failure with recorded decisions and synthetic fixtures. All four real searches reproduce;
+the type filter, rather than lack of catalogue watches, explains the empty results. A final
+terminal-response counterfactual completes within the same budget. This is diagnosis, not a
+benchmark or proof of a live-policy improvement. The test suite adds three passing controls
+and three explicitly expected failures for unresolved behavior. No held-out tasks, scoring
+rules or learning stores were introduced or modified.
