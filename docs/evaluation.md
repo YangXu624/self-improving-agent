@@ -2,8 +2,9 @@
 
 **Update (1 November 2026):** the simulated-shopper harness described in
 [simulated-shopper-evaluation.md](simulated-shopper-evaluation.md) is implemented and tested
-offline with scripted and mocked components (scenario generator, Ollama/scripted shopper with
-session memory, dialogue runner, independent scorer, experiment runner, report). It has **not**
+offline with scripted and mocked components (preference-based evaluation and target-item evaluation
+modes, scenario/target generators, catalogue audit, Ollama/scripted shopper with session memory,
+dialogue runner with early cutoff, independent scorer, experiment runner, report). It has **not**
 been run against a real Ollama model or DeepSeek, so no baseline or quality result exists, and
 experience memory is still not implemented. The plan below remains the methodology; where it says
 "proposed", the harness now supplies the mechanics but the protocol values (K, B, budgets,
