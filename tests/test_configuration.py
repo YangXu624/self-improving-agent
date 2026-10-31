@@ -59,6 +59,3 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(
             read_env_file(self.path)["DEEPSEEK_API_KEY"], "$(never-execute)"
         )
-        self.assertNotIn(
-            "DEEPSEEK_API_KEY", json.dumps({"status": "configuration parsed"})
-        )
