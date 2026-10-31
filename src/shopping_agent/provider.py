@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 from .configuration import read_env_file
 
 MAX_RESPONSE_BYTES = 128000
+MAX_OUTPUT_TOKENS = 2000
 
 
 class ProviderError(RuntimeError):
@@ -56,7 +57,7 @@ class DeepSeekPolicy:
             "model": self.model,
             "messages": messages,
             "temperature": 0,
-            "max_tokens": 2000,
+            "max_tokens": MAX_OUTPUT_TOKENS,
             "response_format": {"type": "json_object"},
             "thinking": {"type": "disabled"},
             "stream": False,
@@ -91,7 +92,13 @@ class DeepSeekPolicy:
             # Whitelist response metadata; do not log arbitrary headers or reasoning_content.
             counts = {
                 k: usage[k]
-                for k in ("prompt_tokens", "completion_tokens", "total_tokens")
+                for k in (
+                    "prompt_tokens",
+                    "completion_tokens",
+                    "total_tokens",
+                    "prompt_cache_hit_tokens",
+                    "prompt_cache_miss_tokens",
+                )
                 if isinstance(usage.get(k), int) and usage[k] >= 0
             }
             meta = {
@@ -100,6 +107,11 @@ class DeepSeekPolicy:
                 "usage": counts,
                 "finish_reason": str(choice.get("finish_reason", "unknown"))[:50],
             }
+            returned_model = data.get("model")
+            if isinstance(returned_model, str) and re.fullmatch(
+                r"[A-Za-z0-9._/-]{1,100}", returned_model
+            ):
+                meta["returned_model"] = returned_model
         except (ValueError, KeyError, IndexError, TypeError):
             raise ProviderError("provider_invalid_envelope") from None
         return PolicyReply(content=content, metadata=meta)

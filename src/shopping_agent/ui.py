@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from .cards import PROFILES
 from .provider import DeepSeekPolicy, ProviderError
 from .sessions import SessionError
 from .ui_service import ChatService
@@ -243,6 +244,13 @@ def run_app(project_root: Path) -> None:
         )
         st.chat_input("Configure DeepSeek to start chatting", disabled=True)
         return
+    cards_profile = os.environ.get("ASTRA_CARDS_PROFILE", "baseline")
+    if cards_profile not in PROFILES:
+        st.title("ASTRA")
+        st.error("ASTRA_CARDS_PROFILE is not a known card profile.")
+        st.caption("Valid values: " + ", ".join(PROFILES))
+        st.chat_input("Fix the card profile to start chatting", disabled=True)
+        return
     try:
         service = ChatService(
             Path(
@@ -261,6 +269,7 @@ def run_app(project_root: Path) -> None:
                 )
             ),
             policy=policy,
+            cards_profile=cards_profile,
         )
     except SAFE_ERRORS:
         st.title("ASTRA")

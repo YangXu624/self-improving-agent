@@ -112,6 +112,14 @@ live storage separate from historical mock fixtures. The UI lock records the tes
 environment; the core lock remains separate. `ChatService` now requires explicit policy
 injection; tests supply a fixture or mock HTTP, while production supplies DeepSeekPolicy.
 
+## Experiment A (BM25 card presentation)
+
+Optional, offline-first controlled comparison of card count/format profiles; see
+[`experiments/experiment_a/README.md`](experiments/experiment_a/README.md). It needs the
+extra `requirements-experiment-lock.txt`, the pinned DeepSeek V4 `tokenizer.json`, and an
+independently verified frozen benchmark under ignored `data/`. The application default is
+unchanged (`--cards-profile baseline`). No paid live run has been made.
+
 ## Chat with DeepSeek
 
 ```bash

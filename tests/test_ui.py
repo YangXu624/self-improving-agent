@@ -161,6 +161,14 @@ class StreamlitTests(unittest.TestCase):
         self.assertTrue(any("catalogue index" in e.value for e in app.error))
         self.assertTrue(app.chat_input[0].disabled)
 
+    def test_unknown_card_profile_is_named_not_reported_as_a_missing_index(self):
+        with patch.dict(os.environ, {"ASTRA_CARDS_PROFILE": "nope"}):
+            app = AppTest.from_file(str(APP), default_timeout=15).run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any("card profile" in e.value for e in app.error))
+        self.assertFalse(any("catalogue index" in e.value for e in app.error))
+        self.assertTrue(app.chat_input[0].disabled)
+
     def test_busy_session_send_error_is_visible_without_losing_session(self):
         sid = self.app.session_state["conversation"]
         with patch(
