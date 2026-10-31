@@ -449,6 +449,18 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
                     + "\n",
                     encoding="utf-8",
                 )
+                trace_data = {
+                    "scenario_id": scenario.id,
+                    "split": scenario.split,
+                    "condition": condition.name,
+                    "termination": record.termination,
+                    "turns": [asdict(t) for t in record.turns],
+                }
+                (directory / "trace.json").write_text(
+                    json.dumps(trace_data, indent=2, sort_keys=True, ensure_ascii=False)
+                    + "\n",
+                    encoding="utf-8",
+                )
                 append_line(output / "results.jsonl", result)
                 results.append(result)
                 provider_failures = (

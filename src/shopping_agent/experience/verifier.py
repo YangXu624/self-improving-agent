@@ -17,31 +17,61 @@ def verify_decision_application(decision: Decision, lesson: Lesson) -> bool:
 
     sig: dict[str, Any] = lesson.action_signature
     if not sig:
-        return True
+        return False
 
     if action.type == "SEARCH":
+        matched_any = False
+        if "mode" in sig:
+            if action.mode != sig["mode"]:
+                return False
+            matched_any = True
+
         query = (action.query or "").lower()
-        forbidden_terms = sig.get("query_not_contains", [])
-        if any(term.lower() in query for term in forbidden_terms):
-            return False
+        if "query_not_contains" in sig:
+            forbidden_terms = sig["query_not_contains"]
+            if any(term.lower() in query for term in forbidden_terms):
+                return False
+            matched_any = True
 
-        required_terms = sig.get("query_contains", [])
-        if any(term.lower() not in query for term in required_terms):
-            return False
+        if "query_contains" in sig:
+            required_terms = sig["query_contains"]
+            if any(term.lower() not in query for term in required_terms):
+                return False
+            matched_any = True
 
-        if "mode" in sig and action.mode != sig["mode"]:
-            return False
+        return matched_any
 
     elif action.type == "CLARIFY":
-        if "attribute" in sig and action.attribute != sig["attribute"]:
-            return False
-        if "attribute_in" in sig and action.attribute not in sig["attribute_in"]:
-            return False
+        matched_any = False
+        if "attribute" in sig:
+            if action.attribute != sig["attribute"]:
+                return False
+            matched_any = True
+        if "attribute_in" in sig:
+            if action.attribute not in sig["attribute_in"]:
+                return False
+            matched_any = True
+        return matched_any
 
     elif action.type == "RECOMMEND":
-        if "min_products" in sig and len(action.product_ids) < sig["min_products"]:
-            return False
-        if "max_products" in sig and len(action.product_ids) > sig["max_products"]:
-            return False
+        matched_any = False
+        if "min_products" in sig:
+            if len(action.product_ids) < sig["min_products"]:
+                return False
+            matched_any = True
+        if "max_products" in sig:
+            if len(action.product_ids) > sig["max_products"]:
+                return False
+            matched_any = True
+        return matched_any
 
-    return True
+    elif action.type == "RESPOND":
+        matched_any = False
+        if "message_contains" in sig:
+            msg = (action.message or "").lower()
+            if any(term.lower() not in msg for term in sig["message_contains"]):
+                return False
+            matched_any = True
+        return matched_any
+
+    return False

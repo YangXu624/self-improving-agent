@@ -19,6 +19,25 @@ VALID_TRIGGER_TYPES = {
 }
 VALID_ACTIONS = {"SEARCH", "CLARIFY", "RECOMMEND", "RESPOND"}
 
+SUPPORTED_SIGNATURE_KEYS = {
+    "SEARCH": {"mode", "query_contains", "query_not_contains"},
+    "CLARIFY": {"attribute", "attribute_in"},
+    "RECOMMEND": {"min_products", "max_products"},
+    "RESPOND": {"message_contains"},
+}
+
+SUPPORTED_TRIGGER_CONDITIONS = {
+    "is_initial",
+    "searches",
+    "calls",
+    "has_search",
+    "has_candidates",
+    "candidate_count",
+    "empty_search",
+    "is_underspecified",
+    "category_only",
+}
+
 
 class LessonValidationError(ValueError):
     """Raised when a candidate lesson fails structural validation or anti-contamination."""
@@ -57,6 +76,29 @@ def validate_lesson(
     if lesson.expected_action not in VALID_ACTIONS:
         raise LessonValidationError(
             f"Invalid expected_action: {lesson.expected_action!r}. Must be one of {sorted(VALID_ACTIONS)}"
+        )
+
+    # 3. Trigger condition contract validation
+    if not lesson.trigger_condition:
+        raise LessonValidationError("Lesson trigger_condition must not be empty")
+    unsupported_triggers = (
+        set(lesson.trigger_condition.keys()) - SUPPORTED_TRIGGER_CONDITIONS
+    )
+    if unsupported_triggers:
+        raise LessonValidationError(
+            f"Unsupported trigger condition keys: {sorted(unsupported_triggers)}. "
+            f"Allowed keys: {sorted(SUPPORTED_TRIGGER_CONDITIONS)}"
+        )
+
+    # 4. Action signature contract validation
+    if not lesson.action_signature:
+        raise LessonValidationError("Lesson action_signature must not be empty")
+    allowed_keys = SUPPORTED_SIGNATURE_KEYS.get(lesson.expected_action, set())
+    unsupported_keys = set(lesson.action_signature.keys()) - allowed_keys
+    if unsupported_keys:
+        raise LessonValidationError(
+            f"Unsupported signature keys for action {lesson.expected_action}: {sorted(unsupported_keys)}. "
+            f"Allowed keys: {sorted(allowed_keys)}"
         )
 
     # 3. Anti-contamination / target leak checks

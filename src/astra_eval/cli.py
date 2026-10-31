@@ -111,6 +111,48 @@ def parser():
     s.add_argument(
         "--debug-scenarios", help="also print hidden profile/ground truth (debug only)"
     )
+    el = sub.add_parser(
+        "extract-lessons", help="extract candidate lessons from learning traces"
+    )
+    el.add_argument(
+        "--run", required=True, help="path to learning evaluation run directory"
+    )
+    el.add_argument(
+        "--store",
+        default="data/experience/store.sqlite",
+        help="path to SQLite experience store",
+    )
+
+    rl = sub.add_parser(
+        "review-lessons", help="inspect and review candidate/active lessons"
+    )
+    rl.add_argument(
+        "--store",
+        default="data/experience/store.sqlite",
+        help="path to SQLite experience store",
+    )
+    rl.add_argument(
+        "--status",
+        choices=("candidate", "active", "rejected", "retracted", "superseded", "all"),
+        default="all",
+    )
+    rl.add_argument("--confirm", help="lesson ID to confirm and activate")
+    rl.add_argument("--reject", help="lesson ID to reject")
+    rl.add_argument("--retract", help="lesson ID to retract")
+    rl.add_argument(
+        "--notes", default="Human supervisor review", help="review notes or rationale"
+    )
+
+    fl = sub.add_parser(
+        "freeze-lessons", help="freeze active lessons into an immutable snapshot JSON"
+    )
+    fl.add_argument(
+        "--store",
+        default="data/experience/store.sqlite",
+        help="path to SQLite experience store",
+    )
+    fl.add_argument("--output", required=True, help="output JSON path for snapshot")
+    fl.add_argument("--snapshot-id", help="snapshot identifier")
     return p
 
 
@@ -123,6 +165,131 @@ def main(argv=None):
 
 
 def run_command(args):
+    if args.command == "extract-lessons":
+        from shopping_agent.experience import (
+            ExperienceStore,
+            extract_candidate_lesson,
+            validate_lesson,
+        )
+
+        run_path = Path(args.run)
+        if not run_path.exists():
+            print(f"error: run directory not found: {args.run}", file=sys.stderr)
+            return 2
+        sessions_dir = run_path / "sessions"
+        if not sessions_dir.exists():
+            print(f"error: sessions directory not found in {args.run}", file=sys.stderr)
+            return 2
+
+        store = ExperienceStore(args.store)
+        extracted = []
+        for sdir in sorted(sessions_dir.iterdir()):
+            if not sdir.is_dir():
+                continue
+            trace_path = sdir / "trace.json"
+            result_path = sdir / "result.json"
+            if not trace_path.exists() or not result_path.exists():
+                continue
+            trace = json.loads(trace_path.read_text(encoding="utf-8"))
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            if trace.get("split") != "learning":
+                continue
+            candidate = extract_candidate_lesson(
+                trace, result.get("score", {}), source_split="learning"
+            )
+            if candidate is not None:
+                validate_lesson(candidate)
+                store.add_candidate(candidate)
+                extracted.append(candidate)
+
+        store.close()
+        print(f"Extracted {len(extracted)} candidate lesson(s) into {args.store}:")
+        for lesson in extracted:
+            print(
+                f"  - [{lesson.lesson_id[:12]}] ({lesson.trigger_type}) directive: {lesson.directive[:80]}"
+            )
+        print(
+            "\nRun `python -m astra_eval review-lessons` to inspect and confirm candidate lessons."
+        )
+        return 0
+
+    if args.command == "review-lessons":
+        from shopping_agent.experience import ExperienceStore
+
+        store = ExperienceStore(args.store)
+        if args.confirm:
+            confirmed = store.confirm(args.confirm, review_notes=args.notes)
+            print(
+                f"Confirmed lesson {confirmed.lesson_id} (status: {confirmed.status})"
+            )
+        elif args.reject:
+            rejected = store.reject(args.reject, review_notes=args.notes)
+            print(f"Rejected lesson {rejected.lesson_id} (status: {rejected.status})")
+        elif args.retract:
+            retracted = store.retract(args.retract, reason=args.notes)
+            print(
+                f"Retracted lesson {retracted.lesson_id} (status: {retracted.status})"
+            )
+
+        status_filter = None if args.status == "all" else args.status
+        lessons = store.list_lessons(status=status_filter)
+        print(
+            f"\n--- Lesson Review Report ({args.store}) [{len(lessons)} lesson(s)] ---"
+        )
+        for lesson in lessons:
+            ev = lesson.evidence
+            print("=" * 80)
+            print(f"Lesson ID:           {lesson.lesson_id} (v{lesson.version})")
+            print(f"Status:              {lesson.status.upper()}")
+            print(f"Scope:               {lesson.scope}")
+            print(f"Trigger Type:        {lesson.trigger_type}")
+            print(f"Trigger Condition:   {json.dumps(lesson.trigger_condition)}")
+            print(f"Expected Action:     {lesson.expected_action}")
+            print(f"Action Signature:    {json.dumps(lesson.action_signature)}")
+            print(f"Directive:           {lesson.directive}")
+            print(f"Hypothesized Cause:  {lesson.hypothesized_cause}")
+            print(f"Observed Failure:    {lesson.observed_outcome}")
+            print(
+                f"Source Evidence:     scenario={ev.get('source_scenario_id')}, split={ev.get('source_split')}, "
+                f"turn={ev.get('turn')}, termination={ev.get('termination')}"
+            )
+            if lesson.review_notes:
+                print(f"Review Notes:        {lesson.review_notes}")
+            if lesson.supersedes_id:
+                print(f"Supersedes:          {lesson.supersedes_id}")
+            if lesson.superseded_by_id:
+                print(f"Superseded By:       {lesson.superseded_by_id}")
+        print("=" * 80)
+        print("Explicit Confirmation Instructions:")
+        print(
+            f'  Confirm: python -m astra_eval review-lessons --store {args.store} --confirm <LESSON_ID> --notes "<NOTES>"'
+        )
+        print(
+            f'  Reject:  python -m astra_eval review-lessons --store {args.store} --reject <LESSON_ID> --notes "<REASON>"'
+        )
+        print(
+            f'  Retract: python -m astra_eval review-lessons --store {args.store} --retract <LESSON_ID> --notes "<REASON>"'
+        )
+        store.close()
+        return 0
+
+    if args.command == "freeze-lessons":
+        import uuid
+
+        from shopping_agent.experience import ExperienceStore
+
+        store = ExperienceStore(args.store)
+        snap_id = args.snapshot_id or f"snap-{uuid.uuid4().hex[:8]}"
+        snapshot = store.create_snapshot(snap_id)
+        out_path = Path(args.output)
+        store.save_snapshot(snapshot, out_path)
+        print(
+            f"Saved frozen snapshot '{snapshot.snapshot_id}' (SHA-256: {snapshot.sha256[:16]}...) "
+            f"with {len(snapshot.lessons)} active lesson(s) to {out_path}"
+        )
+        store.close()
+        return 0
+
     if args.command == "audit-targets":
         from .target_scenarios import TargetPool
 
