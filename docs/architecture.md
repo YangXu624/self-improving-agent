@@ -138,3 +138,29 @@ Metadata is sparse and historical. Exact prices, literal categories and explicit
 fields cannot establish current availability or child-variant stock. Product content is
 untrusted; model-level resistance to malicious instructions has not been established.
 See [milestone evidence](milestone-1.md) and [decisions](decisions.md).
+
+### Asked and disclosed attribute working memory
+
+`shopping_agent.attributes` projects executed CLARIFY responses, user-message evidence and
+active requirements into current-goal asked/disclosed ledgers. Values, exclusions and
+corrections retain authoritative requirement IDs; the model never maintains another value
+store. Narrow deterministic response patterns record declined/no-preference/uncertain
+answers, explicit currencies and direct width answers. Bare `$` does not establish currency.
+This is not a general natural-language verifier: other confirmed values still require validated
+requirement extraction by the decision policy.
+
+The snapshot caches `attribute_ledger` separately from `ShoppingState`; full canonical events
+rebuild it on reopen. Existing state schema 1 and storage codec versions remain readable.
+Question-only changes do not increment requirement versions or invalidate search results.
+NEW_GOAL scopes both ledgers to the current goal, including its initiating user message.
+Compact working context references active requirements instead of repeating their values.
+The prompt is `shopping-baseline-v4-attributes`; old prompts/events are retained unchanged.
+
+CLARIFY uses separate `size`, `width`, `price`, `currency`, `product_type` and
+`product_subtype` attributes. Resolved exact attributes are rejected after current edits;
+unanswered, conflicting, incomplete or explicitly uncertain/reopened attributes remain
+available. Repeated rejected questions end in a bounded product-free RESPOND closure.
+The original watch-taxonomy failures remain; subtype clarification does not repair retrieval.
+Confirmed non-USD budgets are recorded but never converted implicitly: SEARCH/RECOMMEND
+with an active hard price limit require a USD budget, otherwise validation rejects the action
+and a bounded product-free closure explains the limitation.

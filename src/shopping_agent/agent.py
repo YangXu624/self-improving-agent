@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from .attributes import attribute_ledger, redundant_clarification
 from .context import (
     PROMPT_VERSION,
     BuiltContext,
@@ -216,6 +217,21 @@ class ShoppingAgent:
                         )
                     edits_allowed = False
                     action = decision.action
+                    currency = attribute_ledger(session)["disclosed_attributes"].get(
+                        "currency", {}
+                    )
+                    if (
+                        action.type in {"SEARCH", "RECOMMEND"}
+                        and currency.get("status") == "answered"
+                        and currency.get("value") not in {None, "USD"}
+                        and any(
+                            r.status == "active"
+                            and r.field == "price"
+                            and r.strength == "hard"
+                            for r in state.requirements
+                        )
+                    ):
+                        raise ActionError("budget_currency_not_supported")
                     if (
                         action.type in {"SEARCH", "RECOMMEND"}
                         and session.state.conflicts
@@ -284,6 +300,8 @@ class ShoppingAgent:
                             request_id,
                         )
                     elif action.type == "CLARIFY":
+                        if redundant_clarification(session, action.attribute):
+                            raise ActionError("redundant_clarification")
                         response = {
                             "status": "ok",
                             "action": "CLARIFY",
@@ -342,6 +360,27 @@ class ShoppingAgent:
                         "message": CLOSURE_MESSAGE,
                         "products": [],
                         "closure": closure,
+                    },
+                    calls,
+                    searches,
+                )
+            if feedback and feedback[-1].get("code") in {
+                "redundant_clarification",
+                "budget_currency_not_supported",
+            }:
+                return self._complete(
+                    session,
+                    request_id,
+                    {
+                        "status": "ok",
+                        "action": "RESPOND",
+                        "message": (
+                            "Catalogue prices are historical USD. Please provide a USD budget; currency conversion is not available."
+                            if feedback[-1]["code"] == "budget_currency_not_supported"
+                            else "I already have that information. Please tell me if you would like to change it or add another requirement."
+                        ),
+                        "products": [],
+                        "closure": feedback[-1]["code"],
                     },
                     calls,
                     searches,

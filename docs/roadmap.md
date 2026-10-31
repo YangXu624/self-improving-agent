@@ -226,3 +226,10 @@ reranking, then one bounded DETAILS batch if supported by evidence. The immediat
 checkpoint is serving-version verification and a fixed, independently judged query benchmark.
 The application remains BM25; full retrieval implementation awaits review. Known correctness
 defects and decision-decoder versioning must remain separate from ranking-quality attribution.
+
+### Current attribute-state checkpoint
+
+Asked/disclosed current-goal ledgers and redundant-clarification validation are implemented
+on `feat/asked-disclosed-state`, pending independent review and PR approval. This is working
+memory only. Target-item evaluation is a separate approved component; persistent user and
+procedural experience memories remain unimplemented. No paid calls are used for this work.

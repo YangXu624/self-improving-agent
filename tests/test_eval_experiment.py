@@ -275,7 +275,8 @@ class IdentityTests(ExperimentCase):
         self.assertRegex(shared["index_sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(shared["decision_policy"]["class"], "HeuristicPolicy")
         self.assertEqual(
-            shared["decision_policy"]["prompt_version"], "shopping-baseline-v3-compact"
+            shared["decision_policy"]["prompt_version"],
+            "shopping-baseline-v4-attributes",
         )
         self.assertNotIn("key", json.dumps(shared["decision_policy"]).lower())
 

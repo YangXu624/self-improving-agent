@@ -94,7 +94,7 @@ class WatchRegressionTests(unittest.TestCase):
                 c,
                 {
                     "type": "CLARIFY",
-                    "attribute": "product_type",
+                    "attribute": "product_subtype",
                     "question": "An actual wristwatch or an accessory?",
                 },
             ),

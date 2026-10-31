@@ -156,3 +156,15 @@ Ollama (`llama3.1:latest`) running only on the user's Mac.
 - **Memory comparison seam only.** `Condition`/`ExperienceSnapshot`/agent factory and one hashed
   shared config; memory ON raises `NotImplementedError` until a factory exists.
 
+
+## Attribute ledgers: derived session projection, not a second requirement store
+
+Asked/disclosed ledgers are rebuilt from canonical events and active requirements and cached
+as a separate snapshot field. This avoids changing historical ShoppingState/codec payloads,
+keeps requirement IDs/statuses authoritative, and avoids invalidating retrieval when merely
+asking a question. Narrow evidence patterns handle explicit response dispositions, currency
+and width. Ambiguous or unsupported language stays unresolved; deterministic validation does
+not claim complete semantic understanding. Related question facets have separate names.
+The new working-context prompt version distinguishes this intentionally changed agent policy
+from older evaluation baselines. Watch regression fixtures now use product_subtype for their
+legitimate type-narrowing question; their two taxonomy expected failures stay visible.

@@ -109,7 +109,7 @@ class StateUpdate(Strict):
 class Clarify(Strict):
     type: Literal["CLARIFY"]
     question: str = Field(min_length=1, max_length=1000)
-    attribute: FieldName
+    attribute: FieldName | Literal["currency", "width", "product_subtype"]
 
 
 class Search(Strict):

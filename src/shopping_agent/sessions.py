@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import ClassVar
 from uuid import uuid4
 
+from .attributes import attribute_ledger
 from .contracts import Event, ShoppingState
 from .event_codec import decode_event, encode_event
 
@@ -138,6 +139,7 @@ class Session:
             "session_id": self.id,
             "user_id": self.user_id,
             "last_event_seq": len(self.events),
+            "attribute_ledger": attribute_ledger(self),
             "state": self.state.model_dump(exclude_defaults=True, exclude_none=True),
         }
         fd, temp = tempfile.mkstemp(dir=self.directory, prefix=".state-", suffix=".tmp")
