@@ -82,12 +82,14 @@ class ShoppingAgent:
         context_builder=build_decision_context,
         max_calls=3,
         max_searches=2,
+        experience=None,
     ):
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
         self.store, self.search, self.policy = store, search, policy
         self.context_builder = context_builder
         self.max_calls, self.max_searches = max_calls, max_searches
+        self.experience = experience
 
     def turn(self, user_id, session_id, message, *, request_id=None):
         if not isinstance(message, str) or not message.strip() or len(message) > 8000:
@@ -125,23 +127,116 @@ class ShoppingAgent:
                 "user_message", {"message": message}, request_id
             )
             calls, searches, feedback, edits_allowed = 0, 0, [], True
+            retrieved_experience: list[str] = []
+            injected_experience: list[str] = []
+            applied_experience: list[str] = []
+
+            def finish(resp):
+                exp_payload = {
+                    "retrieved": retrieved_experience,
+                    "injected": injected_experience,
+                    "applied": applied_experience,
+                }
+                if self.experience is not None or retrieved_experience:
+                    session.append("experience_audit", exp_payload, request_id)
+                return self._complete(
+                    session, request_id, resp, calls, searches, experience=exp_payload
+                )
+
             failure = "decision_budget_exhausted"
             while calls < self.max_calls:
                 result = latest_search(
                     session, self.search.catalogue_version, self.search.strategy_version
                 )
+                retrieved_lessons = []
+                guidance = None
+                if self.experience is not None:
+                    scope = "*"
+                    for req in session.state.requirements:
+                        if req.status == "active" and req.field in (
+                            "product_type",
+                            "category",
+                        ):
+                            scope = str(req.value)
+                            break
+                    cues = {
+                        "searches": searches,
+                        "calls": calls,
+                        "has_search": result is not None,
+                        "candidate_count": len(result.get("candidates", []))
+                        if result
+                        else 0,
+                        "is_initial": searches == 0,
+                    }
+                    if result is None:
+                        possible_triggers = [
+                            "initial_query",
+                            "search_strategy",
+                            "attribute_clarification",
+                        ]
+                    elif len(result.get("candidates", [])) == 0:
+                        possible_triggers = [
+                            "empty_search_recovery",
+                            "unsuccessful_search",
+                            "query_reformulation",
+                            "search_strategy",
+                        ]
+                    else:
+                        possible_triggers = [
+                            "recommend_cutoff",
+                            "candidate_selection",
+                            "attribute_clarification",
+                        ]
+                    for trig in possible_triggers:
+                        matches = self.experience.retrieve(
+                            trigger_type=trig,
+                            scope=scope,
+                            context_cues=cues,
+                            max_lessons=1,
+                        )
+                        if matches:
+                            retrieved_lessons = matches
+                            break
+                    if retrieved_lessons:
+                        for lesson in retrieved_lessons:
+                            if lesson.lesson_id not in retrieved_experience:
+                                retrieved_experience.append(lesson.lesson_id)
+                        guidance = [
+                            {
+                                "lesson_id": lesson.lesson_id,
+                                "directive": lesson.directive[:400],
+                            }
+                            for lesson in retrieved_lessons
+                        ]
+                        for lesson in retrieved_lessons:
+                            if lesson.lesson_id not in injected_experience:
+                                injected_experience.append(lesson.lesson_id)
                 try:
-                    built = self.context_builder(
-                        session,
-                        message,
-                        result,
-                        feedback,
-                        {
-                            "model_calls": self.max_calls - calls,
-                            "searches": self.max_searches - searches,
-                        },
-                        edits_allowed,
-                    )
+                    try:
+                        built = self.context_builder(
+                            session,
+                            message,
+                            result,
+                            feedback,
+                            {
+                                "model_calls": self.max_calls - calls,
+                                "searches": self.max_searches - searches,
+                            },
+                            edits_allowed,
+                            procedural_guidance=guidance,
+                        )
+                    except TypeError:
+                        built = self.context_builder(
+                            session,
+                            message,
+                            result,
+                            feedback,
+                            {
+                                "model_calls": self.max_calls - calls,
+                                "searches": self.max_searches - searches,
+                            },
+                            edits_allowed,
+                        )
                     if not isinstance(built, BuiltContext):
                         built = bind_context(built, result)
                     else:
@@ -209,6 +304,13 @@ class ShoppingAgent:
                     session.append(
                         "decision_validated", decision.model_dump(), request_id
                     )
+                    if retrieved_lessons:
+                        from .experience.verifier import verify_decision_application
+
+                        for lesson in retrieved_lessons:
+                            if verify_decision_application(decision, lesson):
+                                if lesson.lesson_id not in applied_experience:
+                                    applied_experience.append(lesson.lesson_id)
                     if state.version != session.state.version:
                         session.commit(
                             state,
@@ -316,9 +418,7 @@ class ShoppingAgent:
                             "message": action.message,
                             "products": [],
                         }
-                    return self._complete(
-                        session, request_id, response, calls, searches
-                    )
+                    return finish(response)
                 except (ValidationError, StateError, ActionError) as exc:
                     if isinstance(exc, ValidationError):
                         feedback = [
@@ -351,26 +451,20 @@ class ShoppingAgent:
             )
             if closure:
                 session.append("turn_closed_safely", {"code": closure}, request_id)
-                return self._complete(
-                    session,
-                    request_id,
+                return finish(
                     {
                         "status": "ok",
                         "action": "RESPOND",
                         "message": CLOSURE_MESSAGE,
                         "products": [],
                         "closure": closure,
-                    },
-                    calls,
-                    searches,
+                    }
                 )
             if feedback and feedback[-1].get("code") in {
                 "redundant_clarification",
                 "budget_currency_not_supported",
             }:
-                return self._complete(
-                    session,
-                    request_id,
+                return finish(
                     {
                         "status": "ok",
                         "action": "RESPOND",
@@ -381,35 +475,35 @@ class ShoppingAgent:
                         ),
                         "products": [],
                         "closure": feedback[-1]["code"],
-                    },
-                    calls,
-                    searches,
+                    }
                 )
             session.append(
                 "turn_failed", {"code": failure, "last_feedback": feedback}, request_id
             )
-            return self._complete(
-                session,
-                request_id,
+            return finish(
                 {
                     "status": "error",
                     "action": "RESPOND",
                     "message": "This turn could not complete safely. Inspect the trace or try again; accepted state changes are retained.",
                     "products": [],
                     "error": failure,
-                },
-                calls,
-                searches,
+                }
             )
 
     @staticmethod
-    def _complete(session, request_id, response, calls, searches):
+    def _complete(session, request_id, response, calls, searches, experience=None):
         response = {
             **response,
             "session_id": session.id,
             "request_id": request_id,
             "state_version": session.state.version,
             "budget_used": {"model_calls": calls, "searches": searches},
+            "experience": experience
+            or {
+                "retrieved": [],
+                "injected": [],
+                "applied": [],
+            },
         }
         session.append("assistant_response", response, request_id)
         session.append("turn_completed", {"response": response}, request_id)

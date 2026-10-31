@@ -95,6 +95,9 @@ def resources(record, config):
         "estimated_cost_usd": estimated_cost(usage, config),
         "simulator_calls": sim.get("calls", 0),
         "simulator_usage": sim.get("usage", {}),
+        "retrieved_experience": getattr(record, "retrieved_experience", []),
+        "injected_experience": getattr(record, "injected_experience", []),
+        "applied_experience": getattr(record, "applied_experience", []),
     }
 
 

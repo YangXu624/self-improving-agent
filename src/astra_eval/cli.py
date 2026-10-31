@@ -96,6 +96,9 @@ def parser():
     r.add_argument("--turn-budget", type=int)
     r.add_argument("--price-input-per-million", type=float)
     r.add_argument("--price-output-per-million", type=float)
+    r.add_argument(
+        "--experience-snapshot", help="path to frozen experience snapshot JSON"
+    )
     add_sim_args(r)
     rp = sub.add_parser(
         "report", help="aggregate a finished run into report.json/report.md"
@@ -167,6 +170,16 @@ def run_command(args):
             )
         )
         return 0
+    if getattr(args, "experience_snapshot", None):
+        from shopping_agent.experience import ExperienceStore
+
+        snapshot = ExperienceStore.load_snapshot(args.experience_snapshot)
+        conditions = (
+            Condition("memory_off"),
+            Condition("memory_on", experience=snapshot),
+        )
+    else:
+        conditions = (Condition(),)
     config = ExperimentConfig(
         scenarios_dir=Path(args.scenarios),
         evaluation_mode=args.evaluation_mode,
@@ -178,7 +191,7 @@ def run_command(args):
         output=Path(args.output),
         split=args.split,
         limit=args.limit,
-        conditions=(Condition(),),
+        conditions=conditions,
         simulator=sim_config(args),
         score=ScoreConfig(
             k_values=tuple(args.k),
@@ -219,13 +232,22 @@ def run_command(args):
             return 1
     from shopping_agent.provider import DeepSeekPolicy
 
+    from .experiment import default_agent_factory, experiential_agent_factory
+
     policy = DeepSeekPolicy.from_env_file(args.env_file)
     simulator = (
         OllamaShopper(config.simulator)
         if args.simulator == "ollama"
         else ScriptedShopper(config.simulator)
     )
-    result = run_experiment(config, simulator=simulator, policy=policy)
+    factory = (
+        experiential_agent_factory
+        if getattr(args, "experience_snapshot", None)
+        else default_agent_factory
+    )
+    result = run_experiment(
+        config, simulator=simulator, policy=policy, agent_factory=factory
+    )
     write_report(config.output)
     print(json.dumps(result, indent=2, sort_keys=True))
     print(f"Report: {config.output / 'report.md'}")

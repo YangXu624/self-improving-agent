@@ -76,7 +76,11 @@ class ExperienceSnapshot:
 
     snapshot_id: str
     sha256: str
-    lessons: tuple[Lesson, ...] = ()
+    lessons: tuple[Any, ...] = ()
+
+    @property
+    def entries(self) -> tuple[Any, ...]:
+        return self.lessons
 
     @classmethod
     def from_lessons(
@@ -88,3 +92,46 @@ class ExperienceSnapshot:
         ).encode("utf-8")
         digest = hashlib.sha256(content).hexdigest()
         return cls(snapshot_id=snapshot_id, sha256=digest, lessons=sorted_lessons)
+
+    def retrieve(
+        self,
+        trigger_type: str,
+        scope: str = "*",
+        context_cues: dict[str, Any] | None = None,
+        max_lessons: int = 1,
+    ) -> list[Lesson]:
+        """Retrieve active lessons from the frozen snapshot matching trigger and scope."""
+        cues = context_cues or {}
+        candidates = [
+            item
+            for item in self.lessons
+            if isinstance(item, Lesson)
+            and item.status in ("active", "confirmed")
+            and item.trigger_type == trigger_type
+            and item.scope in (scope, "*")
+        ]
+        candidates.sort(
+            key=lambda item: (
+                0 if item.scope == scope else 1,
+                -item.version,
+                item.created_at,
+            )
+        )
+        matched: list[Lesson] = []
+        for lesson in candidates:
+            cond = lesson.trigger_condition
+            matches = True
+            for k, expected in cond.items():
+                actual = cues.get(k)
+                if isinstance(expected, bool):
+                    if bool(actual) != expected:
+                        matches = False
+                        break
+                elif actual != expected:
+                    matches = False
+                    break
+            if matches:
+                matched.append(lesson)
+                if len(matched) >= max_lessons:
+                    break
+        return matched

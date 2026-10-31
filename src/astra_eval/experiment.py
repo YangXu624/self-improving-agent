@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from shopping_agent.agent import ShoppingAgent
+from shopping_agent.experience import ExperienceSnapshot
 from shopping_agent.retrieval import LexicalSearch, file_hash
 from shopping_agent.sessions import SessionStore
 
@@ -29,15 +30,6 @@ from .simulators import SimulatorConfig
 
 MAX_CONSECUTIVE_PROVIDER_FAILURES = 3
 MIN_FORBIDDEN_TITLE = 15
-
-
-@dataclass(frozen=True)
-class ExperienceSnapshot:
-    """Frozen, previously learned experience (interface only; nothing implements learning)."""
-
-    snapshot_id: str
-    sha256: str
-    entries: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -58,6 +50,20 @@ def default_agent_factory(condition, store, search, policy, *, max_calls, max_se
         )
     return ShoppingAgent(
         store, search, policy, max_calls=max_calls, max_searches=max_searches
+    )
+
+
+def experiential_agent_factory(
+    condition, store, search, policy, *, max_calls, max_searches
+):
+    """ASTRA agent factory with experiential memory snapshot support."""
+    return ShoppingAgent(
+        store,
+        search,
+        policy,
+        max_calls=max_calls,
+        max_searches=max_searches,
+        experience=condition.experience,
     )
 
 
@@ -431,6 +437,11 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
                     "astra_session_id": record.astra_session_id,
                     "user_id": record.user_id,
                     "session_dir": str(directory.relative_to(output)),
+                    "experience": {
+                        "retrieved": record.retrieved_experience,
+                        "injected": record.injected_experience,
+                        "applied": record.applied_experience,
+                    },
                     "score": score,
                 }
                 (directory / "result.json").write_text(
