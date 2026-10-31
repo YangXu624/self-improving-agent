@@ -470,6 +470,29 @@ class UsageBudgetTests(unittest.TestCase):
                     budget.reserve(prompt)
                 self.assertEqual(budget.snapshot(), before)
 
+    def test_cap_is_cumulative_across_earlier_runs(self):
+        first = run.UsageBudget.carried([]).snapshot()
+        self.assertEqual(first, run.PREFLIGHT_USAGE)
+        earlier = {"requests": 52, "input_tokens": 300_000, "output_tokens": 90_000}
+        more = {"requests": 10, "input_tokens": 50_000, "output_tokens": 10_000}
+        total = run.UsageBudget.carried([earlier, more]).snapshot()
+        self.assertEqual(total["requests"], 2 + 50 + 8)
+        self.assertEqual(
+            total["input_tokens"], 4893 + (300_000 - 4893) + (50_000 - 4893)
+        )
+        # An earlier run that never exceeded the preflight adds nothing.
+        self.assertEqual(
+            run.UsageBudget.carried(
+                [{"requests": 0, "input_tokens": 0, "output_tokens": 0}]
+            ).snapshot(),
+            run.PREFLIGHT_USAGE,
+        )
+        full = run.UsageBudget.carried(
+            [{"requests": 100, "input_tokens": 1, "output_tokens": 1}]
+        )
+        with self.assertRaisesRegex(ValueError, "experiment_budget_exhausted"):
+            full.reserve(10)
+
     def test_default_budget_includes_the_two_preflight_requests(self):
         self.assertEqual(run.UsageBudget().snapshot()["requests"], 2)
 
@@ -523,6 +546,49 @@ class LiveReplayOfflineTests(RunnerCase):
             self.live("unverified", policy=policy)
         self.assertEqual(policy.calls, [])
 
+    def test_budget_is_persisted_before_each_paid_call(self):
+        seen = []
+
+        class Watching(FakePolicy):
+            def complete(inner, messages):
+                seen.append(
+                    json.loads((self.root / "out" / "budget.json").read_text())[
+                        "requests"
+                    ]
+                )
+                return super().complete(messages)
+
+        self.live(policy=Watching())
+        self.assertEqual(seen, list(range(3, 19)))
+
+    def test_prior_runs_count_against_the_cap_and_are_recorded(self):
+        self.live("first")
+        near = self.root / "near"
+        near.mkdir()
+        (near / "budget.json").write_text(
+            json.dumps(
+                {"requests": 90, "input_tokens": 100_000, "output_tokens": 50_000}
+            )
+        )
+        policy = FakePolicy()
+        with self.assertRaisesRegex(ValueError, "experiment_budget_exhausted"):
+            self.live("second", policy=policy, prior_runs=[near])
+        self.assertEqual(len(policy.calls), 10)
+        meta = json.loads((self.root / "second" / "run.json").read_text())
+        self.assertEqual(meta["prior_runs"], [str(near)])
+        self.assertEqual(meta["tokenizer_sha256"], run.TOKENIZER_SHA256)
+        self.assertRegex(meta["verification_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_unexpected_provider_exception_is_logged_by_class_only_and_run_continues(
+        self,
+    ):
+        policy = FakePolicy(errors=[KeyError("secret-looking message")])
+        self.live(policy=policy)
+        first = self.lines("out", "outcomes.jsonl")[0]
+        self.assertEqual(first["outcome"]["error"], "unexpected_KeyError")
+        self.assertNotIn("secret", json.dumps(first))
+        self.assertEqual(len(policy.calls), 16)
+
     def test_provider_error_is_recorded_without_retry_and_run_continues(self):
         policy = FakePolicy(errors=[ProviderError("provider_http_500")])
         self.live(policy=policy)
@@ -535,10 +601,9 @@ class LiveReplayOfflineTests(RunnerCase):
         self.assertTrue(first["metrics"]["failure"])
 
     def test_budget_exhaustion_stops_before_the_next_request(self):
-        real = run.UsageBudget
-        small = lambda: real(requests=98, input_tokens=0, output_tokens=0)  # noqa: E731
+        near_cap = run.UsageBudget(requests=98, input_tokens=0, output_tokens=0)
         policy = FakePolicy()
-        with patch.object(run, "UsageBudget", small):
+        with patch.object(run.UsageBudget, "carried", return_value=near_cap):
             with self.assertRaisesRegex(ValueError, "experiment_budget_exhausted"):
                 self.live(policy=policy)
         self.assertEqual(len(policy.calls), 2)

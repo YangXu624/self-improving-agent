@@ -115,4 +115,15 @@ trusted executor, not the prompt, and adds only the optional `closure` response 
   Token counts approximate provider usage; API-reported usage remains authoritative.
 - **Report is descriptive.** Paired exact McNemar and a seeded bootstrap are reported with
   explicit denominators and an exploratory caveat; no significance threshold is promoted.
+- **Interface hardening.** `ShoppingAgent` now binds each decision to the serialized visible
+  set (`BuiltContext` and a receipt). A legacy or custom `context_builder` that returns plain
+  messages still works, but a turn now fails with `invalid_context_visibility` if its last
+  message is not JSON naming the current search or if its evidence differs from the raw
+  result; previously such a builder was accepted. The default profile is unchanged.
+- **Dependency surface.** `tokenizers` pulls in `huggingface_hub` and HTTP libraries that are
+  never used: only `Tokenizer.from_file` on a local, hash-pinned file is called. Streamlit's
+  `watchdog==6.0.0` is installed but not in any lock file (pre-existing).
+- **Cumulative budget.** The live cap is shared across runs via `--prior-run`; the budget is
+  persisted before each paid call. Primary comparison, a null replicate arm and a cache-aware
+  latency policy remain open for the owner (experiment README).
 

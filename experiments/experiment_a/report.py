@@ -116,7 +116,28 @@ def paired_binary(by_task, treatment, reference):
         "mean_difference": statistics.fmean(differences) if n else None,
         "bootstrap_95": bootstrap_interval(differences),
         "mcnemar_exact_p": mcnemar_exact(only_t, only_r) if n else None,
+        # Best case: every pair discordant in one direction. Shows what n can ever detect.
+        "min_achievable_p": min(1.0, 2 * 0.5**n) if n else None,
     }
+
+
+def holm_adjust(paired, metric):
+    """Add Holm-adjusted p across the comparison family for one metric (in place).
+
+    The adjusted value is descriptive: no comparison is designated primary yet.
+    """
+    items = [
+        (label, metrics[metric])
+        for label, metrics in paired.items()
+        if metrics[metric]["mcnemar_exact_p"] is not None
+    ]
+    ordered = sorted(items, key=lambda item: item[1]["mcnemar_exact_p"])
+    running = 0.0
+    for rank, (_, cell) in enumerate(ordered):
+        running = max(running, (len(ordered) - rank) * cell["mcnemar_exact_p"])
+        cell["holm_adjusted_p"] = min(1.0, running)
+    for metrics in paired.values():
+        metrics[metric].setdefault("holm_adjusted_p", None)
 
 
 def paired_numeric(by_task, treatment, reference):
@@ -191,7 +212,7 @@ def summarize_offline(offline, tasks):
     for treatment, reference in COMPARISONS:
         label = f"{treatment}_vs_{reference}"
         out["paired"][label] = {
-            "scope": "held_out",
+            "scope": "held_out (all 24 tasks, feasible and no-witness)",
             "shortlist_hit_at_k": paired_binary(hit, treatment, reference),
             "content_tokens": paired_numeric(tokens, treatment, reference),
             "result_tokens": paired_numeric(results, treatment, reference),
@@ -278,6 +299,7 @@ def summarize_live(records, requests, tasks, qrels):
                 "median_latency_ms": median([r["latency_ms"] for r in mine]),
                 "prompt_tokens": usage_total(mine, "prompt_tokens"),
                 "completion_tokens": usage_total(mine, "completion_tokens"),
+                "prompt_cache_hit_tokens": usage_total(mine, "prompt_cache_hit_tokens"),
                 "median_content_tokens": median(
                     [request_by_trial[r["trial_id"]]["content_tokens"] for r in mine]
                 ),
@@ -319,10 +341,12 @@ def summarize_live(records, requests, tasks, qrels):
         out["paired"][label]["content_tokens"] = paired_numeric(
             tokens, treatment, reference
         )
+    for metric, which in LIVE_BINARY:
+        holm_adjust(out["paired"], f"{metric}[{which}]")
     return out
 
 
-def build_report(frozen, run=None, offline=None):
+def build_report(frozen, run=None, offline=None, *, allow_partial=False):
     manifest, tasks, _baseline, qrels = load_frozen(frozen)
     report = {
         "caveat": CAVEAT,
@@ -345,6 +369,15 @@ def build_report(frozen, run=None, offline=None):
         records = list(map(json.loads, read_lines(run / "outcomes.jsonl")))
         requests = list(map(json.loads, read_lines(run / "requests.jsonl")))
         meta = json.loads((run / "run.json").read_text())
+        if meta["manifest_sha256"] != file_hash(Path(frozen) / "manifest.json"):
+            raise ValueError("Run was made against a different frozen manifest")
+        if not (run / "completed.json").exists() and not allow_partial:
+            raise ValueError("Run is not finished; pass allow_partial to report it")
+        if (
+            len(records) != len({r["trial_id"] for r in records})
+            or len(records) > meta["trials"]
+        ):
+            raise ValueError("Run records are duplicated or exceed the schedule")
         report["live"] = {
             "run": {
                 "git_commit": meta["git_commit"],
@@ -353,6 +386,9 @@ def build_report(frozen, run=None, offline=None):
                 "planned_trials": meta["trials"],
                 "observed_trials": len(records),
                 "finished": (run / "completed.json").exists(),
+                "tokenizer_sha256": meta.get("tokenizer_sha256"),
+                "verification_sha256": meta.get("verification_sha256"),
+                "requirements_lock_sha256": meta.get("requirements_lock_sha256"),
             },
             **summarize_live(records, requests, tasks, qrels),
         }
@@ -419,9 +455,9 @@ def render_markdown(report):
             )
         lines += ["", "### Paired differences (treatment - reference)", ""]
         lines += [
-            "| Comparison | Metric | Pairs | Mean diff | 95% bootstrap | Discordant (T only / R only) | Exact p |"
+            "| Comparison | Metric | Pairs | Mean diff | 95% bootstrap | Discordant (T only / R only) | Exact p | Holm p | Best-case p |"
         ]
-        lines += ["| --- | --- | --- | --- | --- | --- | --- |"]
+        lines += ["| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
         for label, metrics in live["paired"].items():
             for name in ("strict_success[feasible]", "safe_abstention[no_witness]"):
                 m = metrics[name]
@@ -429,19 +465,20 @@ def render_markdown(report):
                 lines.append(
                     f"| {label} | {name} | {m['n_pairs']} | {fmt(m['mean_difference'])} | "
                     f"{'N/A' if interval is None else f'[{interval[0]:.3f}, {interval[1]:.3f}]'} | "
-                    f"{m['only_treatment']} / {m['only_reference']} | {fmt(m['mcnemar_exact_p'])} |"
+                    f"{m['only_treatment']} / {m['only_reference']} | {fmt(m['mcnemar_exact_p'])} | "
+                    f"{fmt(m['holm_adjusted_p'])} | {fmt(m['min_achievable_p'])} |"
                 )
         lines.append("")
     return "\n".join(lines) + "\n"
 
 
-def write_report(frozen, output, run=None, offline=None):
+def write_report(frozen, output, run=None, offline=None, *, allow_partial=False):
     output = Path(output)
     if output.exists():
         raise FileExistsError("Report output exists; choose a new directory")
     if run is None and offline is None:
         raise ValueError("Provide --run and/or --offline")
-    report = build_report(frozen, run, offline)
+    report = build_report(frozen, run, offline, allow_partial=allow_partial)
     output.mkdir(parents=True)
     write_json(output / "report.json", report)
     (output / "report.md").write_text(render_markdown(report), encoding="utf-8")
@@ -454,8 +491,17 @@ def main():
     parser.add_argument("--run", type=Path, help="completed live run directory")
     parser.add_argument("--offline", type=Path, help="offline.json from run.py offline")
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--allow-partial", action="store_true", help="report an unfinished live run"
+    )
     args = parser.parse_args()
-    write_report(args.frozen, args.output, args.run, args.offline)
+    write_report(
+        args.frozen,
+        args.output,
+        args.run,
+        args.offline,
+        allow_partial=args.allow_partial,
+    )
     print(dumps({"report": str(args.output / "report.json")}))
 
 

@@ -152,7 +152,15 @@ BM25 floats within a 1e-9 relative tolerance for SQLite rounding), formats the f
 profiles, binds the visible set with a receipt, and measures tokens and formatting time.
 `live` (paid; **needs explicit budget approval**) additionally needs a clean Git tree, a
 fresh output directory and the verified certificate. `replay` re-validates a saved run and
-re-scores it with no provider. `report` summarises either or both: per profile, split by
+re-scores it with no provider. `report` also loads the frozen directory through the same certificate check, so it too needs
+a certificate (a scratch copy is fine for a dry run). A live run refuses to start when its
+cumulative spend would pass the shared cap: pass `--prior-run DIR` for every earlier live run
+(its `budget.json` counts, preflight excluded to avoid double counting). `budget.json` is
+written before each paid call, and a non-provider exception during a trial is recorded by
+class name only and counted as a failed trial, with no retry. `run.json` records the
+tokenizer, certificate and lock-file hashes; `report` refuses a run from a different
+manifest, a duplicated/oversized record set, or an unfinished run unless `--allow-partial`.
+`report` summarises either or both: per profile, split by
 feasible vs no-witness tasks and by intent stratum, with exact denominators, paired
 differences (exact McNemar for discordant pairs, seeded bootstrap interval for the mean
 difference) and an exploratory caveat. Output is deterministic and never overwrites.
@@ -167,6 +175,27 @@ offline run covered 36 tasks × 4 profiles with a scratch certificate only (see
 frozen-v3 independent certificate is still required before live use. Observations: all
 profiles show Hit@K 16/16 on held-out feasible tasks (a ceiling effect, so shortlist
 quality cannot separate them); the shared encoding is identical to v3 evidence in 36/36
-tasks; median context content tokens fall from 3,010 (v3_k10) to 2,464 (v3_k5), 2,769
+tasks; median context content tokens (held-out feasible tasks) fall from 3,010 (v3_k10) to 2,464 (v3_k5), 2,769
 (shared_k10) and 2,369 (shared_k5). These are cost measurements, not recommendation quality.
+
+## Open design decisions before any live run
+
+These are for the project owner; none is decided here, and the report labels every
+comparison descriptive until they are.
+
+1. **Primary comparison and metric.** The report computes four comparisons across six binary
+   metrics with raw exact McNemar p-values, a Holm-adjusted p per metric family (over the
+   four comparisons) and a best-case p. With 16 feasible held-out tasks, 6 discordant pairs
+   in one direction are the fewest that can reach p < 0.05 (0.031); 4 pairs cannot go below
+   0.125. Name one primary comparison (for example v3_k5 vs v3_k10 on strict success) before
+   spending anything.
+2. **Noise estimate.** Temperature 0 is still stochastic and each cell has one repeat, so
+   within-profile noise is unmeasured. A replicate of v3_k10 as a null arm would cost 24
+   more requests (122 total, above the proposed cap of 100), so it needs a raised cap or a
+   subset.
+3. **Latency and cost.** The four profiles of one task run back to back, so provider prompt
+   caching can favour later profiles; order is shuffled per task but not removed. The
+   report records cache-hit tokens; treat latency as descriptive.
+4. **Ceiling effect.** Every reviewed pair is category-relevant, so offline Hit@K cannot
+   differ between profiles; any live difference will come from model behaviour.
 

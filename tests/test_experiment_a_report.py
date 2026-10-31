@@ -56,6 +56,32 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(result["mean_difference"], 0.0)
         self.assertEqual(report.paired_binary({}, "t", "r")["mean_difference"], None)
 
+    def test_holm_adjustment_and_best_case_p(self):
+        def cell(t_only, r_only):
+            return report.paired_binary(
+                {f"t{i}": {"t": True, "r": False} for i in range(t_only)}
+                | {f"r{i}": {"t": False, "r": True} for i in range(r_only)},
+                "t",
+                "r",
+            )
+
+        paired = {
+            "a": {"m": cell(6, 0)},
+            "b": {"m": cell(3, 0)},
+            "c": {"m": cell(1, 1)},
+        }
+        report.holm_adjust(paired, "m")
+        raw = {k: v["m"]["mcnemar_exact_p"] for k, v in paired.items()}
+        adjusted = {k: v["m"]["holm_adjusted_p"] for k, v in paired.items()}
+        self.assertAlmostEqual(adjusted["a"], min(1.0, 3 * raw["a"]))
+        self.assertAlmostEqual(adjusted["b"], min(1.0, max(3 * raw["a"], 2 * raw["b"])))
+        self.assertEqual(adjusted["c"], 1.0)
+        self.assertTrue(all(adjusted[k] >= raw[k] for k in raw))
+        # With only 4 pairs the best possible p is 0.125, however the pairs fall.
+        self.assertAlmostEqual(cell(4, 0)["min_achievable_p"], 0.125)
+        self.assertAlmostEqual(cell(6, 0)["min_achievable_p"], 2 / 64)
+        self.assertIsNone(report.paired_binary({}, "t", "r")["min_achievable_p"])
+
     def test_paired_numeric_difference(self):
         table = {"a": {"t": 5, "r": 9}, "b": {"t": 7, "r": 8}, "c": {"t": 1}}
         result = report.paired_numeric(table, "t", "r")
@@ -128,6 +154,34 @@ class ReportIntegrationTests(fixtures.RunnerCase):
             with self.assertRaises(FileNotFoundError):
                 report.build_report(self.frozen, live, offline)
 
+    def test_unfinished_run_needs_explicit_permission_and_manifest_must_match(self):
+        _, live = self.make_inputs()
+        meta = json.loads((live / "run.json").read_text())
+        (live / "run.json").write_text(
+            json.dumps({**meta, "manifest_sha256": "0" * 64})
+        )
+        with self.assertRaisesRegex(ValueError, "different frozen manifest"):
+            report.build_report(self.frozen, live)
+        (live / "run.json").write_text(json.dumps(meta))
+        (live / "completed.json").unlink()
+        with self.assertRaisesRegex(ValueError, "not finished"):
+            report.build_report(self.frozen, live)
+        self.assertFalse(
+            report.build_report(self.frozen, live, allow_partial=True)["live"]["run"][
+                "finished"
+            ]
+        )
+        records = (live / "outcomes.jsonl").read_text().splitlines()
+        (live / "outcomes.jsonl").write_text("\n".join(records + records[:1]) + "\n")
+        with self.assertRaisesRegex(ValueError, "duplicated or exceed"):
+            report.build_report(self.frozen, live, allow_partial=True)
+
+    def test_run_provenance_hashes_are_carried_into_the_report(self):
+        offline, live = self.make_inputs()
+        info = report.build_report(self.frozen, live, offline)["live"]["run"]
+        self.assertEqual(info["tokenizer_sha256"], run.TOKENIZER_SHA256)
+        self.assertRegex(info["verification_sha256"], r"^[0-9a-f]{64}$")
+
     def test_incomplete_run_is_labelled_not_finished_and_failures_are_counted(self):
         offline, live = self.make_inputs()
         (live / "completed.json").unlink()
@@ -137,7 +191,7 @@ class ReportIntegrationTests(fixtures.RunnerCase):
         (live / "outcomes.jsonl").write_text(
             "".join(json.dumps(r) + "\n" for r in records[:8])
         )
-        result = report.build_report(self.frozen, live)
+        result = report.build_report(self.frozen, live, allow_partial=True)
         self.assertFalse(result["live"]["run"]["finished"])
         self.assertEqual(result["live"]["run"]["observed_trials"], 8)
         self.assertEqual(

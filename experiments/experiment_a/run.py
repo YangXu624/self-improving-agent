@@ -260,6 +260,9 @@ def offline(directory, index, output, tokenizer):
     }
 
 
+PREFLIGHT_USAGE = {"requests": 2, "input_tokens": 4893, "output_tokens": 198}
+
+
 class UsageBudget:
     """Persisted conservative accounting; transport failures keep their reservation."""
 
@@ -269,6 +272,19 @@ class UsageBudget:
             input_tokens,
             output_tokens,
         )
+
+    @classmethod
+    def carried(cls, prior_snapshots):
+        """Start from the preflight plus everything earlier runs already accounted.
+
+        Each earlier snapshot already includes the preflight, so only its excess counts.
+        The cap is cumulative across interrupted or repeated runs, never per run.
+        """
+        total = dict(PREFLIGHT_USAGE)
+        for snapshot in prior_snapshots:
+            for key, base in PREFLIGHT_USAGE.items():
+                total[key] += max(0, snapshot[key] - base)
+        return cls(**total)
 
     def reserve(self, prompt_tokens):
         reservation = prompt_tokens + 512
@@ -323,7 +339,9 @@ def build_schedule(tasks, baseline, seed):
     return schedule
 
 
-def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
+def live(
+    directory, index, output, tokenizer, env_file, *, seed=20261031, prior_runs=()
+):
     manifest, tasks, baseline, qrels = load_frozen(directory)
     if subprocess.check_output(
         ["git", "status", "--porcelain"], cwd=ROOT, text=True
@@ -338,11 +356,18 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
     policy = DeepSeekPolicy.from_env_file(env_file)
     search = LexicalSearch(index, expected_catalogue_hash=manifest["catalogue_sha256"])
     output.mkdir(parents=True)
-    budget = UsageBudget()
+    budget = UsageBudget.carried(
+        json.loads((Path(prior) / "budget.json").read_text()) for prior in prior_runs
+    )
+    lock = ROOT / "requirements-experiment-lock.txt"
     write_json(
         output / "run.json",
         {
             "protocol": manifest["protocol"],
+            "tokenizer_sha256": TOKENIZER_SHA256,
+            "verification_sha256": file_hash(Path(directory) / "verification.json"),
+            "requirements_lock_sha256": file_hash(lock) if lock.exists() else None,
+            "prior_runs": [str(prior) for prior in prior_runs],
             "manifest_sha256": file_hash(Path(directory) / "manifest.json"),
             "git_commit": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -378,6 +403,8 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
                     "usage_reserved": budget.snapshot(),
                 },
             )
+            # Persist the reservation before the paid call so a crash cannot lose it.
+            write_json(output / "budget.json", budget.snapshot())
             started = time.perf_counter()
             try:
                 reply = policy.complete(bundle.messages)
@@ -389,7 +416,10 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
                     reply, task, baseline[task["id"]], bundle, search
                 )
                 response = {"content": reply.content, "metadata": reply.metadata}
-            except ProviderError as exc:
+            except Exception as exc:
+                # ProviderError carries a safe code; anything else is logged by class
+                # name only (never its message) and counts as a failed trial. The
+                # reservation stays charged. No retry is made.
                 elapsed = (time.perf_counter() - started) * 1000
                 usage_complete = False
                 outcome = {
@@ -397,7 +427,9 @@ def live(directory, index, output, tokenizer, env_file, *, seed=20261031):
                     "action": None,
                     "attempted_ids": [],
                     "accepted_ids": [],
-                    "error": str(exc),
+                    "error": str(exc)
+                    if isinstance(exc, ProviderError)
+                    else "unexpected_" + type(exc).__name__,
                 }
                 response = None
             outcome["runtime_hard_failures"] = sum(
@@ -501,6 +533,13 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--env-file", default=".env", type=Path)
+    parser.add_argument(
+        "--prior-run",
+        action="append",
+        default=[],
+        type=Path,
+        help="earlier live run directory whose spend counts against the shared cap",
+    )
     args = parser.parse_args()
     if args.mode == "replay":
         print(dumps(replay(args.frozen, args.output, args.index)))
@@ -513,7 +552,14 @@ def main():
     if args.mode == "offline":
         result = offline(args.frozen, args.index, args.output, tokenizer)
     else:
-        result = live(args.frozen, args.index, args.output, tokenizer, args.env_file)
+        result = live(
+            args.frozen,
+            args.index,
+            args.output,
+            tokenizer,
+            args.env_file,
+            prior_runs=args.prior_run,
+        )
     print(dumps(result))
 
 
