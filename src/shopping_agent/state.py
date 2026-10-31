@@ -1,6 +1,8 @@
 """Apply evidence-linked edits without erasing superseded requirements."""
 
+import re
 from decimal import Decimal
+from itertools import product
 from uuid import uuid4
 
 from .contracts import NUMERIC, Requirement, ShoppingState, StateUpdate
@@ -12,6 +14,68 @@ class StateError(ValueError):
 
 def normalized(text):
     return " ".join(text.casefold().split())
+
+
+def has_evidence(quote):
+    """A quote must contain a letter or digit; blank/invisible/punctuation-only text is none."""
+    return any(ch.isalnum() for ch in quote)
+
+
+# Department aliases mirror retrieval.facet so conflict checks agree with the eligibility
+# gate. retrieval.py is intentionally untouched (frozen baseline); tests pin both tables.
+DEPARTMENT_ALIASES = {
+    "mens": "men",
+    "men's": "men",
+    "womens": "women",
+    "women's": "women",
+    "unisex-adult": "unisex",
+    "unisex adult": "unisex",
+}
+MAX_TYPE_COMBINATIONS = 4096
+
+
+def canonical(field, value):
+    text = normalized(str(value))
+    return DEPARTMENT_ALIASES.get(text, text) if field == "department" else text
+
+
+def type_conflict(rows):
+    """Prove a product_type contradiction using the gate's token-containment semantics.
+
+    The gate treats eq/in/contains as "category text contains every token of one
+    alternative" and neq/not_in/not_contains as "contains none of these token sets".
+    A category can hold any token union, so only a forbidden set that is covered by
+    the chosen positives is contradictory. Unprovable (oversized) cases are not flagged.
+    """
+
+    def tokens(value):
+        return frozenset(re.findall(r"\w+", normalized(str(value))))
+
+    positives, forbidden = [], []
+    for r in rows:
+        values = r.value if isinstance(r.value, list) else [r.value]
+        sets = [tokens(v) for v in values]
+        if r.op in {"eq", "in", "contains"}:
+            positives.append(sets)
+        elif r.op in {"neq", "not_in", "not_contains"}:
+            forbidden.extend(sets)
+    if not (positives and forbidden):
+        return False
+    # Sufficient and cheap: a positive group whose every alternative is already banned.
+    if any(
+        all(any(b <= alt for b in forbidden) for alt in group) for group in positives
+    ):
+        return True
+    positives = list({tuple(group) for group in positives})
+    count = 1
+    for group in positives:
+        count *= len(group)
+    if count > MAX_TYPE_COMBINATIONS:
+        return False
+    return not any(
+        not any(banned <= set().union(*choice) for banned in forbidden)
+        for choice in product(*positives)
+    )
 
 
 def conflicts(requirements):
@@ -54,13 +118,16 @@ def conflicts(requirements):
                 )
             ):
                 found.append(field)
+        elif field == "product_type":
+            if type_conflict(rows):
+                found.append(field)
         else:
             allowed, excluded = None, set()
             for r in rows:
                 values = (
-                    {normalized(v) for v in r.value}
+                    {canonical(field, v) for v in r.value}
                     if isinstance(r.value, list)
-                    else {normalized(r.value)}
+                    else {canonical(field, r.value)}
                 )
                 if r.op in {"eq", "in"}:
                     allowed = values if allowed is None else allowed & values
@@ -68,8 +135,10 @@ def conflicts(requirements):
                     excluded |= values
             if allowed is not None and not allowed - excluded:
                 found.append(field)
-            positives = {normalized(r.value) for r in rows if r.op == "contains"}
-            negatives = {normalized(r.value) for r in rows if r.op == "not_contains"}
+            positives = {canonical(field, r.value) for r in rows if r.op == "contains"}
+            negatives = {
+                canonical(field, r.value) for r in rows if r.op == "not_contains"
+            }
             if positives & negatives and field not in found:
                 found.append(field)
     return found
@@ -85,10 +154,14 @@ def apply_updates(state, updates, *, expected_version, user_message, source_even
         u = StateUpdate.model_validate(
             raw.model_dump() if hasattr(raw, "model_dump") else raw
         )
-        if normalized(u.quote) not in normalized(user_message):
-            raise StateError("edit_evidence_not_in_current_user_message")
-        if u.requirement and normalized(u.requirement.quote) not in normalized(
+        # An empty normalized quote is a substring of every message: it is no evidence.
+        if not has_evidence(u.quote) or normalized(u.quote) not in normalized(
             user_message
+        ):
+            raise StateError("edit_evidence_not_in_current_user_message")
+        if u.requirement and (
+            not has_evidence(u.requirement.quote)
+            or normalized(u.requirement.quote) not in normalized(user_message)
         ):
             raise StateError("requirement_evidence_not_in_current_user_message")
         if u.op == "NEW_GOAL":
