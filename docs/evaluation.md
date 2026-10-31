@@ -113,3 +113,14 @@ BM25 replay timings and product-token counts in that report are diagnostic measu
 not retrieval-quality results. Confirm the serving prompt version, preserve the original
 BM25 path and freeze gate/presentation/model conditions before making comparisons. No
 embedding model, reranker, evaluation runner or additional dependency has been implemented.
+
+## Experiment A baseline checkpoint
+
+Experiment A is approved incrementally. Its [fixed pilot protocol](../experiments/experiment_a/README.md)
+and 36 public task specifications are now implemented; source-backed pooled judgments,
+witnesses and raw BM25 snapshots remain local/ignored. Independent QA reviewed 215 pairs
+and 24 feasibility witnesses; two requested-field source ambiguities are unknown. Labels
+are pooled and source-grounded, not human ratings or exhaustive semantic relevance. The
+pilot has a strong category/function relevance ceiling. The serving UI has been restarted
+and an actual two-call trace confirms compact v3. Card profiles/live comparisons are the
+next approved checkpoint; no result is claimed here. Known defects remain explicitly isolated.

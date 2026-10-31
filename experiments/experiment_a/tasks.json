@@ -1,0 +1,916 @@
+{
+  "protocol": "experiment-a-pilot-v1",
+  "catalogue_sha256": "da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67",
+  "tasks": [
+    {
+      "id": "literal-01",
+      "split": "development",
+      "stratum": "literal",
+      "family": "wallets",
+      "request": "Find a COACH wallet. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "coach wallet",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wallets",
+          "strength": "hard",
+          "quote": "Find a COACH wallet."
+        },
+        {
+          "field": "brand",
+          "op": "eq",
+          "value": "COACH",
+          "strength": "hard",
+          "quote": "Find a COACH wallet."
+        }
+      ],
+      "relevance": {
+        "category": "Wallets"
+      }
+    },
+    {
+      "id": "literal-02",
+      "split": "development",
+      "stratum": "literal",
+      "family": "belts",
+      "request": "Find a belt for men. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "belt",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Belts",
+          "strength": "hard",
+          "quote": "Find a belt for men."
+        },
+        {
+          "field": "department",
+          "op": "eq",
+          "value": "men",
+          "strength": "hard",
+          "quote": "Find a belt for men."
+        }
+      ],
+      "relevance": {
+        "category": "Belts"
+      }
+    },
+    {
+      "id": "literal-03",
+      "split": "held_out",
+      "stratum": "literal",
+      "family": "fashion_sneakers",
+      "request": "Find women’s fashion sneakers. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sneakers",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Fashion Sneakers",
+          "strength": "hard",
+          "quote": "Find women’s fashion sneakers."
+        },
+        {
+          "field": "department",
+          "op": "eq",
+          "value": "women",
+          "strength": "hard",
+          "quote": "Find women’s fashion sneakers."
+        }
+      ],
+      "relevance": {
+        "category": "Fashion Sneakers"
+      }
+    },
+    {
+      "id": "literal-04",
+      "split": "held_out",
+      "stratum": "literal",
+      "family": "pendant_necklaces",
+      "request": "Find a pendant necklace. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "pendant necklace",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Pendant Necklaces",
+          "strength": "hard",
+          "quote": "Find a pendant necklace."
+        }
+      ],
+      "relevance": {
+        "category": "Pendant Necklaces"
+      }
+    },
+    {
+      "id": "literal-05",
+      "split": "held_out",
+      "stratum": "literal",
+      "family": "earrings",
+      "request": "Find stud earrings. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "stud earrings",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Stud",
+          "strength": "hard",
+          "quote": "Find stud earrings."
+        }
+      ],
+      "relevance": {
+        "category": "Stud"
+      }
+    },
+    {
+      "id": "literal-06",
+      "split": "held_out",
+      "stratum": "literal",
+      "family": "totes",
+      "request": "Find a tote bag. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "tote bag",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Totes",
+          "strength": "hard",
+          "quote": "Find a tote bag."
+        }
+      ],
+      "relevance": {
+        "category": "Totes"
+      }
+    },
+    {
+      "id": "semantic-01",
+      "split": "development",
+      "stratum": "semantic",
+      "family": "wallets",
+      "request": "I need a wallet for carrying cash and cards. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "wallet cards",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wallets",
+          "strength": "hard",
+          "quote": "I need a wallet for carrying cash and cards."
+        }
+      ],
+      "relevance": {
+        "category": "Wallets"
+      }
+    },
+    {
+      "id": "semantic-02",
+      "split": "development",
+      "stratum": "semantic",
+      "family": "belts",
+      "request": "I need a belt to hold up trousers. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "belt pants",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Belts",
+          "strength": "hard",
+          "quote": "I need a belt to hold up trousers."
+        }
+      ],
+      "relevance": {
+        "category": "Belts"
+      }
+    },
+    {
+      "id": "semantic-03",
+      "split": "held_out",
+      "stratum": "semantic",
+      "family": "road_running",
+      "request": "Find shoes intended for jogging on paved roads. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "road running",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Road Running",
+          "strength": "hard",
+          "quote": "Find shoes intended for jogging on paved roads."
+        }
+      ],
+      "relevance": {
+        "category": "Road Running"
+      }
+    },
+    {
+      "id": "semantic-04",
+      "split": "held_out",
+      "stratum": "semantic",
+      "family": "tshirts",
+      "request": "I want a casual T-shirt top. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "t shirt",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "T-Shirts",
+          "strength": "hard",
+          "quote": "I want a casual T-shirt top."
+        }
+      ],
+      "relevance": {
+        "category": "T-Shirts"
+      }
+    },
+    {
+      "id": "semantic-05",
+      "split": "held_out",
+      "stratum": "semantic",
+      "family": "eyewear",
+      "request": "Find sunglasses to shade my eyes outdoors. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sunglasses",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Sunglasses",
+          "strength": "hard",
+          "quote": "Find sunglasses to shade my eyes outdoors."
+        }
+      ],
+      "relevance": {
+        "category": "Sunglasses"
+      }
+    },
+    {
+      "id": "semantic-06",
+      "split": "held_out",
+      "stratum": "semantic",
+      "family": "flats",
+      "request": "Find women’s flat shoes rather than heels. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "flats",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Flats",
+          "strength": "hard",
+          "quote": "Find women’s flat shoes rather than heels."
+        },
+        {
+          "field": "department",
+          "op": "eq",
+          "value": "women",
+          "strength": "hard",
+          "quote": "Find women’s flat shoes rather than heels."
+        }
+      ],
+      "relevance": {
+        "category": "Flats"
+      }
+    },
+    {
+      "id": "type-01",
+      "split": "development",
+      "stratum": "product_accessory",
+      "family": "watches",
+      "request": "Find an actual wristwatch to wear, not a storage accessory. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "watch",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wrist Watches",
+          "strength": "hard",
+          "quote": "Find an actual wristwatch to wear, not a storage accessory."
+        }
+      ],
+      "relevance": {
+        "category": "Wrist Watches"
+      }
+    },
+    {
+      "id": "type-02",
+      "split": "development",
+      "stratum": "product_accessory",
+      "family": "watches",
+      "request": "Find a storage case for watches, not an actual wristwatch. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "watch box",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "cases",
+          "strength": "hard",
+          "quote": "Find a storage case for watches, not an actual wristwatch."
+        }
+      ],
+      "relevance": {
+        "category": "Cabinets & Cases"
+      }
+    },
+    {
+      "id": "type-03",
+      "split": "held_out",
+      "stratum": "product_accessory",
+      "family": "shoelaces",
+      "request": "Find replacement shoelaces, not shoes. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "shoelaces",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Shoelaces",
+          "strength": "hard",
+          "quote": "Find replacement shoelaces, not shoes."
+        }
+      ],
+      "relevance": {
+        "category": "Shoelaces"
+      }
+    },
+    {
+      "id": "type-04",
+      "split": "held_out",
+      "stratum": "product_accessory",
+      "family": "eyewear",
+      "request": "Find replacement sunglass lenses, not sunglasses or a case. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sunglass lenses",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Replacement Sunglass Lenses",
+          "strength": "hard",
+          "quote": "Find replacement sunglass lenses, not sunglasses or a case."
+        }
+      ],
+      "relevance": {
+        "category": "Replacement Sunglass Lenses"
+      }
+    },
+    {
+      "id": "type-05",
+      "split": "held_out",
+      "stratum": "product_accessory",
+      "family": "earrings",
+      "request": "Find an earring jacket accessory. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "earring jacket",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Earring Jackets",
+          "strength": "hard",
+          "quote": "Find an earring jacket accessory."
+        }
+      ],
+      "relevance": {
+        "category": "Earring Jackets"
+      }
+    },
+    {
+      "id": "type-06",
+      "split": "held_out",
+      "stratum": "product_accessory",
+      "family": "fashion_sneakers",
+      "request": "Find actual fashion sneakers to wear, not replacement shoelaces. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sneakers",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Fashion Sneakers",
+          "strength": "hard",
+          "quote": "Find actual fashion sneakers to wear, not replacement shoelaces."
+        }
+      ],
+      "relevance": {
+        "category": "Fashion Sneakers"
+      }
+    },
+    {
+      "id": "multi-01",
+      "split": "development",
+      "stratum": "multiple_constraints",
+      "family": "wallets",
+      "request": "Find a leather wallet under 50 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "wallet",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wallets",
+          "strength": "hard",
+          "quote": "Find a leather wallet under 50 USD."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Leather",
+          "strength": "hard",
+          "quote": "Find a leather wallet under 50 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 50.0,
+          "strength": "hard",
+          "quote": "Find a leather wallet under 50 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Wallets"
+      }
+    },
+    {
+      "id": "multi-02",
+      "split": "development",
+      "stratum": "multiple_constraints",
+      "family": "wallets",
+      "request": "Find a black wallet under 40 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "wallet",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wallets",
+          "strength": "hard",
+          "quote": "Find a black wallet under 40 USD."
+        },
+        {
+          "field": "color",
+          "op": "eq",
+          "value": "Black",
+          "strength": "hard",
+          "quote": "Find a black wallet under 40 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 40.0,
+          "strength": "hard",
+          "quote": "Find a black wallet under 40 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Wallets"
+      }
+    },
+    {
+      "id": "multi-03",
+      "split": "held_out",
+      "stratum": "multiple_constraints",
+      "family": "tshirts",
+      "request": "Find a cotton T-shirt under 25 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "t shirt",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "T-Shirts",
+          "strength": "hard",
+          "quote": "Find a cotton T-shirt under 25 USD."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Cotton",
+          "strength": "hard",
+          "quote": "Find a cotton T-shirt under 25 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 25.0,
+          "strength": "hard",
+          "quote": "Find a cotton T-shirt under 25 USD."
+        }
+      ],
+      "relevance": {
+        "category": "T-Shirts"
+      }
+    },
+    {
+      "id": "multi-04",
+      "split": "held_out",
+      "stratum": "multiple_constraints",
+      "family": "earrings",
+      "request": "Find stud earrings under 25 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "stud earrings",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Stud",
+          "strength": "hard",
+          "quote": "Find stud earrings under 25 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 25.0,
+          "strength": "hard",
+          "quote": "Find stud earrings under 25 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Stud"
+      }
+    },
+    {
+      "id": "multi-05",
+      "split": "held_out",
+      "stratum": "multiple_constraints",
+      "family": "road_running",
+      "request": "Find women’s road running shoes under 80 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "road running",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Road Running",
+          "strength": "hard",
+          "quote": "Find women’s road running shoes under 80 USD."
+        },
+        {
+          "field": "department",
+          "op": "eq",
+          "value": "women",
+          "strength": "hard",
+          "quote": "Find women’s road running shoes under 80 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 80.0,
+          "strength": "hard",
+          "quote": "Find women’s road running shoes under 80 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Road Running"
+      }
+    },
+    {
+      "id": "multi-06",
+      "split": "held_out",
+      "stratum": "multiple_constraints",
+      "family": "eyewear",
+      "request": "Find men’s sunglasses under 25 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sunglasses",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Sunglasses",
+          "strength": "hard",
+          "quote": "Find men’s sunglasses under 25 USD."
+        },
+        {
+          "field": "department",
+          "op": "eq",
+          "value": "men",
+          "strength": "hard",
+          "quote": "Find men’s sunglasses under 25 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 25.0,
+          "strength": "hard",
+          "quote": "Find men’s sunglasses under 25 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Sunglasses"
+      }
+    },
+    {
+      "id": "unknown-01",
+      "split": "development",
+      "stratum": "unknown_evidence",
+      "family": "watches",
+      "request": "Find a wristwatch with verified ceramic material. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "watch",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wrist Watches",
+          "strength": "hard",
+          "quote": "Find a wristwatch with verified ceramic material."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Ceramic",
+          "strength": "hard",
+          "quote": "Find a wristwatch with verified ceramic material."
+        }
+      ],
+      "relevance": {
+        "category": "Wrist Watches"
+      }
+    },
+    {
+      "id": "unknown-02",
+      "split": "development",
+      "stratum": "unknown_evidence",
+      "family": "belts",
+      "request": "Find a belt with verified size 42. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "belt",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Belts",
+          "strength": "hard",
+          "quote": "Find a belt with verified size 42."
+        },
+        {
+          "field": "size",
+          "op": "eq",
+          "value": "42",
+          "strength": "hard",
+          "quote": "Find a belt with verified size 42."
+        }
+      ],
+      "relevance": {
+        "category": "Belts"
+      }
+    },
+    {
+      "id": "unknown-03",
+      "split": "held_out",
+      "stratum": "unknown_evidence",
+      "family": "road_running",
+      "request": "Find road running shoes with verified size 12. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "road running",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Road Running",
+          "strength": "hard",
+          "quote": "Find road running shoes with verified size 12."
+        },
+        {
+          "field": "size",
+          "op": "eq",
+          "value": "12",
+          "strength": "hard",
+          "quote": "Find road running shoes with verified size 12."
+        }
+      ],
+      "relevance": {
+        "category": "Road Running"
+      }
+    },
+    {
+      "id": "unknown-04",
+      "split": "held_out",
+      "stratum": "unknown_evidence",
+      "family": "fashion_sneakers",
+      "request": "Find fashion sneakers with verified canvas material. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "sneakers",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Fashion Sneakers",
+          "strength": "hard",
+          "quote": "Find fashion sneakers with verified canvas material."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Canvas",
+          "strength": "hard",
+          "quote": "Find fashion sneakers with verified canvas material."
+        }
+      ],
+      "relevance": {
+        "category": "Fashion Sneakers"
+      }
+    },
+    {
+      "id": "unknown-05",
+      "split": "held_out",
+      "stratum": "unknown_evidence",
+      "family": "totes",
+      "request": "Find a tote bag with verified cotton material. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "tote",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Totes",
+          "strength": "hard",
+          "quote": "Find a tote bag with verified cotton material."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Cotton",
+          "strength": "hard",
+          "quote": "Find a tote bag with verified cotton material."
+        }
+      ],
+      "relevance": {
+        "category": "Totes"
+      }
+    },
+    {
+      "id": "unknown-06",
+      "split": "held_out",
+      "stratum": "unknown_evidence",
+      "family": "pendant_necklaces",
+      "request": "Find a pendant necklace with verified sterling silver material. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "pendant necklace",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Pendant Necklaces",
+          "strength": "hard",
+          "quote": "Find a pendant necklace with verified sterling silver material."
+        },
+        {
+          "field": "material",
+          "op": "eq",
+          "value": "Sterling Silver",
+          "strength": "hard",
+          "quote": "Find a pendant necklace with verified sterling silver material."
+        }
+      ],
+      "relevance": {
+        "category": "Pendant Necklaces"
+      }
+    },
+    {
+      "id": "absent-01",
+      "split": "development",
+      "stratum": "no_verified_match",
+      "family": "wallets",
+      "request": "Find a wallet under 0.01 USD. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "wallet",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Wallets",
+          "strength": "hard",
+          "quote": "Find a wallet under 0.01 USD."
+        },
+        {
+          "field": "price",
+          "op": "lt",
+          "value": 0.01,
+          "strength": "hard",
+          "quote": "Find a wallet under 0.01 USD."
+        }
+      ],
+      "relevance": {
+        "category": "Wallets"
+      }
+    },
+    {
+      "id": "absent-02",
+      "split": "development",
+      "stratum": "no_verified_match",
+      "family": "audio",
+      "request": "Find headphones. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "headphones",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Headphones",
+          "strength": "hard",
+          "quote": "Find headphones."
+        }
+      ],
+      "relevance": {
+        "category": "Headphones"
+      }
+    },
+    {
+      "id": "absent-03",
+      "split": "held_out",
+      "stratum": "no_verified_match",
+      "family": "computers",
+      "request": "Find a laptop. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "laptop",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Laptops",
+          "strength": "hard",
+          "quote": "Find a laptop."
+        }
+      ],
+      "relevance": {
+        "category": "Laptops"
+      }
+    },
+    {
+      "id": "absent-04",
+      "split": "held_out",
+      "stratum": "no_verified_match",
+      "family": "refrigerators",
+      "request": "Find a refrigerator. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "refrigerator",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Refrigerators",
+          "strength": "hard",
+          "quote": "Find a refrigerator."
+        }
+      ],
+      "relevance": {
+        "category": "Refrigerators"
+      }
+    },
+    {
+      "id": "absent-05",
+      "split": "held_out",
+      "stratum": "no_verified_match",
+      "family": "cameras",
+      "request": "Find a digital camera. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "digital camera",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Digital Cameras",
+          "strength": "hard",
+          "quote": "Find a digital camera."
+        }
+      ],
+      "relevance": {
+        "category": "Digital Cameras"
+      }
+    },
+    {
+      "id": "absent-06",
+      "split": "held_out",
+      "stratum": "no_verified_match",
+      "family": "toasters",
+      "request": "Find a toaster. Recommend up to three verified matches, or explain if none can be verified.",
+      "query": "toaster",
+      "mode": "all",
+      "requirements": [
+        {
+          "field": "product_type",
+          "op": "contains",
+          "value": "Toasters",
+          "strength": "hard",
+          "quote": "Find a toaster."
+        }
+      ],
+      "relevance": {
+        "category": "Toasters"
+      }
+    }
+  ]
+}
