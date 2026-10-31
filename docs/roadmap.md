@@ -214,6 +214,12 @@ Resolve bounded completion and catalogue-grounded type semantics before
 assuming that a larger budget or semantic search is needed. Two regression cases (watch
 type vocabulary) remain explicit expected failures; the exhausted-search case now passes.
 
+Experiment A (BM25 card count/format only) is implemented and offline-validated on branch
+`feat/experiment-a-cards`: card profiles, runner, budget, replay and report. No live run has
+been made; it needs an approved budget and an independently verified frozen-v3
+([provenance](reviews/experiment-a-benchmark-provenance.md)). No dense/hybrid/rerank work
+has started.
+
 Retrieval improvement is now under [design review](reviews/multistage-retrieval-proposal.md):
 larger local eligible candidate pools, five compact evidence cards, optional dense/RRF and
 reranking, then one bounded DETAILS batch if supported by evidence. The immediate proposed

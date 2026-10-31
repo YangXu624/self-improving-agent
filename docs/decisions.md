@@ -98,3 +98,21 @@ trusted executor, not the prompt, and adds only the optional `closure` response 
   rather than `decision_budget_exhausted`. This deliberately changes the prior
   `test_repeated_search_cannot_loop_or_exceed_budget` status from `error` to `ok`; budgets are
   unchanged. The message is deterministic so it cannot assert catalogue facts.
+
+## Experiment A completion decisions (31 October 2026)
+
+- **Recovered Codex work** was cherry-picked onto a new branch from `main` (after the
+  correctness-fix PR); the recovery and original Experiment A branches are untouched.
+- **BM25 stays frozen.** `retrieval.py` is unchanged and the runner refuses to run if its
+  hash differs from the manifest. Replay compares counts, IDs, order and evidence exactly;
+  only BM25 floats get a 1e-9 relative tolerance because another SQLite build changed the
+  last digit of 27 scores. Trade-off: a build changing tie order would still fail loudly.
+- **Benchmark versioning, not regeneration.** Verified frozen-v2 leaks task IDs through
+  requirement IDs, so the runner needs the opaque-ID v3. v2 is preserved; v3 requires an
+  independent certificate before live use ([provenance](reviews/experiment-a-benchmark-provenance.md)).
+- **Pinned tokenizer.** `tokenizers==0.23.3` is an optional `experiment` extra with its own
+  lock file, and the runner accepts only the tokenizer.json with the documented SHA-256.
+  Token counts approximate provider usage; API-reported usage remains authoritative.
+- **Report is descriptive.** Paired exact McNemar and a seeded bootstrap are reported with
+  explicit denominators and an exploratory caveat; no significance threshold is promoted.
+

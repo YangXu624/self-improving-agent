@@ -80,6 +80,22 @@ Policy, context construction, retrieval and storage are separate. Future guidanc
 through context construction; future search implementations must keep tool contracts and
 hard gates. These extension points do not constitute implemented experience/user memory.
 
+## Card profiles and visibility receipts (Experiment A)
+
+`cards.py` defines reversible presentation profiles over the unchanged BM25 result:
+`baseline` (default; all IDs, byte-identical prompt to before), `v3_k10`, `v3_k5`,
+`shared_k10`, `shared_k5`. K is a prefix of the same ranked list; "shared" interns repeated
+category/source maps into headers and decodes exactly to the v3 cards. `context.py` binds
+each decision to the serialized, model-visible set through a `VisibilityReceipt` (search,
+state and catalogue versions, visible IDs, projection and semantic hashes);
+`agent.verified_products` recommends only receipt-visible, current, eligible IDs. The
+receipt and profile name are recorded on `model_request` events. Custom `context_builder`s
+that return plain messages still work. `retrieval.py` and ranking are unchanged; profiles
+are selected by `--cards-profile` / `ASTRA_CARDS_PROFILE` (default `baseline`). The provider
+trace now also records the returned model name and prompt-cache token counts.
+`experiments/experiment_a/` holds the offline/live/replay runner and the report; it is not
+imported by the application.
+
 ## Data boundaries
 
 - Catalogue: ignored `data/catalogue/catalog.jsonl`, image URL map and import manifest.

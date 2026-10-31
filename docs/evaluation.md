@@ -123,4 +123,11 @@ and 24 feasibility witnesses; two requested-field source ambiguities are unknown
 are pooled and source-grounded, not human ratings or exhaustive semantic relevance. The
 pilot has a strong category/function relevance ceiling. The serving UI has been restarted
 and an actual two-call trace confirms compact v3. Card profiles/live comparisons are the
-next approved checkpoint; no result is claimed here. Known defects remain explicitly isolated.
+approved next checkpoint. They are now implemented with offline tests: a runner (offline,
+live, replay), a usage budget and a deterministic paired report; see the
+[experiment README](../experiments/experiment_a/README.md). The offline run on the real
+catalogue gave Hit@K 16/16 for every profile on held-out feasible tasks (a ceiling effect)
+and lower context tokens for K5/shared profiles; no live request has been made and no
+recommendation-quality result exists. Frozen-v2 is verified but unusable by the runner
+(task IDs in requirement IDs); frozen-v3 awaits independent verification, see the
+[provenance note](reviews/experiment-a-benchmark-provenance.md). Known defects remain isolated.

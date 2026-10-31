@@ -113,3 +113,60 @@ Initial live cap, including the two preflight requests: 100 requests, 600k input
 output tokens. Reserve bounded allowance before calls; preserve every request/failure and
 stop on budget exhaustion. No automatic retry/resume of an interrupted paid trial. No live
 request is made by prepare/finalize or automated tests. Experiment B/C require user approval.
+
+## Running the controlled comparison (offline first)
+
+Install the optional experiment extra and the pinned tokenizer asset, build the BM25
+index, then use a **verified** frozen directory:
+
+```sh
+.venv/bin/python -m pip install -r requirements-experiment-lock.txt
+.venv/bin/python -m pip install --no-deps -e .
+.venv/bin/python -m shopping_agent index
+```
+
+**Tokenizer.** Token counts use DeepSeek's published V4 tokenizer
+(`https://cdn.deepseek.com/api-docs/deepseek_v4_tokenizer.zip`, linked from its
+[token-usage documentation](https://api-docs.deepseek.com/quick_start/token_usage/)).
+The zip downloaded on 31 October 2026 had SHA-256
+`e7310d1dafe0a86d8a5629fe78a7c763760f651db9b8682718a1781dcd6fe495`. Extract only
+`deepseek_v4_tokenizer/tokenizer.json` (data; do not run the bundled `.py`) to
+`data/tokenizers/deepseek_v4/tokenizer.json`. `run.py` accepts only a file whose SHA-256 is
+`89085f12ef79460ac5f66d1119325ddfc694b4ab209d80bbd81d35f081dc9614` and refuses anything
+else. The Python package is `tokenizers==0.23.3` (extra `experiment`). The tokenizer
+approximates provider token counts: encoded content was consistently 27 tokens per call
+below API-reported input in the earlier audit, so API usage remains authoritative.
+
+```sh
+.venv/bin/python -m experiments.experiment_a.run offline \
+  --frozen data/benchmarks/experiment-a/frozen-v3 --output data/benchmarks/experiment-a/runs/offline-1 \
+  --tokenizer data/tokenizers/deepseek_v4/tokenizer.json
+.venv/bin/python -m experiments.experiment_a.report \
+  --frozen data/benchmarks/experiment-a/frozen-v3 \
+  --offline data/benchmarks/experiment-a/runs/offline-1/offline.json \
+  --output data/benchmarks/experiment-a/reports/offline-1
+```
+
+`offline` replays frozen BM25 for all 36 tasks (exact IDs, order, counts and evidence;
+BM25 floats within a 1e-9 relative tolerance for SQLite rounding), formats the four
+profiles, binds the visible set with a receipt, and measures tokens and formatting time.
+`live` (paid; **needs explicit budget approval**) additionally needs a clean Git tree, a
+fresh output directory and the verified certificate. `replay` re-validates a saved run and
+re-scores it with no provider. `report` summarises either or both: per profile, split by
+feasible vs no-witness tasks and by intent stratum, with exact denominators, paired
+differences (exact McNemar for discordant pairs, seeded bootstrap interval for the mean
+difference) and an exploratory caveat. Output is deterministic and never overwrites.
+
+## Status (31 October 2026)
+
+Implemented and offline-tested: card profiles and receipts, the executor guard, the
+runner (offline/live/replay, usage budget, schedule), metrics and the report. **Not
+run:** no live provider request has been made; no live result exists. On the real data the
+offline run covered 36 tasks × 4 profiles with a scratch certificate only (see
+[benchmark provenance](../../docs/reviews/experiment-a-benchmark-provenance.md)); the
+frozen-v3 independent certificate is still required before live use. Observations: all
+profiles show Hit@K 16/16 on held-out feasible tasks (a ceiling effect, so shortlist
+quality cannot separate them); the shared encoding is identical to v3 evidence in 36/36
+tasks; median context content tokens fall from 3,010 (v3_k10) to 2,464 (v3_k5), 2,769
+(shared_k10) and 2,369 (shared_k5). These are cost measurements, not recommendation quality.
+
