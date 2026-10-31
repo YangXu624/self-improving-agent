@@ -6,7 +6,9 @@ import sqlite3
 import sys
 
 from .agent import ShoppingAgent
+from .cards import PROFILES
 from .configuration import load_env
+from .context import builder_for_profile
 from .provider import DeepSeekPolicy, ProviderError
 from .retrieval import LexicalSearch, build_index, file_hash
 from .sessions import SessionError, SessionStore
@@ -33,6 +35,7 @@ def parser():
     chat.add_argument("--index", default="data/index/catalogue.sqlite")
     chat.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
     chat.add_argument("--env-file", default=".env")
+    chat.add_argument("--cards-profile", choices=tuple(PROFILES), default="baseline")
     chat.add_argument("--message", help="One turn instead of interactive chat")
     chat.add_argument("--request-id", help="Idempotency key; only with --message")
     chat.add_argument(
@@ -114,7 +117,12 @@ def main(argv=None):
             # Validate ownership even when the interactive user exits immediately.
             with store.open(args.user, sid):
                 pass
-            agent = ShoppingAgent(store, search, policy)
+            agent = ShoppingAgent(
+                store,
+                search,
+                policy,
+                context_builder=builder_for_profile(args.cards_profile),
+            )
             if args.message is not None:
                 response = agent.turn(
                     args.user, sid, args.message, request_id=args.request_id

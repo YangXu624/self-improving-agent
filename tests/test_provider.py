@@ -64,6 +64,29 @@ class ProviderTests(unittest.TestCase):
                 self.assertNotIn("test-secret", str(caught.exception))
                 self.assertEqual(send.call_count, 1)
 
+    def test_safe_returned_model_and_cache_counts_are_recorded(self):
+        response = self.response(
+            model="deepseek-v4.1-flash",
+            usage={
+                "prompt_tokens": 12,
+                "completion_tokens": 6,
+                "prompt_cache_hit_tokens": 10,
+                "prompt_cache_miss_tokens": 2,
+                "authorization": "never persist this",
+            },
+        )
+        with patch("shopping_agent.provider.urlopen", return_value=response):
+            reply = DeepSeekPolicy(api_key="fixture").complete([])
+        self.assertEqual(reply.metadata["returned_model"], "deepseek-v4.1-flash")
+        self.assertEqual(reply.metadata["usage"]["prompt_cache_hit_tokens"], 10)
+        self.assertNotIn("authorization", reply.metadata["usage"])
+        with patch(
+            "shopping_agent.provider.urlopen",
+            return_value=self.response(model="unsafe\nvalue"),
+        ):
+            reply = DeepSeekPolicy(api_key="fixture").complete([])
+        self.assertNotIn("returned_model", reply.metadata)
+
     def test_missing_key_blank_content_bad_envelope_and_size_limit(self):
         with patch.dict("os.environ", {}, clear=True), self.assertRaises(ProviderError):
             DeepSeekPolicy()

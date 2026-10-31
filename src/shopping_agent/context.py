@@ -1,7 +1,11 @@
 """Bounded decision context, independent of the decision provider and storage format."""
 
+import hashlib
 import json
+from dataclasses import asdict, dataclass
+from functools import partial
 
+from .cards import profile_for, semantic_cards, share_metadata
 from .contracts import Decision
 from .sessions import dumps
 
@@ -56,6 +60,75 @@ class ContextLimitError(ValueError):
     pass
 
 
+class ContextIntegrityError(ContextLimitError):
+    pass
+
+
+@dataclass(frozen=True)
+class VisibilityReceipt:
+    search_id: str
+    state_version: int
+    catalogue_version: str
+    strategy_version: str
+    product_ids: tuple[str, ...]
+    projection_sha256: str
+    semantic_sha256: str
+
+    def trace(self):
+        value = asdict(self)
+        value["product_ids"] = list(self.product_ids)
+        return value
+
+
+@dataclass(frozen=True)
+class BuiltContext:
+    messages: list[dict]
+    visible_search: VisibilityReceipt | None
+    cards_profile: str
+
+
+def bind_context(messages, raw_result, cards_profile="custom"):
+    """Bind execution to the precise serialized model-visible set, not the raw pool."""
+    try:
+        value = json.loads(messages[-1]["content"])
+        view = value["latest_search"]
+        receipt = None
+        if view is not None:
+            if type(view["state_version"]) is not int:
+                raise ValueError("Context state version must be an integer")
+            if (
+                not raw_result
+                or view["search_id"] != raw_result["search_id"]
+                or view["state_version"] != raw_result["state_version"]
+            ):
+                raise ValueError("Context does not name its current raw search")
+            ids = tuple(p["id"] for p in view["candidates"])
+            raw_cards = {p["id"]: p for p in raw_result["candidates"]}
+            raw_ids = set(raw_cards)
+            if len(set(ids)) != len(ids) or any(ident not in raw_ids for ident in ids):
+                raise ValueError("Context contains unknown or duplicate candidates")
+            evidence = semantic_cards(view)
+            expected = [product_context(raw_cards[ident]) for ident in ids]
+            if dumps(evidence, compact=True) != dumps(expected, compact=True):
+                raise ValueError("Context changed authoritative candidate evidence")
+            receipt = VisibilityReceipt(
+                search_id=view["search_id"],
+                state_version=view["state_version"],
+                catalogue_version=raw_result["catalogue_version"],
+                strategy_version=raw_result["strategy_version"],
+                product_ids=ids,
+                projection_sha256=hashlib.sha256(
+                    dumps(view, compact=True).encode()
+                ).hexdigest(),
+                semantic_sha256=hashlib.sha256(
+                    dumps(evidence, compact=True).encode()
+                ).hexdigest(),
+            )
+        return BuiltContext(messages, receipt, cards_profile)
+    except (KeyError, TypeError, ValueError, IndexError) as exc:
+        raise ContextIntegrityError("invalid_context_visibility") from exc
+
+
 def compact_schema(value):
     """Remove generated schema titles, retaining property names and all constraints."""
     if isinstance(value, list):
@@ -102,18 +175,28 @@ def product_context(product):
     return value
 
 
-def search_context(result):
-    """Project fields, never candidate IDs/order/count; executor retains full evidence."""
+def search_context(result, cards_profile="baseline"):
+    """Baseline preserves all IDs; explicit profiles select a prefix before packing."""
     if result is None:
         return None
-    return {
+    profile = profile_for(cards_profile)
+    candidates = (
+        result["candidates"]
+        if profile.limit is None
+        else result["candidates"][: profile.limit]
+    )
+    cards = [product_context(product) for product in candidates]
+    view = {
         **{
             key: result[key]
             for key in ("search_id", "state_version", "query", "match_mode", "counts")
         },
         "applied_hard_filters": [r["id"] for r in result["applied_hard_filters"]],
-        "candidates": [product_context(product) for product in result["candidates"]],
+        "candidates": cards,
     }
+    if profile.shared and cards:
+        view.update(share_metadata(cards))
+    return view
 
 
 def state_context(state):
@@ -176,6 +259,7 @@ def build_context(
     edits_allowed,
     *,
     max_chars=40000,
+    cards_profile="baseline",
 ):
     """Preserve essential state/tool data; drop oldest dialogue before exceeding the cap.
 
@@ -188,7 +272,7 @@ def build_context(
         "state": state_context(session.state),
         "current_user_message": user_message,
         "edits_allowed": edits_allowed,
-        "latest_search": search_context(search_result),
+        "latest_search": search_context(search_result, cards_profile),
         "validation_feedback": feedback,
         "remaining_budget": budget,
         "recent_dialogue": history,
@@ -224,3 +308,32 @@ def build_context(
     # Ensure the context is serializable before any network call or event write.
     json.dumps(messages, allow_nan=False)
     return messages
+
+
+def build_decision_context(
+    session,
+    user_message,
+    search_result,
+    feedback,
+    budget,
+    edits_allowed,
+    *,
+    cards_profile="baseline",
+    **kwargs,
+):
+    messages = build_context(
+        session,
+        user_message,
+        search_result,
+        feedback,
+        budget,
+        edits_allowed,
+        cards_profile=cards_profile,
+        **kwargs,
+    )
+    return bind_context(messages, search_result, cards_profile)
+
+
+def builder_for_profile(name):
+    profile_for(name)
+    return partial(build_decision_context, cards_profile=name)

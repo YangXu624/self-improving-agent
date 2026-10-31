@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent import DecisionPolicy, ShoppingAgent
+from .context import builder_for_profile
 from .contracts import Event
 from .retrieval import LexicalSearch, file_hash
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
@@ -23,10 +24,12 @@ class ChatService:
         sessions: Path,
         *,
         policy: DecisionPolicy,
+        cards_profile: str = "baseline",
     ):
         self.index = index
         self.catalogue_hash = file_hash(catalogue)
         self.policy = policy
+        self.context_builder = builder_for_profile(cards_profile)
         self.store = SessionStore(sessions)
         tool = self._search()
         tool.close()
@@ -99,9 +102,9 @@ class ChatService:
     ) -> dict:
         tool = self._search()
         try:
-            return ShoppingAgent(self.store, tool, self.policy).turn(
-                user_id, session_id, message, request_id=request_id
-            )
+            return ShoppingAgent(
+                self.store, tool, self.policy, context_builder=self.context_builder
+            ).turn(user_id, session_id, message, request_id=request_id)
         finally:
             tool.close()
 

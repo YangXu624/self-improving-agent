@@ -7,7 +7,7 @@ from pathlib import Path
 from test_retrieval import product
 
 from experiments.experiment_a.finalize import finalize
-from experiments.experiment_a.prepare import prepare
+from experiments.experiment_a.prepare import prepare, state_for
 from experiments.experiment_a.source_judgments import judge, raw_fact
 from shopping_agent.retrieval import build_index, file_hash
 
@@ -114,6 +114,9 @@ class ExperimentBaselineTests(unittest.TestCase):
             for r in task["requirements"]:
                 self.assertTrue(r["quote"].strip())
                 self.assertIn(r["quote"], task["request"])
+            for requirement in state_for(task).requirements:
+                self.assertRegex(requirement.id, r"^[a-f0-9]{32}$")
+                self.assertNotIn(task["id"], requirement.id)
 
 
 if __name__ == "__main__":

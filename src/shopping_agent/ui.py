@@ -261,6 +261,7 @@ def run_app(project_root: Path) -> None:
                 )
             ),
             policy=policy,
+            cards_profile=os.environ.get("ASTRA_CARDS_PROFILE", "baseline"),
         )
     except SAFE_ERRORS:
         st.title("ASTRA")

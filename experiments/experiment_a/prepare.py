@@ -1,6 +1,7 @@
 """Freeze source-backed pilot qrels and raw BM25 top10; no provider is constructed."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -15,13 +16,17 @@ TASKS = Path(__file__).with_name("tasks.json")
 
 
 def state_for(task):
+    # Task names/splits/strata are evaluator metadata, never model-visible handles.
+    def opaque(label):
+        return hashlib.sha256((task["id"] + ":" + label).encode()).hexdigest()[:32]
+
     return ShoppingState(
         version=1,
         requirements=[
             Requirement(
                 **r,
-                id=task["id"] + f":r{i}",
-                source_event_id=task["id"] + ":user",
+                id=opaque(f"r{i}"),
+                source_event_id=opaque("user"),
                 created_version=1,
             )
             for i, r in enumerate(task["requirements"])

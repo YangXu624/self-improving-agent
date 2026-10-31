@@ -7,7 +7,15 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from .context import PROMPT_VERSION, ContextLimitError, build_context, latest_search
+from .context import (
+    PROMPT_VERSION,
+    BuiltContext,
+    ContextIntegrityError,
+    ContextLimitError,
+    bind_context,
+    build_decision_context,
+    latest_search,
+)
 from .contracts import Decision
 from .provider import PolicyReply, ProviderError
 from .sessions import SessionError, dumps
@@ -34,6 +42,35 @@ CLOSURE_MESSAGE = (
 )
 
 
+def verified_products(action, result, state, search, receipt):
+    """Shared application/experiment guard: visible current IDs and full-fact recheck."""
+    if state.conflicts:
+        raise ActionError("resolve_state_conflicts_before_search_or_recommendation")
+    if (
+        not result
+        or action.search_id != result["search_id"]
+        or result["state_version"] != state.version
+        or result["catalogue_version"] != search.catalogue_version
+    ):
+        raise ActionError("recommendation_requires_inspected_current_search")
+    if (
+        receipt is None
+        or receipt.search_id != result["search_id"]
+        or receipt.state_version != state.version
+        or receipt.catalogue_version != search.catalogue_version
+        or receipt.strategy_version != search.strategy_version
+    ):
+        raise ActionError("recommendation_requires_visible_current_search")
+    if any(ident not in receipt.product_ids for ident in action.product_ids):
+        raise ActionError("recommendation_contains_unseen_product_id")
+    candidates = {p["id"]: p for p in result["candidates"]}
+    if any(ident not in candidates for ident in action.product_ids):
+        raise ActionError("recommendation_contains_unseen_product_id")
+    if any(not search.eligible(ident, state) for ident in action.product_ids):
+        raise ActionError("recommendation_failed_constraint_recheck")
+    return [candidates[ident] for ident in action.product_ids]
+
+
 class ShoppingAgent:
     def __init__(
         self,
@@ -41,7 +78,7 @@ class ShoppingAgent:
         search,
         policy: DecisionPolicy,
         *,
-        context_builder=build_context,
+        context_builder=build_decision_context,
         max_calls=3,
         max_searches=2,
     ):
@@ -93,7 +130,7 @@ class ShoppingAgent:
                     session, self.search.catalogue_version, self.search.strategy_version
                 )
                 try:
-                    messages = self.context_builder(
+                    built = self.context_builder(
                         session,
                         message,
                         result,
@@ -104,6 +141,19 @@ class ShoppingAgent:
                         },
                         edits_allowed,
                     )
+                    if not isinstance(built, BuiltContext):
+                        built = bind_context(built, result)
+                    else:
+                        checked = bind_context(
+                            built.messages, result, built.cards_profile
+                        )
+                        if checked.visible_search != built.visible_search:
+                            raise ContextIntegrityError("context_receipt_mismatch")
+                        built = checked
+                    messages = built.messages
+                except ContextIntegrityError:
+                    failure = "invalid_context_visibility"
+                    break
                 except ContextLimitError:
                     failure = "essential_context_limit"
                     break
@@ -117,6 +167,10 @@ class ShoppingAgent:
                             dumps(messages).encode()
                         ).hexdigest(),
                         "messages": messages,
+                        "cards_profile": built.cards_profile,
+                        "visible_search": built.visible_search.trace()
+                        if built.visible_search
+                        else None,
                     },
                     request_id,
                 )
@@ -206,29 +260,13 @@ class ShoppingAgent:
                     if action.type == "RECOMMEND":
                         # Must be a result actually provided to THIS decision, still current
                         # after any state edit, and from this session/catalogue only.
-                        if (
-                            not result
-                            or action.search_id != result["search_id"]
-                            or result["state_version"] != session.state.version
-                            or result["catalogue_version"]
-                            != self.search.catalogue_version
-                        ):
-                            raise ActionError(
-                                "recommendation_requires_inspected_current_search"
-                            )
-                        candidates = {p["id"]: p for p in result["candidates"]}
-                        if any(pid not in candidates for pid in action.product_ids):
-                            raise ActionError(
-                                "recommendation_contains_unseen_product_id"
-                            )
-                        if any(
-                            not self.search.eligible(pid, session.state)
-                            for pid in action.product_ids
-                        ):
-                            raise ActionError(
-                                "recommendation_failed_constraint_recheck"
-                            )
-                        products = [candidates[pid] for pid in action.product_ids]
+                        products = verified_products(
+                            action,
+                            result,
+                            session.state,
+                            self.search,
+                            built.visible_search,
+                        )
                         response = {
                             "status": "ok",
                             "action": "RECOMMEND",
