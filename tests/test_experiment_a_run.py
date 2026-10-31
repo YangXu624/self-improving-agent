@@ -1,6 +1,8 @@
 """Offline regression tests for the Experiment A runner: no network, key or real data."""
 
+import contextlib
 import copy
+import io
 import json
 import tempfile
 import unittest
@@ -167,14 +169,15 @@ class RunnerCase(unittest.TestCase):
             shell.side_effect = lambda args, **kw: (
                 "" if args[:2] == ["git", "status"] else "deadbeef\n"
             )
-            result = run.live(
-                self.frozen,
-                self.index,
-                self.root / name,
-                FakeTokenizer(),
-                self.root / ".env",
-                **kwargs,
-            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = run.live(
+                    self.frozen,
+                    self.index,
+                    self.root / name,
+                    FakeTokenizer(),
+                    self.root / ".env",
+                    **kwargs,
+                )
         return result, policy
 
 
