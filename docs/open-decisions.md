@@ -1,10 +1,13 @@
 # Open decisions
 
 The future-memory and evaluation questions below remain open. Milestone 1 has since been
-approved and implemented for review: direct bounded LLM orchestration, DeepSeek first,
+approved, implemented and merged: direct bounded LLM orchestration, DeepSeek first,
 JSONL events/JSON snapshots, SQLite FTS5/BM25 and a local CLI. See `milestone-1.md` for the
 chosen contracts, limitations and verification. No agent framework or frontend was introduced.
 Persistent user memory, agent experience and evaluation remain outside the approved baseline.
+The [roadmap](roadmap.md) now supplies proposed sequencing and exit gates; the
+[evaluation plan](evaluation.md) records candidate metrics and controls. Those documents do
+not select a UI/simulator stack, authorise live calls or implement future layers.
 
 ## Task scope and decision-making workflow
 

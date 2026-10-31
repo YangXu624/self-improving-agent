@@ -17,6 +17,14 @@ AutoML project remain separate. No reference code, weights, configuration, sessi
 historical evaluation cases were copied. Only the user-approved frozen 50k catalogue and
 image-URL references were reused as local, ignored data.
 
+The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. We are after
+baseline implementation and before live-model validation or UI work. All 45 automated tests
+passed when rerun on 31 October 2026; they use mocked policies/transport, not live model
+validation. The next proposed checkpoint is a small explicitly authorised live acceptance
+session, followed by review before choosing the UI. No later phase is implemented by the plan.
+See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
+and [decision record](docs/decisions.md).
+
 ## Setup
 
 Use macOS/Linux and Python 3.11+ with SQLite FTS5. Tested locally on Python 3.14.3 /
