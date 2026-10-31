@@ -270,6 +270,7 @@ def build_context(
     budget,
     edits_allowed,
     *,
+    procedural_guidance=None,
     max_chars=40000,
     cards_profile="baseline",
 ):
@@ -289,6 +290,8 @@ def build_context(
         "remaining_budget": budget,
         "recent_dialogue": history,
     }
+    if procedural_guidance:
+        value["procedural_guidance"] = procedural_guidance
     schema = dumps(compact_schema(Decision.model_json_schema()), compact=True)
     example = {
         "based_on_state_version": session.state.version,
@@ -330,6 +333,7 @@ def build_decision_context(
     budget,
     edits_allowed,
     *,
+    procedural_guidance=None,
     cards_profile="baseline",
     **kwargs,
 ):
@@ -340,6 +344,7 @@ def build_decision_context(
         feedback,
         budget,
         edits_allowed,
+        procedural_guidance=procedural_guidance,
         cards_profile=cards_profile,
         **kwargs,
     )

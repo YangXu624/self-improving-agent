@@ -177,3 +177,13 @@ Target-item evaluation is implemented as an explicit mode (`--evaluation-mode ta
 - **Conservative disclosure evidence:** Evaluates disclosures literally with NFKC unicode normalization, negation awareness, color canonicalization, and budget operator contradiction checks. Over-reveal (>2 new facts) triggers a retry error.
 - **Audit and metrics:** Preserves independent constraint checking and explicit failure reasons. Tracks Hit@K, MRR@K, MTTC, cumulative success by turn, search and clarification efficiency, and separate grounded abstention on verified empty tasks. Invalid sessions are recorded safely without crashing the batch.
 
+## Experiential memory: procedural self-improvement without evaluation contamination
+
+The user approved implementing the vertical slice of experiential self-improvement with explicit refinements:
+- **Separation of candidate vs confirmed lessons:** Raw LLM-extracted lessons remain in `candidate` status and cannot be retrieved until human review explicitly confirms them. This prevents hallucinated or spurious failure explanations from automatically corrupting agent behavior.
+- **Explicit lesson structure:** Every lesson maintains separate fields for observed outcome, hypothesized failure cause, bounded procedural directive, expected action, deterministic action signature, and evidence references.
+- **Cross-category behavioral triggers:** Retrieval matches decision triggers (`initial_query`, `empty_search_recovery`, `recommend_cutoff`, `attribute_clarification`) and decision context cues rather than narrow product families, ensuring transfer between disjoint learning and evaluation splits.
+- **Anti-contamination enforcement:** Sourcing is restricted strictly to the `learning` split. Lexical and structural guards reject ASINs (`B0...`), product IDs, evaluator target product titles, and prompt injection patterns. Snapshots for held-out evaluation are frozen and content-hashed; evaluation runs never update memory.
+- **Provenance, superseding and retraction:** Lessons are versioned in SQLite. Superseding links new versions to the replaced lesson ID while updating the superseded lesson. Retracted or rejected lessons are excluded from retrieval without destroying historical provenance.
+- **Distinct metrics for retrieval, injection, application, and improvement:** The agent explicitly logs retrieved lessons, injected lessons, and applied lessons (verified deterministically via `verify_decision_application` against action signatures). Measuring improvement requires comparing outcome metrics between identical frozen scenarios under `memory_on` versus `memory_off`.
+

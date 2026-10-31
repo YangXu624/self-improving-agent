@@ -164,3 +164,22 @@ The original watch-taxonomy failures remain; subtype clarification does not repa
 Confirmed non-USD budgets are recorded but never converted implicitly: SEARCH/RECOMMEND
 with an active hard price limit require a USD budget, otherwise validation rejects the action
 and a bounded product-free closure explains the limitation.
+
+## Experiential-memory self-improvement subsystem
+
+`shopping_agent.experience` provides the first vertical slice of experiential self-improvement:
+1. **Lesson Lifecycle and Storage:** Managed in SQLite (`ExperienceStore`), distinguishing:
+   - Observed outcome (what occurred in the trace)
+   - Hypothesized failure cause (why it occurred)
+   - Proposed procedural directive (concise, actionable advice bounded to $\le 400$ characters)
+   - Verifiable action signature (observable structural criteria such as `token_mode`, `query_contains`, `attribute_in`, `min_products`)
+   - Supporting evidence (source session, turn, and split)
+   - Lifecycle status: `candidate` (raw extractions; never retrieved), `confirmed` / `active` (human-confirmed), `superseded` (versioned replacement), `rejected`, and `retracted` (historical record preserved without retrieval).
+2. **Contamination Guard:** `validate_lesson` enforces that lessons only originate from the `learning` split. It systematically rejects ASIN patterns (`B0...`), product IDs, target product titles from evaluation ground truth, and prompt injection patterns.
+3. **Retrieval and Context Injection:** Lessons are retrieved primarily by generalizable behavioral decision triggers (`initial_query`, `empty_search_recovery`, `recommend_cutoff`, `attribute_clarification`) rather than exact product-family matches. Context cues (`searches`, `calls`, `has_search`, `candidate_count`) match trigger conditions. Guidance is injected bounded into `procedural_guidance` in the decision context.
+4. **Observable Application and Audit:** `ShoppingAgent` logs:
+   - Retrieved lesson IDs (`retrieved_experience`)
+   - Injected lesson IDs (`injected_experience`)
+   - Applied lesson IDs (`applied_experience`), verified by `verify_decision_application` against the emitted decision's concrete action and signature.
+   The session event log records `experience_audit` events and exposes experience tracking on `AgentTurn`, `SessionRecord`, and `results.jsonl`.
+5. **Frozen Snapshots and Evaluation:** Active lessons can be frozen into an immutable, content-hashed `ExperienceSnapshot`. The evaluation harness executes paired conditions (`memory_off` vs `memory_on`) under identical task budgets and models via `experiential_agent_factory` and `--experience-snapshot`.

@@ -43,6 +43,9 @@ class AgentTurn:
     usage: dict = field(default_factory=dict)
     model_seconds: float = 0.0
     wall_ms: float = 0.0
+    retrieved_experience: list = field(default_factory=list)
+    injected_experience: list = field(default_factory=list)
+    applied_experience: list = field(default_factory=list)
 
 
 @dataclass
@@ -61,6 +64,9 @@ class SessionRecord:
     user_id: str = ""
     error: str | None = None
     target_hit: dict | None = None
+    retrieved_experience: list = field(default_factory=list)
+    injected_experience: list = field(default_factory=list)
+    applied_experience: list = field(default_factory=list)
 
 
 def card(product):
@@ -77,6 +83,7 @@ def extract_turn(events, request_id, response, turn, wall_ms):
     mine = [e for e in events if e.turn_id == request_id]
     usage, seconds, seen, counts, recommended = {}, 0.0, [], [], []
     rejected, failure = 0, None
+    retrieved_exp, injected_exp, applied_exp = [], [], []
     for event in mine:
         payload = event.payload
         if event.type == "model_response":
@@ -93,7 +100,15 @@ def extract_turn(events, request_id, response, turn, wall_ms):
             rejected += 1
         elif event.type == "turn_failed":
             failure = payload.get("code")
+        elif event.type == "experience_audit":
+            retrieved_exp.extend(payload.get("retrieved", []))
+            injected_exp.extend(payload.get("injected", []))
+            applied_exp.extend(payload.get("applied", []))
     budget = response.get("budget_used", {})
+    exp = response.get("experience", {})
+    retrieved_exp = list(dict.fromkeys(retrieved_exp + exp.get("retrieved", [])))
+    injected_exp = list(dict.fromkeys(injected_exp + exp.get("injected", [])))
+    applied_exp = list(dict.fromkeys(applied_exp + exp.get("applied", [])))
     return AgentTurn(
         turn=turn,
         request_id=request_id,
@@ -114,6 +129,9 @@ def extract_turn(events, request_id, response, turn, wall_ms):
         usage=usage,
         model_seconds=seconds,
         wall_ms=wall_ms,
+        retrieved_experience=retrieved_exp,
+        injected_experience=injected_exp,
+        applied_experience=applied_exp,
     )
 
 
@@ -391,4 +409,13 @@ class DialogueRunner:
         record.ledger = memory.ledger()
         record.repeated_questions = sum(memory.repeat_counts.values())
         record.unmatched_questions = memory.unmatched_questions
+        record.retrieved_experience = sorted(
+            {x for t in record.turns for x in t.retrieved_experience}
+        )
+        record.injected_experience = sorted(
+            {x for t in record.turns for x in t.injected_experience}
+        )
+        record.applied_experience = sorted(
+            {x for t in record.turns for x in t.applied_experience}
+        )
         return record
