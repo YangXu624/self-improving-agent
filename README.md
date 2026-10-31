@@ -302,3 +302,8 @@ or shopping-success measurements. No API tokens were used and no learning benefi
 See [milestone notes](docs/milestone-1.md) for checkpoint evidence and trade-offs,
 [project context](docs/project-context.md), [research questions](docs/research-questions.md),
 [open decisions](docs/open-decisions.md) and [coding guidance](AGENTS.md).
+
+Current session working memory includes goal-scoped asked/disclosed attribute ledgers, cached
+in `state.json` and reconstructed from the event log. Confirmed values remain in the existing
+requirements; no-preference/declined responses and distinct clarification facets prevent
+redundant questions. See `docs/architecture.md` for evidence and replay boundaries.

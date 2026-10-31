@@ -142,3 +142,12 @@ and lower context tokens for K5/shared profiles; no live request has been made a
 recommendation-quality result exists. Frozen-v2 is verified but unusable by the runner
 (task IDs in requirement IDs); frozen-v3 awaits independent verification, see the
 [provenance note](reviews/experiment-a-benchmark-provenance.md). Known defects remain isolated.
+
+### Attribute-state baseline revision
+
+The asked/disclosed working-memory change uses prompt `shopping-baseline-v4-attributes`.
+It is an intentional agent-baseline change: compare future memory conditions against this
+same version, not against v3 runs with a different policy. Old v1 scenarios and saved runs
+are not rewritten. Offline regressions cover question evidence, dispositions, correction,
+goal scope, history truncation, bounded rejections and legacy replay. This change supplies
+no target IDs, simulator state or experience-learning capability to the shopping agent.
