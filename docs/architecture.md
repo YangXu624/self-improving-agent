@@ -78,7 +78,7 @@ CLI or Streamlit UI message + user/session/request IDs
 
 Policy, context construction, retrieval and storage are separate. Future guidance can enter
 through context construction; future search implementations must keep tool contracts and
-hard gates. These extension points do not constitute implemented experience/user memory.
+hard gates. Procedural experience now uses these seams; persistent user memory remains deferred.
 
 ## Card profiles and visibility receipts (Experiment A)
 
@@ -104,7 +104,8 @@ imported by the application.
 - UI session data: ignored `data/ui-sessions/deepseek/<UUID>/`; old mock histories are separate.
   Owner association does not automatically transfer facts into another session.
 - Credentials: ignored local environment; never in prompts or authorization-header traces.
-- No persistent user profile or agent-experience store. The simulated-shopper evaluation lives
+- Persistent user profiles remain deferred. Procedural lessons use a separate local SQLite
+  experience store and content-hashed snapshot files. The simulated-shopper evaluation lives
   in a separate package, `astra_eval` (see [its documentation](simulated-shopper-evaluation.md));
   the application never imports it and it never feeds the agent anything but the shopper's messages.
 
@@ -183,3 +184,14 @@ and a bounded product-free closure explains the limitation.
    - Applied lesson IDs (`applied_experience`), verified by `verify_decision_application` against the emitted decision's concrete action and signature.
    The session event log records `experience_audit` events and exposes experience tracking on `AgentTurn`, `SessionRecord`, and `results.jsonl`.
 5. **Frozen Snapshots and Evaluation:** Active lessons can be frozen into an immutable, content-hashed `ExperienceSnapshot`. The evaluation harness executes paired conditions (`memory_off` vs `memory_on`) under identical task budgets and models via `experiential_agent_factory` and `--experience-snapshot`.
+
+## Focused experience integrity
+
+See [the checkpoint and pilot protocol](experience-pilot.md). Category-only opening cues use
+read-only documented category metadata and the current goal's canonical event timeline; an
+explicit reset can provisionally scope guidance but cannot retire committed requirements.
+No extra model call classifies the opening. Actual policy payloads establish injection; only
+accepted, signature-matching actions establish application. Reviewed lesson records cannot
+be changed by candidate insertion. New recommendation events snapshot active hard state so
+independent per-presentation compliance is separate from hidden-target-profile mismatches.
+Historical snapshots missing this evidence are unknown; extraction completeness is not proved.

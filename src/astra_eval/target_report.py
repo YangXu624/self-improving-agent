@@ -12,7 +12,21 @@ def cell(rows):
     hits = [s for s in scores if s["hit_at_k"]]
     failures = [r for r in rows if not r["score"]["hit_at_k"]]
     horizon = max((s["turn_budget"] for s in scores), default=0)
+    disclosed = [s.get("disclosed_requirement_compliance") for s in scores]
+    fields = (
+        "checked_occurrences",
+        "passed",
+        "violations",
+        "unknown_required",
+        "unknown_product_id",
+        "missing_snapshot_occurrences",
+    )
+    confirmed = {
+        key: sum(d.get(key, 0) for d in disclosed if d is not None) for key in fields
+    }
+    confirmed["sessions_without_compliance_data"] = sum(d is None for d in disclosed)
     return {
+        "disclosed_requirement_compliance": confirmed,
         "started": len(rows),
         "valid": sum(s["valid"] for s in scores),
         "hit_at_k_all_started": rate(len(hits), len(rows)),
@@ -135,7 +149,8 @@ def render_target_report(report):
             [
                 "",
                 f"Cumulative success: {c['cumulative_success_by_turn']}",
-                f"Terminations: {c['terminations']}; violations: {c['violations']}",
+                f"Terminations: {c['terminations']}; hidden-target-profile mismatches (distinct products): {c['violations']}",
+                f"Disclosed-requirement compliance (per presentation; committed hard state, extraction completeness not asserted): {c['disclosed_requirement_compliance']}",
                 f"Success searches / CLARIFY actions: {c['mean_searches_to_success']} / {c['mean_clarifications_to_success']}",
                 f"Failure resources: {c['failure_resources']}",
                 "",

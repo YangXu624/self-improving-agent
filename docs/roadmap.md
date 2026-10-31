@@ -17,12 +17,12 @@ by themselves evidence that the agent has learned something useful.
 | Phase | Status | Remaining gate |
 | --- | --- | --- |
 | 1. Frozen catalogue | Complete for the initial 50k scope | Future category expansion is a separate decision |
-| 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance pending; earlier defects fixed on a branch pending merge |
+| 2. Session-only conversational baseline | Implemented; small live smoke passed | Broader acceptance pending; earlier fixes merged, watch taxonomy remains limited |
 | 3. Minimal UI | Streamlit UI connected to DeepSeek; runtime script removed | User review pending; five-request smoke is not a benchmark |
-| 4. Evaluation and baseline measurement | Simulated-shopper harness implemented and offline-tested ([details](simulated-shopper-evaluation.md)); no real Ollama/DeepSeek run yet | Validate Llama 3.1 reliability locally, approve protocol and budget, record the baseline |
+| 4. Evaluation and baseline measurement | Simulated-shopper harness implemented and offline-tested ([details](simulated-shopper-evaluation.md)); two real memory-OFF target learning sessions recorded | Validate Llama 3.1 reliability locally, approve protocol and budget, record the baseline |
 | 5. Retrieval/ranking improvements | BM25 baseline exists; alternatives not implemented | Compare alternatives under Phase 4's protocol |
 | 6. Persistent user memory | Not started | Approve lifecycle and repeated-user evaluation |
-| 7. Agent experience learning | MVP vertical slice implemented and verified offline ([details](reviews/experiential-memory-mvp.md)) | Run real DeepSeek learning and evaluation trials |
+| 7. Agent experience learning | MVP vertical slice implemented and verified offline ([details](reviews/experiential-memory-mvp.md)) | Review focused trigger/audit/provenance fixes, then explicitly approve the single-lesson development pilot |
 | 8. Retrieval-code experimentation | Deferred, optional research extension | Demonstrate a need beyond permitted configuration choices |
 
 Historical **Milestone 1** covers the session/retrieval/CLI baseline in Phase 2, using the
@@ -234,3 +234,12 @@ Asked/disclosed current-goal ledgers and redundant-clarification validation are 
 on `feat/asked-disclosed-state`, pending independent review and PR approval. This is working
 memory only. Target-item evaluation is a separate approved component; persistent user and
 procedural experience memories remain unimplemented. No paid calls are used for this work.
+
+## Immediate checkpoint: experience integrity
+
+The focused fix branch implements goal-scoped opening cues, truthful injection/application
+audits, reviewed-lesson overwrite protection, and separately labelled hidden-profile versus
+disclosed compliance. [Pilot commands and artifact evidence](experience-pilot.md) await explicit
+activation/live approval after PR review. Lesson 1 stays candidate; Lesson 2 stays rejected.
+No new memory feature, simulator tuning or retrieval optimisation belongs to this checkpoint.
+Older "immediate" checkpoints above are historical and do not supersede this next action.

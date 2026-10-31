@@ -5,13 +5,16 @@ future decisions. The intended research cycle is: complete a task, independently
 its outcome, distil applicable experience, and compare future behaviour with/without it.
 Memory is not assumed to improve performance; negative transfer is an outcome to measure.
 
-## Current status: live DeepSeek shopping UI
+## Current status: shopping baseline and experimental experience memory
 
 Implemented: session-only memory, lexical product retrieval, a bounded DeepSeek decision
 loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI now uses
 DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
-been removed; mocked responses remain confined to automated tests. **No long-term
-user memory, agent experience learning, evaluator or code self-optimisation is implemented.**
+been removed; mocked responses remain confined to automated tests. Target/preference evaluation
+and an explicitly reviewed procedural-memory MVP are implemented. Two learning sessions produced
+candidates; no real memory-ON transfer benefit is established. Persistent user memory and code
+self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
+pilot commands](docs/experience-pilot.md).
 
 This is a new implementation inspired by
 [ASTRA](https://devpost.com/software/reimagining-the-digital-experience). ASTRA and the earlier
@@ -246,9 +249,9 @@ aliases; product-type token containment). If the final decision proposes a SEARC
 run, the turn closes with a fixed, product-free RESPOND (`closure` field, `turn_closed_safely`
 event) instead of an error. The CLI exits 0 for it; scripted callers should check `closure`.
 
-Policy, context builder, retrieval tool and storage are separate interfaces. Future scoped
-experience can be added to context construction without replacing the executor. There is
-no future-memory placeholder implementation or persistent cross-session preference reuse.
+Policy, context builder, retrieval tool and storage are separate interfaces. Scoped procedural
+experience is injected through the existing context boundary, without replacing the executor.
+There is no persistent cross-session user-preference reuse.
 
 ## Conservative catalogue semantics and limitations
 

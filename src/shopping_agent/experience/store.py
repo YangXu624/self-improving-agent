@@ -86,13 +86,32 @@ class ExperienceStore:
         allow_non_learning: bool = False,
     ) -> Lesson:
         """Validate and insert a candidate lesson. Replaces draft if same unconfirmed ID."""
+        if lesson.status != "candidate":
+            raise ValueError(
+                "add_candidate accepts candidate status only; use explicit review transitions"
+            )
         validate_lesson(
             lesson,
             forbidden_titles=forbidden_titles,
             allow_non_learning=allow_non_learning,
         )
         with self.conn:
-            self.conn.execute(
+            current = self.get(lesson.lesson_id)
+            if current is not None:
+                ignored = {"status", "created_at", "review_notes", "superseded_by_id"}
+                old = {k: v for k, v in current.to_dict().items() if k not in ignored}
+                new = {k: v for k, v in lesson.to_dict().items() if k not in ignored}
+                notes_unchanged = (
+                    lesson.review_notes is None
+                    or lesson.review_notes == current.review_notes
+                )
+                if old == new and notes_unchanged:
+                    return current
+                if current.status != "candidate":
+                    raise ValueError(
+                        "Reviewed lesson is immutable; use explicit revision/supersession"
+                    )
+            cursor = self.conn.execute(
                 """
                 INSERT INTO lessons (
                     lesson_id, version, scope, trigger_type, trigger_condition,
@@ -112,6 +131,7 @@ class ExperienceStore:
                     hypothesized_cause=excluded.hypothesized_cause,
                     evidence=excluded.evidence,
                     review_notes=excluded.review_notes
+                WHERE lessons.status = 'candidate'
                 """,
                 (
                     lesson.lesson_id,
@@ -132,7 +152,11 @@ class ExperienceStore:
                     lesson.created_at,
                 ),
             )
-        return lesson
+            if cursor.rowcount != 1:
+                raise ValueError(
+                    "Reviewed lesson changed concurrently; explicit revision required"
+                )
+        return self.get(lesson.lesson_id)
 
     def get(self, lesson_id: str) -> Lesson | None:
         cur = self.conn.execute(
@@ -171,6 +195,8 @@ class ExperienceStore:
         if not current:
             raise KeyError(f"Lesson not found: {lesson_id}")
         notes = review_notes or reason
+        if current.review_notes and current.review_notes != notes:
+            notes = f"{current.review_notes}; {notes}"
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'rejected', review_notes = ? WHERE lesson_id = ?",
@@ -189,6 +215,8 @@ class ExperienceStore:
         if not current:
             raise KeyError(f"Lesson not found: {lesson_id}")
         notes = review_notes or reason
+        if current.review_notes and current.review_notes != notes:
+            notes = f"{current.review_notes}; {notes}"
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'retracted', review_notes = ? WHERE lesson_id = ?",
@@ -206,6 +234,11 @@ class ExperienceStore:
         allow_non_learning: bool = False,
     ) -> tuple[Lesson, Lesson]:
         """Atomically supersede an existing lesson with a new version."""
+        if (
+            new_lesson.lesson_id == old_lesson_id
+            or self.get(new_lesson.lesson_id) is not None
+        ):
+            raise ValueError("Supersession requires a new, unused lesson ID")
         old = self.get(old_lesson_id)
         if not old:
             raise KeyError(f"Lesson to supersede not found: {old_lesson_id}")
@@ -239,7 +272,11 @@ class ExperienceStore:
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'superseded', superseded_by_id = ?, review_notes = ? WHERE lesson_id = ?",
-                (replacement.lesson_id, reason, old_lesson_id),
+                (
+                    replacement.lesson_id,
+                    f"{old.review_notes}; {reason}" if old.review_notes else reason,
+                    old_lesson_id,
+                ),
             )
             self.conn.execute(
                 """

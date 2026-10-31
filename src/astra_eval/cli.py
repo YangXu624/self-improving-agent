@@ -236,6 +236,9 @@ def run_command(args):
         print(
             f"\n--- Lesson Review Report ({args.store}) [{len(lessons)} lesson(s)] ---"
         )
+        print(
+            "Procedural templates are experimental hypotheses; confirmation is approval for use, not evidence of causal improvement."
+        )
         for lesson in lessons:
             ev = lesson.evidence
             print("=" * 80)

@@ -1,3 +1,15 @@
+# Current evaluation status
+
+Preference and target-item evaluation are implemented. Two real memory-OFF learning sessions
+produced candidate procedural templates; a real memory-ON/OFF transfer result is not yet
+established. See [the focused integrity checkpoint and exact proposed pilot](experience-pilot.md).
+Hidden-target-profile mismatches retain historical scores, but are labelled separately from
+new per-presentation compliance with confirmed disclosed hard state. Missing historical
+compliance evidence is unknown. These checks do not verify complete natural-language extraction.
+
+The original plans below are historical; their old implementation/status claims are superseded
+by this paragraph and the focused checkpoint. No historical run or frozen benchmark is rewritten.
+
 # Evaluation plan
 
 **Update (1 November 2026):** the simulated-shopper harness described in

@@ -171,7 +171,7 @@ class ExperienceStoreTests(unittest.TestCase):
                 "source_split": "learning",
                 "turn": 1,
             },
-            status="active",
+            status="candidate",
         )
         self.store.add_candidate(specific_lesson)
         self.store.confirm("exp-specific")
@@ -189,7 +189,7 @@ class ExperienceStoreTests(unittest.TestCase):
         self.assertEqual(scarves_retrieved[0].lesson_id, "exp-global")
 
     def test_snapshot_creation_save_and_reload_integrity(self):
-        lesson = self.sample_lesson("exp-active", status="active")
+        lesson = self.sample_lesson("exp-active")
         self.store.add_candidate(lesson)
         self.store.confirm("exp-active")
 
@@ -632,7 +632,10 @@ class ScopedTriggerTests(unittest.TestCase):
             "".join(
                 json.dumps(p) + "\n"
                 for p in [
-                    product("bangle-1", 15, Material="Metal", Color="Pink"),
+                    {
+                        **product("bangle-1", 15, Material="Metal", Color="Pink"),
+                        "categories": ["Women", "Bangles"],
+                    },
                     product("boots-1", 45, Material="Leather", Color="Black"),
                 ]
             )
