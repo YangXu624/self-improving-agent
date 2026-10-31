@@ -187,3 +187,19 @@ The user approved implementing the vertical slice of experiential self-improveme
 - **Provenance, superseding and retraction:** Lessons are versioned in SQLite. Superseding links new versions to the replaced lesson ID while updating the superseded lesson. Retracted or rejected lessons are excluded from retrieval without destroying historical provenance.
 - **Distinct metrics for retrieval, injection, application, and improvement:** The agent explicitly logs retrieved lessons, injected lessons, and applied lessons (verified deterministically via `verify_decision_application` against action signatures). Measuring improvement requires comparing outcome metrics between identical frozen scenarios under `memory_on` versus `memory_off`.
 
+
+## Focused pilot-integrity fixes
+
+First decision means first policy request for a category-identified current goal, including
+repaired decisions and validated goal transitions. Conservative category-only parsing suppresses
+unrecognized extra words; false negatives are preferable to applying a clarification directive
+to a specified request. Read-only vocabulary projection leaves BM25 and the tool interface
+unchanged. Cue provenance records provisional scope separately from committed state.
+
+Retrieval, actual serialized prompt inclusion, accepted action conformance, and empirical
+outcome improvement are distinct. Candidate upserts cannot alter reviewed content; duplicate
+extraction is idempotent. Revisions require a new unused ID, and explicit lifecycle transitions
+retain approval notes. Disclosed compliance uses per-recommendation committed hard state;
+hidden target requirements and exact target hits keep their existing independent definitions.
+The extractor chooses predefined templates; its causal explanations remain hypotheses. No
+simulator/profile/benchmark tuning or lesson activation is part of this checkpoint.
