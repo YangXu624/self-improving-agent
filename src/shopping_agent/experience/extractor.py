@@ -11,7 +11,7 @@ def extract_candidate_lesson(
     *,
     source_split: str = "learning",
 ) -> Lesson | None:
-    """Analyze a learning-session trace and outcome to extract a candidate procedural lesson.
+    """Select a predefined procedural template from a learning trace, not infer causality.
 
     Evaluator-only secrets (target IDs, titles, ground-truth hashes) are strictly excluded.
     The returned lesson is ALWAYS in 'candidate' status and requires explicit confirmation.
@@ -128,8 +128,9 @@ def extract_candidate_lesson(
     ) and outcome.get("outcome") == "failure":
         observed = "unclarified_broad_search_failure"
         cause = (
-            "Agent executed a broad search on an underspecified request without clarifying "
-            "available hard constraints, leading to exhausted search attempts."
+            "Hypothesis: early clarification might reveal useful constraints before search. "
+            "A failed task after an initial search does not establish this cause; shopper "
+            "disclosure and retrieval coverage may also limit target discovery."
         )
         directive = (
             "When the opening request contains only an underspecified category, "

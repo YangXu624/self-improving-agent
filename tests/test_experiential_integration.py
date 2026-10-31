@@ -13,7 +13,7 @@ from astra_eval.experiment import (
     run_experiment,
 )
 from astra_eval.report import build_report, write_report
-from astra_eval.scenarios import generate, save
+from astra_eval.scenarios import generate, load_ground_truth, load_scenarios, save
 from astra_eval.scoring import ScoreConfig
 from astra_eval.simulators import ScriptedShopper
 from shopping_agent.experience import (
@@ -192,7 +192,7 @@ class ExperientialIntegrationTests(F.EvalCase):
             directive="Initial search directive",
             expected_action="SEARCH",
             action_signature={"mode": "all"},
-            status="active",
+            status="candidate",
             evidence={"source_split": "learning"},
         )
         validate_lesson(l1)
@@ -374,6 +374,9 @@ class ExperientialIntegrationTests(F.EvalCase):
         # Step 4: Run paired evaluation on a different scenario (development split)
         # Using a responsive policy whose baseline behavior is NOT sabotaged
         class CleanGuidanceResponsivePolicy(F.HeuristicPolicy):
+            def __init__(self):
+                super().__init__(ask_department=False)
+
             def complete(self, messages):
                 ctx = json.loads(messages[-1]["content"])
                 self.contexts.append(ctx)
@@ -389,9 +392,27 @@ class ExperientialIntegrationTests(F.EvalCase):
                         data["action"]["mode"] = "any"
                 return PolicyReply(json.dumps(data), reply.metadata)
 
+        # is_initial now means first goal decision, not a later first search.
+        # Use a fully specified, temporary development fixture for this SEARCH-template
+        # wiring test; no original benchmark/profile or extracted lesson is rewritten.
+        fixture_scenarios, fixture_manifest = load_scenarios(self.scenarios_dir)
+        for scenario in fixture_scenarios:
+            if scenario.split == "development":
+                budget = scenario.profile.fact("budget")
+                scenario.opening += " " + budget.statement
+                scenario.profile = scenario.profile.model_copy(
+                    update={"opening_keys": ("type", "budget")}
+                )
+        fixture_dir = self.root / "specified-dev-fixture"
+        save(
+            fixture_dir,
+            fixture_scenarios,
+            list(load_ground_truth(self.scenarios_dir).values()),
+            fixture_manifest,
+        )
         dev_out = self.root / "dev_out"
         dev_config = ExperimentConfig(
-            scenarios_dir=self.scenarios_dir,
+            scenarios_dir=fixture_dir,
             catalogue=self.catalogue,
             index=self.index,
             output=dev_out,

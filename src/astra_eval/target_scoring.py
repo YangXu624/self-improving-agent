@@ -3,6 +3,7 @@
 import re
 from dataclasses import dataclass
 
+from .disclosed_compliance import compliance
 from .scoring import Judge, ScoreConfig, resources
 
 
@@ -88,6 +89,9 @@ def target_score(record, truth, oracle, config=ScoreConfig(headline_k=5), *, max
             "unknown_product_id": sum(v["hard"] == "unknown_id" for v in verdicts),
         },
     }
+    # Keep the historical key/value meaning for readers of existing scores.
+    base["hidden_target_profile_mismatches"] = dict(base["violations"])
+    base["disclosed_requirement_compliance"] = compliance(record, oracle)
     if integrity_error:
         base.update(
             termination="harness_error",

@@ -1,7 +1,7 @@
 """Bounded orchestration. Policies propose; trusted state/search guards execute."""
 
 import hashlib
-import re
+import json
 import time
 from typing import Protocol
 from uuid import uuid4
@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from .attributes import (
     attribute_ledger,
-    canonical_attribute,
     redundant_clarification,
 )
 from .context import (
@@ -23,6 +22,7 @@ from .context import (
     latest_search,
 )
 from .contracts import Decision
+from .experience.cues import catalogue_categories, decision_cues
 from .provider import PolicyReply, ProviderError
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
@@ -95,6 +95,9 @@ class ShoppingAgent:
         self.context_builder = context_builder
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
+        self.category_vocabulary = (
+            catalogue_categories(search) if experience is not None else frozenset()
+        )
 
     def turn(self, user_id, session_id, message, *, request_id=None):
         if not isinstance(message, str) or not message.strip() or len(message) > 8000:
@@ -148,6 +151,28 @@ class ShoppingAgent:
                     session, request_id, resp, calls, searches, experience=exp_payload
                 )
 
+            def accepted(decision, sent_lessons):
+                from .experience.verifier import verify_decision_application
+
+                matched = [
+                    lesson.lesson_id
+                    for lesson in sent_lessons
+                    if verify_decision_application(decision, lesson)
+                ]
+                for ident in matched:
+                    if ident not in applied_experience:
+                        applied_experience.append(ident)
+                if self.experience is not None:
+                    session.append(
+                        "experience_action_accepted",
+                        {
+                            "ordinal": calls,
+                            "action": decision.action.type,
+                            "applied": matched,
+                        },
+                        request_id,
+                    )
+
             failure = "decision_budget_exhausted"
             while calls < self.max_calls:
                 result = latest_search(
@@ -156,82 +181,21 @@ class ShoppingAgent:
                 retrieved_lessons = []
                 guidance = None
                 if self.experience is not None:
-                    scope = "*"
-                    for req in session.state.requirements:
-                        if req.status == "active" and req.field in (
-                            "product_type",
-                            "category",
-                        ):
-                            scope = str(req.value)
-                            break
-                    has_cand = bool(result and result.get("candidates"))
-                    active_fields = {
-                        canonical_attribute(r.field)
-                        for r in session.state.requirements
-                        if r.status == "active"
-                    }
-                    ledger = attribute_ledger(session)
-                    disclosed = ledger.get("disclosed_attributes", {})
-                    asked_dict = ledger.get("asked_attributes", {})
-                    resolved_attrs = {
-                        canonical_attribute(k)
-                        for k, v in disclosed.items()
-                        if v.get("status") in {"answered", "declined", "no_preference"}
-                    }
-                    asked_attrs = {canonical_attribute(k) for k in asked_dict.keys()}
-                    non_cat_fields = active_fields - {"product_type", "type"}
-                    non_cat_disclosed = resolved_attrs - {"product_type", "type"}
-                    non_cat_asked = asked_attrs - {"product_type", "type"}
-                    has_non_cat_message = bool(
-                        re.search(
-                            r"\b(?:under|below|less than|max|budget|price|\$)\s*\$?\d+|\b\d+\s*(?:dollars?|usd|eur|gbp)\b"
-                            r"|\b(?:women'?s?|men'?s?|girls?|boys?|unisex|kids?)\b"
-                            r"|\b(?:black|white|red|blue|green|yellow|pink|purple|brown|grey|gray|silver|gold|navy)\b"
-                            r"|\b(?:leather|cotton|wool|silk|metal|copper|canvas|denim|linen)\b"
-                            r"|\b(?:size\s+\d+|extra wide|wide|narrow)\b",
-                            message,
-                            re.I,
-                        )
+                    cues, scope, provenance = decision_cues(
+                        session,
+                        message,
+                        result,
+                        searches,
+                        calls,
+                        self.category_vocabulary,
                     )
-                    cat_only = (
-                        (
-                            len(active_fields) > 0
-                            or re.search(
-                                r"\b(?:looking for|shopping for|want|need|find)\s+[a-z\s&]+",
-                                message,
-                                re.I,
-                            )
-                        )
-                        and len(non_cat_fields) == 0
-                        and len(non_cat_disclosed) == 0
-                        and not has_non_cat_message
-                    )
-                    underspecified = (
-                        len(non_cat_fields) == 0
-                        and len(non_cat_disclosed) == 0
-                        and len(non_cat_asked) == 0
-                        and not has_non_cat_message
-                    )
-                    cues = {
-                        "is_initial": searches == 0,
-                        "searches": searches,
-                        "calls": calls,
-                        "has_search": result is not None,
-                        "has_candidates": has_cand,
-                        "candidate_count": len(result.get("candidates", []))
-                        if result
-                        else 0,
-                        "empty_search": result is not None and not has_cand,
-                        "is_underspecified": underspecified,
-                        "category_only": cat_only,
-                    }
-                    if result is None:
+                    if not cues["has_search"]:
                         possible_triggers = [
                             "initial_query",
                             "search_strategy",
                             "attribute_clarification",
                         ]
-                    elif len(result.get("candidates", [])) == 0:
+                    elif not cues["has_candidates"]:
                         possible_triggers = [
                             "empty_search_recovery",
                             "unsuccessful_search",
@@ -265,9 +229,18 @@ class ShoppingAgent:
                             }
                             for lesson in retrieved_lessons
                         ]
-                        for lesson in retrieved_lessons:
-                            if lesson.lesson_id not in injected_experience:
-                                injected_experience.append(lesson.lesson_id)
+                    session.append(
+                        "experience_selection",
+                        {
+                            "ordinal": calls + 1,
+                            "selected": [
+                                lesson.lesson_id for lesson in retrieved_lessons
+                            ],
+                            "cues": cues,
+                            **provenance,
+                        },
+                        request_id,
+                    )
                 try:
                     try:
                         built = self.context_builder(
@@ -327,6 +300,26 @@ class ShoppingAgent:
                     },
                     request_id,
                 )
+                # Inspect the exact serialized policy payload, after legacy builders/bounds.
+                sent_lessons = []
+                try:
+                    entries = json.loads(messages[-1]["content"]).get(
+                        "procedural_guidance", []
+                    )
+                    sent_lessons = [
+                        lesson
+                        for lesson in retrieved_lessons
+                        if {
+                            "lesson_id": lesson.lesson_id,
+                            "directive": lesson.directive[:400],
+                        }
+                        in entries
+                    ]
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    pass
+                for lesson in sent_lessons:
+                    if lesson.lesson_id not in injected_experience:
+                        injected_experience.append(lesson.lesson_id)
                 start = time.monotonic()
                 try:
                     reply = self.policy.complete(messages)
@@ -361,13 +354,6 @@ class ShoppingAgent:
                     session.append(
                         "decision_validated", decision.model_dump(), request_id
                     )
-                    if retrieved_lessons:
-                        from .experience.verifier import verify_decision_application
-
-                        for lesson in retrieved_lessons:
-                            if verify_decision_application(decision, lesson):
-                                if lesson.lesson_id not in applied_experience:
-                                    applied_experience.append(lesson.lesson_id)
                     if state.version != session.state.version:
                         session.commit(
                             state,
@@ -430,6 +416,7 @@ class ShoppingAgent:
                             },
                             request_id,
                         )
+                        accepted(decision, sent_lessons)
                         feedback = []
                         continue
                     if action.type == "RECOMMEND":
@@ -455,6 +442,21 @@ class ShoppingAgent:
                                 "search_id": result["search_id"],
                                 "product_ids": action.product_ids,
                                 "state_version": session.state.version,
+                                "goal_epoch": session.state.goal_epoch,
+                                "requirements": [
+                                    r.model_dump(
+                                        include={
+                                            "id",
+                                            "field",
+                                            "op",
+                                            "value",
+                                            "strength",
+                                            "source_event_id",
+                                        }
+                                    )
+                                    for r in session.state.requirements
+                                    if r.status == "active" and r.strength == "hard"
+                                ],
                             },
                             request_id,
                         )
@@ -475,6 +477,7 @@ class ShoppingAgent:
                             "message": action.message,
                             "products": [],
                         }
+                    accepted(decision, sent_lessons)
                     return finish(response)
                 except (ValidationError, StateError, ActionError) as exc:
                     if isinstance(exc, ValidationError):

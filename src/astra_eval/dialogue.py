@@ -33,6 +33,7 @@ class AgentTurn:
     message: str
     recommended_ids: list = field(default_factory=list)
     presented_ids: list = field(default_factory=list)
+    recommendation_requirements: list | None = None
     candidates_seen: list = field(default_factory=list)
     counts: list = field(default_factory=list)
     model_calls: int = 0
@@ -83,6 +84,7 @@ def extract_turn(events, request_id, response, turn, wall_ms):
     mine = [e for e in events if e.turn_id == request_id]
     usage, seconds, seen, counts, recommended = {}, 0.0, [], [], []
     rejected, failure = 0, None
+    requirements = None
     retrieved_exp, injected_exp, applied_exp = [], [], []
     for event in mine:
         payload = event.payload
@@ -96,6 +98,7 @@ def extract_turn(events, request_id, response, turn, wall_ms):
             counts.append(payload.get("counts", {}))
         elif event.type == "recommendation":
             recommended = list(payload.get("product_ids", []))
+            requirements = payload.get("requirements")
         elif event.type == "decision_rejected":
             rejected += 1
         elif event.type == "turn_failed":
@@ -116,6 +119,7 @@ def extract_turn(events, request_id, response, turn, wall_ms):
         action=response.get("action", ""),
         message=response.get("message", ""),
         recommended_ids=recommended,
+        recommendation_requirements=requirements,
         presented_ids=[p["id"] for p in response.get("products", [])]
         if response.get("status") == "ok" and response.get("action") == "RECOMMEND"
         else [],
