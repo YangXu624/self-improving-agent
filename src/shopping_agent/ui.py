@@ -134,7 +134,12 @@ def render_activity(events: list[dict], request_id: str) -> None:
                 st.caption(
                     f"Recommended {len(payload['product_ids'])} verified candidate(s)"
                 )
-            elif event["type"] in {"decision_rejected", "turn_failed", "model_error"}:
+            elif event["type"] in {
+                "decision_rejected",
+                "turn_failed",
+                "turn_closed_safely",
+                "model_error",
+            }:
                 st.text(event["type"].replace("_", " ").capitalize())
                 st.json(payload)
         with st.expander("Full turn events"):

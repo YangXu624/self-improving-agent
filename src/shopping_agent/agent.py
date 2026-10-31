@@ -22,6 +22,18 @@ class ActionError(ValueError):
     pass
 
 
+# A SEARCH that cannot execute once no decision call remains to repair it. The turn is
+# closed with a fixed message; the model cannot spend more budget or invent a result.
+UNEXECUTABLE_SEARCH = {
+    "search_budget_exhausted",
+    "search_requires_a_remaining_decision_call",
+}
+CLOSURE_MESSAGE = (
+    "I could not run another search within this turn's limit, so no products are "
+    "recommended. Your requirements are saved; send a follow-up to continue."
+)
+
+
 class ShoppingAgent:
     def __init__(
         self,
@@ -274,6 +286,28 @@ class ShoppingAgent:
                         },
                         request_id,
                     )
+            closure = (
+                feedback[0]["code"]
+                if failure == "decision_budget_exhausted"
+                and len(feedback) == 1
+                and feedback[0].get("code") in UNEXECUTABLE_SEARCH
+                else None
+            )
+            if closure:
+                session.append("turn_closed_safely", {"code": closure}, request_id)
+                return self._complete(
+                    session,
+                    request_id,
+                    {
+                        "status": "ok",
+                        "action": "RESPOND",
+                        "message": CLOSURE_MESSAGE,
+                        "products": [],
+                        "closure": closure,
+                    },
+                    calls,
+                    searches,
+                )
             session.append(
                 "turn_failed", {"code": failure, "last_feedback": feedback}, request_id
             )

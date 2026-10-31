@@ -1,6 +1,6 @@
 """Synthetic regressions from the watch incident; no private traces or live API.
 
-Three expected failures describe pending correctness fixes. They are deliberately
+Two expected failures describe the pending product-type vocabulary fix. They are deliberately
 not correctness passes; remove each marker when its reviewed fix is implemented.
 """
 
@@ -184,9 +184,8 @@ class WatchRegressionTests(unittest.TestCase):
         ids = {p["id"] for p in self.candidates(self.type_state("wristwatch"))}
         self.assertEqual(ids, {"wearable", "unknown-price-wearable"})
 
-    @unittest.expectedFailure
     def test_final_repeated_search_gets_safe_terminal_closure(self):
-        """Pending: executor rejects the action but currently emits generic exhaustion."""
+        """The executor rejects the action; the turn closes safely, not generically."""
         response, policy = self.replay(
             {"type": "SEARCH", "query": "watch wristwatch", "mode": "any", "limit": 10}
         )
