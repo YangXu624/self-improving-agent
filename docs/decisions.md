@@ -168,3 +168,12 @@ not claim complete semantic understanding. Related question facets have separate
 The new working-context prompt version distinguishes this intentionally changed agent policy
 from older evaluation baselines. Watch regression fixtures now use product_subtype for their
 legitimate type-narrowing question; their two taxonomy expected failures stay visible.
+
+## Target-item evaluation: exact discovery and grounded abstention (Part B)
+
+Target-item evaluation is implemented as an explicit mode (`--evaluation-mode target_item`), strictly separate from the preference-based benchmark.
+- **Catalogue grounding:** Sampling derives only from documented explicit fields, category tokens, and next strictly greater $10 USD boundaries. Target IDs and titles are stored strictly in `TargetGroundTruth` and never enter shopping agent or shopper contexts.
+- **Early termination:** Halts immediately once ASTRA presents the target product within primary $K$ ($K \le 5$, default 5). No additional simulated-shopper or shopping-agent calls are made after a hit.
+- **Conservative disclosure evidence:** Evaluates disclosures literally with NFKC unicode normalization, negation awareness, color canonicalization, and budget operator contradiction checks. Over-reveal (>2 new facts) triggers a retry error.
+- **Audit and metrics:** Preserves independent constraint checking and explicit failure reasons. Tracks Hit@K, MRR@K, MTTC, cumulative success by turn, search and clarification efficiency, and separate grounded abstention on verified empty tasks. Invalid sessions are recorded safely without crashing the batch.
+

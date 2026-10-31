@@ -7,6 +7,7 @@ they are not a proof of consistency.
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from .models import ShopperProfile, ShopperReply
@@ -155,7 +156,10 @@ def profile_words(profile):
 
 
 def numbers_in(text):
-    return {float(n) for n in re.findall(r"\d+(?:\.\d+)?", text)}
+    return {
+        float(n.replace(",", ""))
+        for n in re.findall(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?", text)
+    }
 
 
 def check_reply(
@@ -287,3 +291,85 @@ def check_reply(
 
 def errors(violations):
     return [v for v in violations if v.level == "error"]
+
+
+def target_disclosures(reply, memory):
+    """Conservative literal disclosure evidence for the target protocol, not an LLM judge.
+
+    Declared keys alone never establish a disclosure. Repeating known facts is harmless;
+    the bound concerns genuinely new information. Paraphrases may remain unverified.
+    """
+    supported, flags = [], []
+    norm_msg = unicodedata.normalize("NFKC", reply.message)
+    words = tokens(norm_msg)
+    ordered = re.findall(r"\w+", norm(norm_msg))
+    negated = {
+        w
+        for i, token in enumerate(ordered)
+        if token in NEGATIONS
+        for w in ordered[i + 1 : i + 4]
+    }
+    positive_words = words - negated
+    for fact in memory.profile.facts:
+        f_words = (
+            canonical_words(fact_words(fact))
+            if fact.field == "color"
+            else fact_words(fact)
+        )
+        pos_words = (
+            canonical_words(positive_words) if fact.field == "color" else positive_words
+        )
+        if fact.field == "price":
+            stated = any(
+                abs(float(fact.value) - n) < 0.01 for n in numbers_in(norm_msg)
+            )
+            val = float(fact.value)
+            val_str = f"{val:g}"
+            val_pattern = re.escape(val_str)
+            if val.is_integer() and val >= 1000:
+                thousands = f"{int(val):,}"
+                val_pattern = rf"(?:{re.escape(val_str)}|{re.escape(thousands)})"
+            opposite = re.search(
+                r"\b(over|above|at least|more than)\s*\$?\s*" + val_pattern + r"\b",
+                norm_msg,
+                re.I,
+            )
+            below = re.search(
+                r"\b(under|below|at most|less than)\s*\$?\s*" + val_pattern + r"\b",
+                norm_msg,
+                re.I,
+            )
+            if opposite and fact.op in {"lt", "lte"}:
+                flags.append(
+                    Violation("contradicts_budget_operator", "error", fact.key)
+                )
+                stated = False
+            elif below and fact.op in {"gt", "gte"}:
+                flags.append(
+                    Violation("contradicts_budget_operator", "error", fact.key)
+                )
+                stated = False
+        elif fact.field == "department":
+            stated = bool(
+                departments_in(fact_words(fact)) & departments_in(positive_words)
+            )
+        else:
+            stated = bool(f_words) and f_words <= pos_words
+        if stated:
+            supported.append(fact.key)
+        elif fact.key in reply.reveals:
+            flags.append(Violation("claimed_reveal_missing", "warning", fact.key))
+    new = set(supported) - set(memory.revealed)
+    if len(new) > 2:
+        flags.append(
+            Violation("over_reveal", "error", "More than two new facts in message")
+        )
+    if set(supported) - set(reply.reveals):
+        flags.append(
+            Violation(
+                "unclaimed_disclosure",
+                "warning",
+                "Message states more than its declared keys",
+            )
+        )
+    return supported, flags

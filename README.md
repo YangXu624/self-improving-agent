@@ -118,8 +118,9 @@ An offline-tested harness (`python -m astra_eval`) generates catalogue-grounded 
 scenarios, plays them against ASTRA with a scripted or Ollama-backed simulated shopper that
 keeps a fixed hidden profile and a bounded conversation memory, scores them independently from
 raw catalogue data and reports Success@K, nDCG@K, violations, turns, cost and retrieval
-diagnostics. Ollama is only needed to run the real simulator; the paid DeepSeek path requires
-`--live --max-model-calls N`. See
+diagnostics. Both preference-based evaluation and target-item evaluation (`--evaluation-mode target_item`,
+with `audit-targets` for offline eligibility) are supported. Ollama is only needed to run the real
+simulator; the paid DeepSeek path requires `--live --max-model-calls N`. See
 [docs/simulated-shopper-evaluation.md](docs/simulated-shopper-evaluation.md) for the Mac setup
 guide. No real evaluation result exists yet.
 

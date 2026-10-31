@@ -350,6 +350,10 @@ def paired(results, a, b):
 def build_report(directory, k_values=None, headline=None):
     results = read_results(directory)
     run = json.loads((Path(directory) / "run.json").read_text(encoding="utf-8"))
+    if run["shared_config"].get("evaluation_mode") == "target_item":
+        from .target_report import build_target_report
+
+        return build_target_report(directory)
     # The report must use the K values the run was scored with, not its own defaults.
     scored = run["shared_config"]["score"]
     k_values = tuple(k_values or scored["k_values"])
@@ -420,6 +424,10 @@ def fmt(value):
 
 
 def render_markdown(report):
+    if report.get("evaluation_mode") == "target_item":
+        from .target_report import render_target_report
+
+        return render_target_report(report)
     lines = [
         "# Simulated-shopper evaluation report",
         "",

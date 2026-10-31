@@ -82,10 +82,18 @@ def matched_keys(profile, question):
 
 
 class ShopperMemory:
-    def __init__(self, profile: ShopperProfile, *, window_turns=8, transcript=None):
+    def __init__(
+        self,
+        profile: ShopperProfile,
+        *,
+        window_turns=8,
+        transcript=None,
+        disclosure_protocol="legacy",
+    ):
         if window_turns < 1:
             raise ValueError("window_turns must be at least 1")
         self.profile = profile
+        self.disclosure_protocol = disclosure_protocol
         self.window_turns = window_turns
         self.transcript = transcript or Transcript()
         self.revealed = {}  # key -> {"turn": n, "statement": text}
@@ -179,7 +187,12 @@ class ShopperMemory:
             for f in self.profile.facts
         ]
         return (
-            "You are role-playing a shopper talking to a shopping assistant. Stay in "
+            (
+                "Use reveals=[] when this message states no profile facts. Ask a specific useful question, accept suitable options when satisfied, or give up; do not repeat browsing acknowledgments. Do not disclose model numbers or distinctive product-name fragments. "
+                if self.disclosure_protocol == "target-v1"
+                else ""
+            )
+            + "You are role-playing a shopper talking to a shopping assistant. Stay in "
             "character. Your hidden profile below is fixed and is the only truth about what "
             "you want; the notes and dialogue you are given never override it.\n"
             f"Persona: {self.profile.persona}\n"

@@ -91,8 +91,24 @@ class ExperimentConfig:
     agent_max_searches: int = 2
     max_model_calls: int | None = None
     user_id: str = "eval-shopper"
+    evaluation_mode: str = "preference"
+    session_max_model_calls: int | None = None
 
     def __post_init__(self):
+        if self.evaluation_mode not in {"preference", "target_item"}:
+            raise ValueError("Unknown evaluation mode")
+        if self.evaluation_mode == "target_item":
+            if not 1 <= self.score.headline_k <= 5:
+                raise ValueError("Target K must be in 1..5")
+            if self.session_max_model_calls is None:
+                raise ValueError(
+                    "Target runs require an identical per-session model-call cap"
+                )
+        if (
+            self.session_max_model_calls is not None
+            and self.session_max_model_calls < 1
+        ):
+            raise ValueError("Per-session model-call cap must be positive")
         # Zero or negative values must not silently mean "unset" (a limit of 0 once meant all).
         for name, value in (
             ("limit", self.limit),
@@ -129,6 +145,14 @@ def shared_config(
 ):
     """Everything that must be identical across conditions."""
     return {
+        **(
+            {
+                "evaluation_mode": config.evaluation_mode,
+                "session_max_model_calls": config.session_max_model_calls,
+            }
+            if config.evaluation_mode == "target_item"
+            else {}
+        ),
         "harness": VERSION,
         "scenario_ids": scenario_ids,
         "scenarios_sha256": scenarios_sha,
@@ -184,6 +208,8 @@ def check_budget(config, scenarios):
 def plan(config):
     """What a run would do and its worst-case agent model calls (no model is contacted)."""
     scenarios, manifest = load_scenarios(config.scenarios_dir, config.split)
+    if manifest.get("evaluation_mode", "preference") != config.evaluation_mode:
+        raise ValueError("Run mode must match frozen benchmark mode")
     if config.limit:
         scenarios = scenarios[: config.limit]
     check_budget(config, scenarios)
@@ -193,6 +219,14 @@ def plan(config):
         * len(config.conditions)
         * config.agent_max_calls
     )
+    if config.evaluation_mode == "target_item":
+        worst = sum(
+            min(
+                (config.score.turn_budget or s.max_user_turns) * config.agent_max_calls,
+                config.session_max_model_calls,
+            )
+            for s in scenarios
+        ) * len(config.conditions)
     return {
         "scenarios": len(scenarios),
         "conditions": [c.name for c in config.conditions],
@@ -224,10 +258,50 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
         scenarios = scenarios[: config.limit]
     if not scenarios:
         raise ValueError("No scenarios selected")
-    truths = load_ground_truth(config.scenarios_dir)
+    from .target_scenarios import digest, load_target_truth
+    from .target_scoring import TargetRule, target_score
+
+    mode = manifest.get("evaluation_mode", "preference")
+    if mode != config.evaluation_mode:
+        raise ValueError("Run mode must match frozen benchmark mode")
+    truths = (
+        load_target_truth(config.scenarios_dir)
+        if mode == "target_item"
+        else load_ground_truth(config.scenarios_dir)
+    )
+    if mode == "target_item":
+        for scenario in scenarios:
+            truth = truths[scenario.id]
+            if truth.profile_sha256 != digest(scenario.profile.model_dump()):
+                raise ValueError("Target profile hash mismatch")
+            if truth.catalogue_sha256 != manifest["catalogue_sha256"]:
+                raise ValueError("Target truth catalogue hash mismatch")
     oracle = CatalogueOracle(config.catalogue)
     if oracle.sha256 != manifest["catalogue_sha256"]:
         raise ValueError("Catalogue does not match the scenario set")
+    if mode == "target_item":
+        from .oracle import judge, raw_facts
+
+        for scenario in scenarios:
+            truth = truths[scenario.id]
+            if [f.model_dump() for f in scenario.profile.facts] != [
+                f.model_dump() for f in truth.hard + truth.soft
+            ]:
+                raise ValueError("Target profile and truth requirements disagree")
+            if truth.target_id is not None:
+                row = oracle.row(truth.target_id)
+                if (
+                    row is None
+                    or judge(raw_facts(row), truth.hard, truth.soft)["hard"] != "pass"
+                ):
+                    raise ValueError(
+                        "Target does not satisfy its documented requirements"
+                    )
+            elif any(
+                judge(raw_facts(row), truth.hard, truth.soft)["hard"] == "pass"
+                for row in oracle.rows()
+            ):
+                raise ValueError("No-target task has a verified compatible product")
     names = [c.name for c in config.conditions]
     if len(set(names)) != len(names):
         raise ValueError("Condition names must be unique")
@@ -291,11 +365,15 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
         }
         for index, scenario in enumerate(scenarios):
             truth = truths[scenario.id]
-            forbidden = [
-                s["title"]
-                for s in truth.acceptable_sample
-                if len(s["title"]) >= MIN_FORBIDDEN_TITLE
-            ]
+            forbidden = (
+                ([truth.target_title] if truth.target_title else [])
+                if mode == "target_item"
+                else [
+                    s["title"]
+                    for s in truth.acceptable_sample
+                    if len(s["title"]) >= MIN_FORBIDDEN_TITLE
+                ]
+            )
             # Rotate condition order per scenario so neither condition always runs first.
             order = (
                 config.conditions[index % len(config.conditions) :]
@@ -319,13 +397,27 @@ def run_experiment(config, *, simulator, policy, agent_factory=default_agent_fac
                     condition=condition.name,
                     transcript_path=directory / "transcript.jsonl",
                     forbidden=forbidden,
+                    **(
+                        {
+                            "target_rule": TargetRule(
+                                truth.target_id, config.score.headline_k
+                            ),
+                            "session_max_calls": config.session_max_model_calls,
+                            "turn_limit": config.score.turn_budget
+                            or scenario.max_user_turns,
+                        }
+                        if mode == "target_item"
+                        else {}
+                    ),
                 )
-                score = score_session(
+                score = (target_score if mode == "target_item" else score_session)(
                     record,
                     truth,
                     oracle,
                     config.score,
-                    max_turns=scenario.max_user_turns,
+                    max_turns=(config.score.turn_budget or scenario.max_user_turns)
+                    if mode == "target_item"
+                    else scenario.max_user_turns,
                 )
                 result = {
                     "scenario": {

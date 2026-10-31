@@ -107,7 +107,8 @@ isolation and corrections. A failed image URL must not prevent viewing product f
 ## Phase 4 — Build evaluation and measure the baseline
 
 **Purpose:** establish what success means before tuning retrieval or adding persistent memory.
-See the proposed [evaluation protocol](evaluation.md); it is not an implemented framework.
+Both preference-based and target-item evaluation modes are implemented and tested offline (see
+[simulated-shopper-evaluation.md](simulated-shopper-evaluation.md)). Live baseline measurement remains to be run.
 
 Separate hidden task truth, shopper dialogue generation and independent scoring. Include
 exact-item discovery and needs-based tasks with potentially multiple acceptable products.

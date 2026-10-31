@@ -2,7 +2,13 @@ import unittest
 
 from test_eval_memory import profile
 
-from astra_eval.consistency import ConsistencyConfig, check_reply, errors, prices_in
+from astra_eval.consistency import (
+    ConsistencyConfig,
+    check_reply,
+    errors,
+    prices_in,
+    target_disclosures,
+)
 from astra_eval.models import ShopperReply
 
 
@@ -205,6 +211,270 @@ class ConsistencyTests(unittest.TestCase):
         self.assertEqual(
             codes(check("Great!", action="accept", has_products=True)), set()
         )
+
+
+class TargetDisclosureTests(unittest.TestCase):
+    def make_memory(self, facts=None, revealed=None):
+        from test_eval_memory import profile as base_profile
+
+        from astra_eval.memory import ShopperMemory
+        from astra_eval.models import ShopperProfile
+
+        profile_facts = facts if facts is not None else base_profile().facts
+        p = ShopperProfile(
+            scenario_id="target-disc-test",
+            persona="Target shopper.",
+            facts=profile_facts,
+            opening_keys=tuple(
+                k for k in ("type",) if any(f.key == k for f in profile_facts)
+            ),
+        )
+        mem = ShopperMemory(p, disclosure_protocol="target-v1")
+        if revealed:
+            for k in revealed:
+                mem.revealed[k] = {"turn": 1, "statement": "stated"}
+        return mem
+
+    def test_faithful_literal_disclosures(self):
+        mem = self.make_memory()
+        reply = ShopperReply(
+            message="Under $60, in red please.", reveals=["budget", "color"]
+        )
+        supported, flags = target_disclosures(reply, mem)
+        self.assertIn("budget", supported)
+        self.assertIn("color", supported)
+        self.assertEqual(errors(flags), [])
+
+    def test_price_matching_integer_float_and_thousands_separator(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="budget",
+                kind="hard",
+                field="price",
+                op="lt",
+                value=1000.0,
+                statement="Under $1,000.",
+                keywords=["budget"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(message="My budget is $1,000.", reveals=["budget"])
+        supported, flags = target_disclosures(reply, mem)
+        self.assertEqual(supported, ["budget"])
+        self.assertEqual(errors(flags), [])
+
+    def test_budget_operator_contradiction(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="budget",
+                kind="hard",
+                field="price",
+                op="lt",
+                value=60.0,
+                statement="Under $60.",
+                keywords=["budget"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(message="I need something over $60.", reveals=["budget"])
+        supported, flags = target_disclosures(reply, mem)
+        self.assertNotIn("budget", supported)
+        self.assertIn("contradicts_budget_operator", codes(flags))
+        self.assertTrue(errors(flags))
+
+    def test_department_synonyms_and_negation(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="department",
+                kind="hard",
+                field="department",
+                op="eq",
+                value="women",
+                statement="For women.",
+                keywords=["who"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(message="It's for my wife.", reveals=["department"])
+        supported, flags = target_disclosures(reply, mem)
+        self.assertEqual(supported, ["department"])
+
+        neg_reply = ShopperReply(message="Not for women.", reveals=["department"])
+        supported, flags = target_disclosures(neg_reply, mem)
+        self.assertEqual(supported, [])
+
+    def test_color_canonicalization_and_full_width_text(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="color",
+                kind="hard",
+                field="color",
+                op="eq",
+                value="grey",
+                statement="Grey color.",
+                keywords=["color"],
+            ),
+            Fact(
+                key="budget",
+                kind="hard",
+                field="price",
+                op="lt",
+                value=60.0,
+                statement="Under $60.",
+                keywords=["budget"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(
+            message="Under ＄60, ｇｒａｙ please.", reveals=["budget", "color"]
+        )
+        supported, flags = target_disclosures(reply, mem)
+        self.assertIn("color", supported)
+        self.assertIn("budget", supported)
+
+    def test_negated_attribute_is_not_supported(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="material",
+                kind="hard",
+                field="material",
+                op="eq",
+                value="leather",
+                statement="Leather.",
+                keywords=["material"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(message="No leather please.", reveals=["material"])
+        supported, flags = target_disclosures(reply, mem)
+        self.assertEqual(supported, [])
+
+    def test_over_reveal_triggers_error_for_more_than_two_new_facts(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="color",
+                kind="hard",
+                field="color",
+                op="eq",
+                value="red",
+                statement="Red.",
+                keywords=["color"],
+            ),
+            Fact(
+                key="material",
+                kind="hard",
+                field="material",
+                op="eq",
+                value="cotton",
+                statement="Cotton.",
+                keywords=["material"],
+            ),
+            Fact(
+                key="budget",
+                kind="hard",
+                field="price",
+                op="lt",
+                value=50.0,
+                statement="Under $50.",
+                keywords=["budget"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        reply = ShopperReply(
+            message="Red cotton under $50.", reveals=["color", "material", "budget"]
+        )
+        supported, flags = target_disclosures(reply, mem)
+        self.assertEqual(len(supported), 3)
+        self.assertIn("over_reveal", codes(flags))
+        self.assertTrue(errors(flags))
+
+    def test_repeating_known_fact_does_not_count_toward_over_reveal(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="type",
+                kind="hard",
+                field="product_type",
+                op="contains",
+                value="boots",
+                statement="Boots.",
+                keywords=["type"],
+            ),
+            Fact(
+                key="color",
+                kind="hard",
+                field="color",
+                op="eq",
+                value="red",
+                statement="Red.",
+                keywords=["color"],
+            ),
+            Fact(
+                key="material",
+                kind="hard",
+                field="material",
+                op="eq",
+                value="cotton",
+                statement="Cotton.",
+                keywords=["material"],
+            ),
+        )
+        mem = self.make_memory(facts=facts, revealed=["type"])
+        reply = ShopperReply(
+            message="Boots in red cotton.", reveals=["type", "color", "material"]
+        )
+        supported, flags = target_disclosures(reply, mem)
+        self.assertEqual(set(supported), {"type", "color", "material"})
+        self.assertEqual(errors(flags), [])
+
+    def test_claimed_reveal_missing_and_unclaimed_disclosure(self):
+        from astra_eval.models import Fact
+
+        facts = (
+            Fact(
+                key="color",
+                kind="hard",
+                field="color",
+                op="eq",
+                value="red",
+                statement="Red.",
+                keywords=["color"],
+            ),
+            Fact(
+                key="budget",
+                kind="hard",
+                field="price",
+                op="lt",
+                value=50.0,
+                statement="Under $50.",
+                keywords=["budget"],
+            ),
+        )
+        mem = self.make_memory(facts=facts)
+        missing_reply = ShopperReply(message="Hello there.", reveals=["color"])
+        supported, flags = target_disclosures(missing_reply, mem)
+        self.assertEqual(supported, [])
+        self.assertIn("claimed_reveal_missing", codes(flags))
+        self.assertEqual(errors(flags), [])
+
+        unclaimed_reply = ShopperReply(message="I need red.", reveals=[])
+        supported, flags = target_disclosures(unclaimed_reply, mem)
+        self.assertEqual(supported, ["color"])
+        self.assertIn("unclaimed_disclosure", codes(flags))
+        self.assertEqual(errors(flags), [])
 
 
 if __name__ == "__main__":

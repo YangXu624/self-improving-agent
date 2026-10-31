@@ -243,6 +243,28 @@ unmeasured until you run it.
 | DeepSeek `provider_http_401/402/429` | Key invalid, balance exhausted or rate limited; the run stops after 3 consecutive provider failures and those sessions are invalid, not agent failures |
 | Very high success with the scripted shopper | Expected: it is a trivial rule-based user for plumbing tests, not a quality signal |
 
+## Target-item evaluation mode
+
+Target-item evaluation (`--evaluation-mode target_item`) measures exact-item discovery and grounded abstention, deliberately separate from the preference-based benchmark.
+
+- **Offline catalogue audit (`audit-targets`):** The catalogue audit classifies products using documented explicit fields:
+  - 1,554 distinguishable products (unique matching profile across the catalogue)
+  - 8,855 ambiguous products (multiple products satisfy the maximal profile)
+  - 39,591 products with insufficient evidence (missing prices or ungrounded attributes)
+- **Target task generation:** Scenarios are sampled by split using coarse USD budgets (next strictly greater $10 boundary, never an identifying exact price) and explicit category tokens/attributes. Target IDs and titles are stored strictly in `TargetGroundTruth` and never enter the shopping agent or shopper simulator contexts.
+- **Early-termination stopping rule:** The dialogue runner halts immediately once ASTRA recommends the target item within primary $K$ ($K \le 5$, default $K=5$). No additional simulated-shopper or shopping-agent calls are made after a target hit.
+- **Session call reservation:** `--session-max-model-calls` (default 18) guarantees an identical reservation limit across conditions and terminates safely if reserved calls cannot be made.
+- **Conservative disclosure validation (`target-v1`):** Literal word verification normalises NFKC unicode, accounts for negation, canonicalizes color spelling variants (gray/grey), and flags budget operator contradictions (`contradicts_budget_operator`). More than two new facts per turn triggers an `over_reveal` retry error. Unclaimed disclosures are recorded as warnings and added to verified disclosures.
+- **Metrics & Reporting:**
+  - `hit_at_k_all_started` and `hit_at_k_valid_only`: primary exact-item discovery rate.
+  - `first_hit_mrr_at_k`: reciprocal rank of first qualifying hit ($1/\text{rank}$ or $0.0$).
+  - `mttc_successes_only` and `penalized_mttc`: mean turns to cutoff (penalized treats failure as turn budget + 1).
+  - `cumulative_success_by_turn`: success rate by turn up to horizon.
+  - `mean_searches_to_success` and `mean_clarifications_to_success`: agent efficiency.
+  - Separate `no_target` grounded abstention reporting for verified-empty impossible tasks.
+  - Invalid sessions are recorded safely in results and report tables rather than failing the batch.
+  - Paired comparison with exact McNemar test when two conditions are run.
+
 ## What is verified and what is not
 
 **Verified offline (mocks and fixtures, 316 tests including strict ResourceWarning mode):**

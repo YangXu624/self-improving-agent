@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from shopping_agent.sessions import SessionError
 
-from .consistency import ConsistencyConfig, check_reply, errors
+from .consistency import ConsistencyConfig, check_reply, errors, target_disclosures
 from .memory import AssistantView, ContextBudgetError, ShopperMemory, Transcript
 from .simulators import SimulatorError
 
@@ -32,6 +32,7 @@ class AgentTurn:
     action: str
     message: str
     recommended_ids: list = field(default_factory=list)
+    presented_ids: list = field(default_factory=list)
     candidates_seen: list = field(default_factory=list)
     counts: list = field(default_factory=list)
     model_calls: int = 0
@@ -59,6 +60,7 @@ class SessionRecord:
     unmatched_questions: int = 0
     user_id: str = ""
     error: str | None = None
+    target_hit: dict | None = None
 
 
 def card(product):
@@ -99,6 +101,9 @@ def extract_turn(events, request_id, response, turn, wall_ms):
         action=response.get("action", ""),
         message=response.get("message", ""),
         recommended_ids=recommended,
+        presented_ids=[p["id"] for p in response.get("products", [])]
+        if response.get("status") == "ok" and response.get("action") == "RECOMMEND"
+        else [],
         candidates_seen=seen,
         counts=counts,
         model_calls=budget.get("model_calls", 0),
@@ -163,6 +168,27 @@ class DialogueRunner:
                 forbidden=forbidden,
                 config=self.consistency,
             )
+            supported = None
+            if getattr(self, "target_mode", False):
+                supported, extra = target_disclosures(result.reply, memory)
+                violations = list(
+                    {(v.code, v.detail): v for v in violations + extra}.values()
+                )
+                memory.transcript.append(
+                    {
+                        "role": "simulator_audit",
+                        "attempt": attempt + 1,
+                        "parsed_reply": result.reply.model_dump(),
+                        "raw_content": result.raw_content,
+                        "raw_sha256": result.raw_sha256,
+                        "prompt_info": result.prompt_info,
+                        "verified_disclosures": supported,
+                        "violations": [
+                            {"code": v.code, "level": v.level, "detail": v.detail}
+                            for v in violations
+                        ],
+                    }
+                )
             for v in violations:
                 stats["violations"][v.code] = stats["violations"].get(v.code, 0) + 1
             hard = errors(violations)
@@ -170,15 +196,29 @@ class DialogueRunner:
                 unverified = [
                     v.detail for v in violations if v.code == "claimed_reveal_missing"
                 ]
-                return result.reply, [v.code for v in violations], unverified
+                reply = (
+                    result.reply
+                    if supported is None
+                    else result.reply.model_copy(update={"reveals": supported})
+                )
+                return reply, [v.code for v in violations], unverified
             stats["consistency_retries"] += 1
             feedback = [f"{v.code}: {v.detail}".strip(": ") for v in hard]
             last = [v.code for v in hard]
         raise SimulatorFailure("simulator_inconsistent", ",".join(last))
 
     def run(
-        self, scenario, *, condition="memory_off", transcript_path=None, forbidden=()
+        self,
+        scenario,
+        *,
+        condition="memory_off",
+        transcript_path=None,
+        forbidden=(),
+        target_rule=None,
+        session_max_calls=None,
+        turn_limit=None,
     ):
+        self.target_mode = target_rule is not None
         # One ASTRA user per scenario: nothing user-scoped can ever leak between scenarios.
         user = f"{self.user_id}-{scenario.id}"
         sid = self.store.create(user)
@@ -187,6 +227,7 @@ class DialogueRunner:
             scenario.profile,
             window_turns=self.simulator.config.window_turns,
             transcript=Transcript(transcript_path),
+            disclosure_protocol="target-v1" if target_rule is not None else "legacy",
         )
         stats = {
             "calls": 0,
@@ -196,12 +237,23 @@ class DialogueRunner:
             "violations": {},
             "usage": {},
         }
+        max_turns = turn_limit or scenario.max_user_turns
         message = scenario.opening
         memory.record_shopper(1, message, scenario.profile.opening_keys)
         consecutive_errors = 0
-        for turn in range(1, scenario.max_user_turns + 1):
+        for turn in range(1, max_turns + 1):
             if self.budget is not None and not self.budget.allow(self.agent.max_calls):
                 record.termination = "run_budget_exhausted"
+                break
+            if (
+                session_max_calls is not None
+                and sum(t.model_calls for t in record.turns) + self.agent.max_calls
+                > session_max_calls
+            ):
+                record.termination, record.error = (
+                    "budget_exhausted",
+                    "session_model_call_reservation",
+                )
                 break
             started = time.perf_counter()
             try:
@@ -226,7 +278,7 @@ class DialogueRunner:
                 text=agent_turn.message,
                 products=tuple(card(p) for p in response.get("products", [])),
                 turn=turn,
-                turns_left=scenario.max_user_turns - turn,
+                turns_left=max_turns - turn,
             )
             memory.record_assistant(
                 view,
@@ -238,6 +290,46 @@ class DialogueRunner:
                     "error": agent_turn.error,
                 },
             )
+            if target_rule is not None:
+                try:
+                    rank = target_rule.check(response, agent_turn.recommended_ids)
+                except (ValueError, TypeError, KeyError):
+                    record.termination, record.error = (
+                        "harness_error",
+                        "recommendation_response_event_mismatch",
+                    )
+                    break
+                if rank is not None:
+                    record.target_hit = {
+                        "turn": turn,
+                        "rank": rank,
+                        "request_id": agent_turn.request_id,
+                    }
+                    record.termination = "target_found"
+                    memory.transcript.append(
+                        {
+                            "role": "evaluation",
+                            "event": "target_found",
+                            "turn": turn,
+                            "rank": rank,
+                        }
+                    )
+                    break
+                if agent_turn.closure or agent_turn.status != "ok":
+                    record.error = agent_turn.error or agent_turn.closure
+                    record.termination = (
+                        "provider_error"
+                        if str(record.error).startswith(PROVIDER_PREFIX)
+                        else "budget_exhausted"
+                        if record.error
+                        in BUDGET_ERRORS
+                        | {
+                            "search_requires_a_remaining_decision_call",
+                            "redundant_clarification",
+                        }
+                        else "agent_error"
+                    )
+                    break
             if agent_turn.status != "ok":
                 consecutive_errors += 1
                 if str(agent_turn.error).startswith(PROVIDER_PREFIX):
@@ -251,7 +343,7 @@ class DialogueRunner:
                     break
             else:
                 consecutive_errors = 0
-            if turn == scenario.max_user_turns:
+            if turn == max_turns:
                 record.termination = "max_turns"
                 break
             try:
@@ -260,7 +352,9 @@ class DialogueRunner:
                 )
             except SimulatorFailure as failure:
                 record.termination, record.error = (
-                    "simulator_failure",
+                    "simulator_error"
+                    if target_rule is not None
+                    else "simulator_failure",
                     failure.code + (f":{failure.detail}" if failure.detail else ""),
                 )
                 memory.transcript.append(
@@ -274,10 +368,14 @@ class DialogueRunner:
                 break
             memory.apply(turn + 1, reply, flags, unverified)
             if reply.action == "accept":
-                record.termination = "accepted"
+                record.termination = (
+                    "shopper_ended" if target_rule is not None else "accepted"
+                )
                 break
             if reply.action == "give_up":
-                record.termination = "gave_up"
+                record.termination = (
+                    "shopper_ended" if target_rule is not None else "gave_up"
+                )
                 break
             message = reply.message
         else:  # pragma: no cover - loop always breaks at max_turns
