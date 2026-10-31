@@ -36,7 +36,8 @@ def state_for(task):
 
 def write_json(path, value):
     path.write_text(
-        json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
+        json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -46,7 +47,7 @@ def prepare(catalogue, index, destination, tasks_path=TASKS):
         raise FileExistsError(
             "Use a fresh output directory; frozen evidence is never overwritten"
         )
-    task_doc = json.loads(Path(tasks_path).read_text())
+    task_doc = json.loads(Path(tasks_path).read_text(encoding="utf-8"))
     tasks = task_doc["tasks"]
     source_hash = file_hash(catalogue)
     if source_hash != task_doc["catalogue_sha256"]:

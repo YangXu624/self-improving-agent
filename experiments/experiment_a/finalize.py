@@ -15,7 +15,7 @@ def finalize(draft, review, destination):
     draft, review, destination = Path(draft), Path(review), Path(destination)
     if destination.exists():
         raise FileExistsError("Frozen evidence must not be overwritten")
-    original = json.loads((draft / "manifest.json").read_text())
+    original = json.loads((draft / "manifest.json").read_text(encoding="utf-8"))
     for filename, key in [
         ("tasks.json", "tasks_sha256"),
         ("qrels.json", "qrels_sha256"),
@@ -23,10 +23,10 @@ def finalize(draft, review, destination):
     ]:
         if file_hash(draft / filename) != original[key]:
             raise ValueError("Draft evidence hash mismatch")
-    task_doc = json.loads((draft / "tasks.json").read_text())
-    baseline = json.loads((draft / "baseline.json").read_text())
-    seed = json.loads((draft / "qrels.json").read_text())
-    reviewed = json.loads(review.read_text())
+    task_doc = json.loads((draft / "tasks.json").read_text(encoding="utf-8"))
+    baseline = json.loads((draft / "baseline.json").read_text(encoding="utf-8"))
+    seed = json.loads((draft / "qrels.json").read_text(encoding="utf-8"))
+    reviewed = json.loads(review.read_text(encoding="utf-8"))
     labels, witnesses = reviewed["labels"], reviewed["witnesses"]
     qrels = {}
     for task in task_doc["tasks"]:

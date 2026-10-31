@@ -126,4 +126,10 @@ trusted executor, not the prompt, and adds only the optional `closure` response 
 - **Cumulative budget.** The live cap is shared across runs via `--prior-run`; the budget is
   persisted before each paid call. Primary comparison, a null replicate arm and a cache-aware
   latency policy remain open for the owner (experiment README).
+- **Authenticated visibility.** For a named card profile, `bind_context` now requires the
+  model-visible `latest_search` to equal the profile's projection of the raw result exactly,
+  so extra keys, rewritten counts, reordered/dropped cards and unreferenced shared entries
+  are rejected. `custom` (legacy) builders keep the evidence-only check.
+- **Replay integrity** checks the seeded schedule, duplicates, completeness and error trials;
+  consistent record fabrication and forged certificates remain undetectable by code.
 

@@ -74,6 +74,18 @@ class EquivalenceTests(fixtures.RunnerCase):
             shutil.rmtree(other)
         return self.copy_with(mutate)
 
+    def test_changes_to_state_metadata_or_extra_entry_keys_are_detected(self):
+        for mutate in (
+            lambda d: next(iter(d.values()))["state"].update(goal_epoch=7),
+            lambda d: next(iter(d.values()))["state"].update(conflicts=["price"]),
+            lambda d: next(iter(d.values()))["state"].update(schema_version=2),
+            lambda d: next(iter(d.values())).update(extra="x"),
+        ):
+            with self.subTest():
+                self.assertFalse(
+                    all(compare(self.frozen, self.copy_with_fresh(mutate)).values())
+                )
+
     def test_changed_labels_are_detected(self):
         other = self.copy_with(lambda d: None)
         (other / "qrels.json").write_text((other / "qrels.json").read_text() + " ")

@@ -30,8 +30,9 @@ class FakePolicy:
 
     model = "fixture-model"
 
-    def __init__(self, requests_file=None, errors=()):
+    def __init__(self, requests_file=None, errors=(), reason="fixture"):
         self.calls, self.requests_file, self.errors = [], requests_file, list(errors)
+        self.reason = reason
         self.lines_at_call = []
 
     def complete(self, messages):
@@ -53,10 +54,10 @@ class FakePolicy:
                 "search_id": view["search_id"],
                 "product_ids": [view["candidates"][0]["id"]],
             },
-            "reason": "fixture",
+            "reason": self.reason,
         }
         return PolicyReply(
-            json.dumps(decision),
+            json.dumps(decision, ensure_ascii=False),
             {"usage": {"prompt_tokens": 1000, "completion_tokens": 50}},
         )
 
@@ -670,6 +671,86 @@ class LiveReplayOfflineTests(RunnerCase):
                 run.offline(
                     self.frozen, self.index, self.root / "drift", FakeTokenizer()
                 )
+
+
+class ReplayIntegrityTests(RunnerCase):
+    def setUp(self):
+        super().setUp()
+        self.live(policy=FakePolicy(reason="line\u2028sep\u2029and\x85next"))
+        self.out = self.root / "out"
+
+    def rewrite(self, name, mutate):
+        path = self.out / name
+        records = [json.loads(x) for x in run.read_lines(path)]
+        result = mutate(records)
+        records = records if result is None else result
+        path.write_text(
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records),
+            encoding="utf-8",
+        )
+
+    def replay(self, **kwargs):
+        return run.replay(self.frozen, self.out, self.index, **kwargs)
+
+    def test_unicode_line_separators_in_model_output_replay_exactly(self):
+        self.assertEqual(
+            self.replay(), {"replayed": 16, "provider_calls": 0, "exact": True}
+        )
+
+    def test_truncated_duplicated_or_missing_records_are_rejected(self):
+        original = (self.out / "outcomes.jsonl").read_bytes()
+        for mutate, message in [
+            (lambda r: r[:10], "incomplete|schedule"),
+            (lambda r: [], "incomplete|schedule"),
+            (lambda r: r + r[:3], "(?i)duplicate"),
+        ]:
+            with self.subTest(message=message):
+                self.rewrite("outcomes.jsonl", mutate)
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.replay()
+                finally:
+                    (self.out / "outcomes.jsonl").write_bytes(original)
+        (self.out / "completed.json").unlink()
+        with self.assertRaisesRegex(ValueError, "not finished"):
+            self.replay()
+        self.assertEqual(self.replay(allow_partial=True)["exact"], True)
+
+    def test_request_task_or_profile_must_match_the_seeded_schedule(self):
+        def swap(records):
+            records[0]["profile"] = (
+                "v3_k10" if records[0]["profile"] != "v3_k10" else "v3_k5"
+            )
+
+        self.rewrite("requests.jsonl", swap)
+        with self.assertRaisesRegex(ValueError, "schedule"):
+            self.replay()
+
+    def test_fabricated_success_replacing_a_recorded_error_is_rejected(self):
+        policy = FakePolicy(errors=[ProviderError("provider_http_500")])
+        self.live("err", policy=policy)
+        out = self.root / "err"
+        path = out / "outcomes.jsonl"
+        records = [json.loads(x) for x in run.read_lines(path)]
+        records[0]["outcome"].update(status="ok", action="RECOMMEND", error=None)
+        path.write_text("".join(json.dumps(r) + "\n" for r in records))
+        with self.assertRaisesRegex(ValueError, "error trial"):
+            run.replay(self.frozen, out, self.index)
+
+
+class CircuitBreakerTests(RunnerCase):
+    def test_repeated_provider_failures_stop_before_more_paid_requests(self):
+        errors = [ProviderError("provider_http_401")] * 16
+        policy = FakePolicy(errors=errors)
+        with self.assertRaisesRegex(ValueError, "consecutive"):
+            self.live(policy=policy)
+        self.assertEqual(len(policy.calls), run.MAX_CONSECUTIVE_FAILURES)
+
+    def test_an_intervening_success_resets_the_failure_count(self):
+        errors = [ProviderError("provider_http_500")] * 2
+        policy = FakePolicy(errors=errors)
+        self.live(policy=policy)
+        self.assertEqual(len(policy.calls), 16)
 
 
 class CompatibilityTests(RunnerCase):

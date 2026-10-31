@@ -152,7 +152,18 @@ BM25 floats within a 1e-9 relative tolerance for SQLite rounding), formats the f
 profiles, binds the visible set with a receipt, and measures tokens and formatting time.
 `live` (paid; **needs explicit budget approval**) additionally needs a clean Git tree, a
 fresh output directory and the verified certificate. `replay` re-validates a saved run and
-re-scores it with no provider. `report` also loads the frozen directory through the same certificate check, so it too needs
+re-scores it with no provider. `replay` rebuilds the seeded schedule and fails on a different trial set, duplicated or
+missing records, an unfinished run (unless `--allow-partial`), or a recorded provider error
+rewritten as a success; it then re-validates and re-scores every reply with no provider.
+It cannot detect a fabricated reply whose outcome and metrics were rewritten consistently
+(that would need signed records), and a verification certificate is a hash binding that
+anyone with write access could forge, so independence rests on the review process, not on
+code. After three consecutive provider failures the live run stops before another paid
+request (`MAX_CONSECUTIVE_FAILURES`). `report` splits paired token and shortlist
+differences into feasible and no-witness tasks as well as pooled: no-witness tasks with no
+results have identical prompts in every profile and dilute the pooled difference (offline
+median content-token difference v3_k5 vs v3_k10: -479.5 pooled, -573.5 feasible, 0 no-witness).
+`report` also loads the frozen directory through the same certificate check, so it too needs
 a certificate (a scratch copy is fine for a dry run). A live run refuses to start when its
 cumulative spend would pass the shared cap: pass `--prior-run DIR` for every earlier live run
 (its `budget.json` counts, preflight excluded to avoid double counting). `budget.json` is
@@ -198,4 +209,10 @@ comparison descriptive until they are.
    report records cache-hit tokens; treat latency as descriptive.
 4. **Ceiling effect.** Every reviewed pair is category-relevant, so offline Hit@K cannot
    differ between profiles; any live difference will come from model behaviour.
+5. **Redundant requests.** For the 8 held-out no-witness tasks with zero candidates, all four
+   profiles produce byte-identical prompts (32 of the 96 planned requests; 24 are repeats).
+   Running them once per task would save 24 requests, and the paired difference on those
+   tasks is pure sampling noise either way. Keeping all four preserves the planned design
+   and the cap arithmetic (98 requests including preflight); dropping the repeats needs
+   your decision.
 

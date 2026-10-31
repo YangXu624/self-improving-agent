@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from functools import partial
 
-from .cards import profile_for, semantic_cards, share_metadata
+from .cards import PROFILES, profile_for, semantic_cards, share_metadata
 from .contracts import Decision
 from .sessions import dumps
 
@@ -107,6 +107,13 @@ def bind_context(messages, raw_result, cards_profile="custom"):
             raw_ids = set(raw_cards)
             if len(set(ids)) != len(ids) or any(ident not in raw_ids for ident in ids):
                 raise ValueError("Context contains unknown or duplicate candidates")
+            if cards_profile in PROFILES:
+                # A named profile is fully determined by the raw result: any other
+                # content (extra keys, counts, order, shared entries) is unauthenticated.
+                if dumps(view, compact=True) != dumps(
+                    search_context(raw_result, cards_profile), compact=True
+                ):
+                    raise ValueError("Context differs from its profile projection")
             evidence = semantic_cards(view)
             expected = [product_context(raw_cards[ident]) for ident in ids]
             if dumps(evidence, compact=True) != dumps(expected, compact=True):

@@ -48,8 +48,8 @@ def compare(old, new):
         name: (old / name).read_bytes() == (new / name).read_bytes()
         for name in SAME_FILES
     }
-    a = json.loads((old / "baseline.json").read_text())
-    b = json.loads((new / "baseline.json").read_text())
+    a = json.loads((old / "baseline.json").read_text(encoding="utf-8"))
+    b = json.loads((new / "baseline.json").read_text(encoding="utf-8"))
     checks["same_task_set"] = set(a) == set(b)
     ids = order = counts = facts = states = mapped = True
     for key in set(a) & set(b):
@@ -75,7 +75,12 @@ def compare(old, new):
         for x, y in zip(ra["candidates"], rb["candidates"]):
             facts &= math.isclose(x["bm25"], y["bm25"], rel_tol=1e-9)
         facts &= dumps(without(ra)) == dumps(without(rb))
-        states &= strip(sa) == strip(sb) and sa["version"] == sb["version"]
+        states &= (
+            strip(sa) == strip(sb)
+            and {k: v for k, v in sa.items() if k != "requirements"}
+            == {k: v for k, v in sb.items() if k != "requirements"}
+            and set(a[key]) == set(b[key])
+        )
     checks.update(
         candidate_ids_equal=ids,
         candidate_order_equal=order,

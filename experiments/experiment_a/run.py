@@ -73,8 +73,10 @@ def same_search(fresh, original):
 
 def load_frozen(directory):
     directory = Path(directory)
-    manifest = json.loads((directory / "manifest.json").read_text())
-    certificate = json.loads((directory / "verification.json").read_text())
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    certificate = json.loads(
+        (directory / "verification.json").read_text(encoding="utf-8")
+    )
     if certificate.get("verified") is not True or certificate[
         "manifest_sha256"
     ] != file_hash(directory / "manifest.json"):
@@ -97,9 +99,9 @@ def load_frozen(directory):
         raise ValueError("Original BM25 implementation changed")
     return (
         manifest,
-        json.loads((directory / "tasks.json").read_text())["tasks"],
-        json.loads((directory / "baseline.json").read_text()),
-        json.loads((directory / "qrels.json").read_text()),
+        json.loads((directory / "tasks.json").read_text(encoding="utf-8"))["tasks"],
+        json.loads((directory / "baseline.json").read_text(encoding="utf-8")),
+        json.loads((directory / "qrels.json").read_text(encoding="utf-8")),
     )
 
 
@@ -260,6 +262,7 @@ def offline(directory, index, output, tokenizer):
     }
 
 
+MAX_CONSECUTIVE_FAILURES = 3
 PREFLIGHT_USAGE = {"requests": 2, "input_tokens": 4893, "output_tokens": 198}
 
 
@@ -357,7 +360,8 @@ def live(
     search = LexicalSearch(index, expected_catalogue_hash=manifest["catalogue_sha256"])
     output.mkdir(parents=True)
     budget = UsageBudget.carried(
-        json.loads((Path(prior) / "budget.json").read_text()) for prior in prior_runs
+        json.loads((Path(prior) / "budget.json").read_text(encoding="utf-8"))
+        for prior in prior_runs
     )
     lock = ROOT / "requirements-experiment-lock.txt"
     write_json(
@@ -382,6 +386,7 @@ def live(
             "initial_usage": budget.snapshot(),
         },
     )
+    failures = 0
     try:
         for ordinal, (task, profile, bundle) in enumerate(schedule, 1):
             content_tokens = counts(bundle.messages, tokenizer)
@@ -416,6 +421,7 @@ def live(
                     reply, task, baseline[task["id"]], bundle, search
                 )
                 response = {"content": reply.content, "metadata": reply.metadata}
+                failures = 0
             except Exception as exc:
                 # ProviderError carries a safe code; anything else is logged by class
                 # name only (never its message) and counts as a failed trial. The
@@ -432,6 +438,7 @@ def live(
                     else "unexpected_" + type(exc).__name__,
                 }
                 response = None
+                failures += 1
             outcome["runtime_hard_failures"] = sum(
                 not search.eligible(
                     ident, ShoppingState.model_validate(baseline[task["id"]]["state"])
@@ -462,6 +469,11 @@ def live(
                     ),
                     flush=True,
                 )
+            if failures >= MAX_CONSECUTIVE_FAILURES:
+                raise ValueError(
+                    "Stopped after consecutive provider failures; fix the cause and "
+                    "start a new run that counts this one via --prior-run"
+                )
             if budget.input_tokens > 600_000 or budget.output_tokens > 200_000:
                 raise ValueError(
                     "Provider usage exceeded reserved accounting; stop without another request"
@@ -484,25 +496,57 @@ def read_lines(path):
     return [line for line in Path(path).read_text(encoding="utf-8").split("\n") if line]
 
 
-def replay(directory, run, index):
+def replay(directory, run, index, *, allow_partial=False):
+    """Re-validate and re-score a saved run with no provider.
+
+    Fails on a different trial set than the seeded schedule, duplicated or missing
+    records, an unfinished run (unless allowed), and recorded errors rewritten as
+    successes. It cannot detect a fabricated reply whose outcome and metrics were
+    rewritten consistently: that would need signed records.
+    """
     manifest, tasks, baseline, qrels = load_frozen(directory)
-    task_map = {task["id"]: task for task in tasks}
-    requests = {
-        r["trial_id"]: r
-        for r in map(
-            json.loads, (Path(run) / "requests.jsonl").read_text().splitlines()
-        )
+    run = Path(run)
+    meta = json.loads((run / "run.json").read_text(encoding="utf-8"))
+    schedule = build_schedule(tasks, baseline, meta["seed"])
+    expected = {
+        f"trial-{ordinal:03}": (task["id"], profile)
+        for ordinal, (task, profile, _) in enumerate(schedule, 1)
     }
-    results = list(
-        map(json.loads, (Path(run) / "outcomes.jsonl").read_text().splitlines())
-    )
+    if meta["trials"] != len(expected):
+        raise ValueError("Run does not match the seeded schedule length")
+    task_map = {task["id"]: task for task in tasks}
+    request_list = list(map(json.loads, read_lines(run / "requests.jsonl")))
+    results = list(map(json.loads, read_lines(run / "outcomes.jsonl")))
+    for name, records in (("requests", request_list), ("outcomes", results)):
+        ids = [r["trial_id"] for r in records]
+        if len(ids) != len(set(ids)):
+            raise ValueError(f"Duplicate trial in {name}")
+        for r in records:
+            if expected.get(r["trial_id"]) != (r["task_id"], r["profile"]):
+                raise ValueError(f"{name} record differs from the seeded schedule")
+    requests = {r["trial_id"]: r for r in request_list}
+    if {r["trial_id"] for r in results} - set(requests):
+        raise ValueError("Outcome without a recorded request")
+    complete = (run / "completed.json").exists()
+    if not allow_partial:
+        if not complete:
+            raise ValueError("Run is not finished; pass allow_partial to replay it")
+        if len(results) != len(expected) or len(request_list) != len(expected):
+            raise ValueError("Run is incomplete against the seeded schedule")
     tool = LexicalSearch(index, expected_catalogue_hash=manifest["catalogue_sha256"])
     try:
         for result in results:
+            task = task_map[result["task_id"]]
             if result["response"] is None:
+                outcome = result["outcome"]
+                if (
+                    outcome.get("status") != "error"
+                    or outcome.get("accepted_ids")
+                    or outcome_metrics(outcome, qrels[task["id"]]) != result["metrics"]
+                ):
+                    raise ValueError("Inconsistent error trial")
                 continue
             request = requests[result["trial_id"]]
-            task = task_map[result["task_id"]]
             bundle = decision_context(task, baseline[task["id"]], result["profile"])
             if (
                 request["messages"] != bundle.messages
@@ -534,6 +578,9 @@ def main():
     parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--env-file", default=".env", type=Path)
     parser.add_argument(
+        "--allow-partial", action="store_true", help="replay an unfinished run"
+    )
+    parser.add_argument(
         "--prior-run",
         action="append",
         default=[],
@@ -542,7 +589,16 @@ def main():
     )
     args = parser.parse_args()
     if args.mode == "replay":
-        print(dumps(replay(args.frozen, args.output, args.index)))
+        print(
+            dumps(
+                replay(
+                    args.frozen,
+                    args.output,
+                    args.index,
+                    allow_partial=args.allow_partial,
+                )
+            )
+        )
         return
     if args.tokenizer is None:
         parser.error(

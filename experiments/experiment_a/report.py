@@ -158,7 +158,10 @@ def pivot(rows, key):
     """{task_id: {profile: value}} for one row key (None values retained as None)."""
     table = {}
     for row in rows:
-        table.setdefault(row["task_id"], {})[row["profile"]] = key(row)
+        cell = table.setdefault(row["task_id"], {})
+        if row["profile"] in cell:
+            raise ValueError("Duplicate task/profile row; refusing to overwrite")
+        cell[row["profile"]] = key(row)
     return table
 
 
@@ -209,6 +212,11 @@ def summarize_offline(offline, tasks):
     results = {
         k: v for k, v in pivot(rows, lambda r: r["result_tokens"]).items() if k in held
     }
+    feasible_ids = {r["task_id"] for r in rows if r["feasible"]}
+
+    def restrict(table, feasible):
+        return {k: v for k, v in table.items() if (k in feasible_ids) == feasible}
+
     for treatment, reference in COMPARISONS:
         label = f"{treatment}_vs_{reference}"
         out["paired"][label] = {
@@ -217,6 +225,20 @@ def summarize_offline(offline, tasks):
             "content_tokens": paired_numeric(tokens, treatment, reference),
             "result_tokens": paired_numeric(results, treatment, reference),
         }
+        # Tasks with no results have identical prompts in every profile and dilute
+        # the pooled difference, so the two strata are reported separately too.
+        for name, feasible in (("feasible", True), ("no_witness", False)):
+            out["paired"][label][name] = {
+                "shortlist_hit_at_k": paired_binary(
+                    restrict(hit, feasible), treatment, reference
+                ),
+                "content_tokens": paired_numeric(
+                    restrict(tokens, feasible), treatment, reference
+                ),
+                "result_tokens": paired_numeric(
+                    restrict(results, feasible), treatment, reference
+                ),
+            }
     # Format-only profiles must show identical evidence at equal K (count-only retention
     # is the K5-vs-K10 pair above).
     semantic = pivot(rows, lambda r: r["semantic_sha256"])
@@ -341,6 +363,13 @@ def summarize_live(records, requests, tasks, qrels):
         out["paired"][label]["content_tokens"] = paired_numeric(
             tokens, treatment, reference
         )
+        by_feasible = {r["task_id"]: r["feasible"] for r in records}
+        for name, feasible in (("feasible", True), ("no_witness", False)):
+            out["paired"][label][f"content_tokens[{name}]"] = paired_numeric(
+                {k: v for k, v in tokens.items() if by_feasible[k] == feasible},
+                treatment,
+                reference,
+            )
     for metric, which in LIVE_BINARY:
         holm_adjust(out["paired"], f"{metric}[{which}]")
     return out
@@ -362,13 +391,13 @@ def build_report(frozen, run=None, offline=None, *, allow_partial=False):
     }
     if offline is not None:
         report["offline"] = summarize_offline(
-            json.loads(Path(offline).read_text()), tasks
+            json.loads(Path(offline).read_text(encoding="utf-8")), tasks
         )
     if run is not None:
         run = Path(run)
         records = list(map(json.loads, read_lines(run / "outcomes.jsonl")))
         requests = list(map(json.loads, read_lines(run / "requests.jsonl")))
-        meta = json.loads((run / "run.json").read_text())
+        meta = json.loads((run / "run.json").read_text(encoding="utf-8"))
         if meta["manifest_sha256"] != file_hash(Path(frozen) / "manifest.json"):
             raise ValueError("Run was made against a different frozen manifest")
         if not (run / "completed.json").exists() and not allow_partial:

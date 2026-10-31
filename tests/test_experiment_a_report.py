@@ -130,6 +130,24 @@ class ReportIntegrationTests(fixtures.RunnerCase):
         count_only = result["offline"]["paired"]["v3_k5_vs_v3_k10"]
         self.assertLess(count_only["content_tokens"]["median_difference"], 0)
 
+    def test_paired_comparisons_are_also_split_by_feasible_and_no_witness(self):
+        offline, live = self.make_inputs()
+        result = report.build_report(self.frozen, live, offline)
+        scoped = result["offline"]["paired"]["v3_k5_vs_v3_k10"]
+        self.assertEqual(scoped["feasible"]["content_tokens"]["n_pairs"], 3)
+        self.assertEqual(scoped["no_witness"]["content_tokens"]["n_pairs"], 1)
+        live_pair = result["live"]["paired"]["v3_k5_vs_v3_k10"]
+        self.assertEqual(live_pair["content_tokens[feasible]"]["n_pairs"], 3)
+        self.assertEqual(live_pair["content_tokens[no_witness]"]["n_pairs"], 1)
+
+    def test_duplicate_task_profile_rows_are_an_error_not_an_overwrite(self):
+        rows = [
+            {"task_id": "a", "profile": "v3_k5", "x": 1},
+            {"task_id": "a", "profile": "v3_k5", "x": 2},
+        ]
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            report.pivot(rows, lambda r: r["x"])
+
     def test_report_files_are_deterministic_and_never_overwritten(self):
         offline, live = self.make_inputs()
         a, b = self.root / "report-a", self.root / "report-b"
