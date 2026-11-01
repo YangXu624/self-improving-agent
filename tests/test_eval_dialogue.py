@@ -171,7 +171,13 @@ class LongConversationConsistencyTests(DialogueCase):
             record.repeated_questions, 9
         )  # asked 10 times; only the first was new
         # The full transcript is complete while the model only ever saw a bounded window.
-        self.assertEqual(len(record.transcript), 20)  # 10 shopper + 10 assistant
+        dialogue = [
+            e for e in record.transcript if e["role"] in {"shopper", "assistant"}
+        ]
+        self.assertEqual(len(dialogue), 20)  # 10 shopper + 10 assistant
+        self.assertEqual(
+            sum(e["role"] == "simulator_audit" for e in record.transcript), 9
+        )
         last = json.loads(fake.payloads[-1]["messages"][1]["content"])
         self.assertLessEqual(len(last["recent_dialogue"]), 4)
         self.assertEqual(

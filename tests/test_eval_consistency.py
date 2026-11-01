@@ -199,10 +199,10 @@ class ConsistencyTests(unittest.TestCase):
             ),
         )
 
-    def test_claimed_reveal_that_is_not_in_the_message_is_only_a_warning(self):
+    def test_claimed_reveal_that_is_not_in_the_message_is_rejected(self):
         v = check("Sure, whatever.", ["color"])
         self.assertIn("claimed_reveal_missing", codes(v))
-        self.assertEqual(errors(v), [])
+        self.assertTrue(errors(v))
 
     def test_accepting_without_products_is_a_warning(self):
         v = check("Great!", action="accept", has_products=False)
@@ -468,7 +468,7 @@ class TargetDisclosureTests(unittest.TestCase):
         supported, flags = target_disclosures(missing_reply, mem)
         self.assertEqual(supported, [])
         self.assertIn("claimed_reveal_missing", codes(flags))
-        self.assertEqual(errors(flags), [])
+        self.assertTrue(errors(flags))
 
         unclaimed_reply = ShopperReply(message="I need red.", reveals=[])
         supported, flags = target_disclosures(unclaimed_reply, mem)

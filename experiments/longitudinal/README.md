@@ -36,7 +36,8 @@ must therefore remain distinct from graded suitability.
 The input contracts, thin timeline runner, isolated user-memory conditions and reports are
 implemented. See [commands, architecture and limits](../../docs/longitudinal-evaluation.md).
 The source fixture should be reviewed/refined before a separately frozen held-out set is
-designed. No live model experiment has been run and no effectiveness claim is made.
+designed. The first live pilot stopped during OFF and produced no paired effectiveness
+result. See the [simulator integrity and recovery report](../../docs/reviews/shopper-disclosure-integrity.md).
 
 ## Expanded development fixture
 

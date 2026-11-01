@@ -220,3 +220,11 @@ Example non-live phase plan (use a separately frozen selected-customer file):
 OFF/ON still compares the existing full user-memory feature: ON adds memory guidance and
 an update-capable decision schema. It is not a comparison with byte-identical prompts or a
 retrieval-only ablation. See [the live development pilot](reviews/longitudinal-live-pilot.md).
+
+## Shopper protocol checkpoint
+
+New runs record `shopper-v2-scoped-disclosures`: per-visit disclosure enums, truthful-value
+validation and audited corrections. Unsupported disclosure claims now cause bounded retries
+and simulator failure rather than harmless warnings. See the [evidence, limits and exact
+fresh-run commands](reviews/shopper-disclosure-integrity.md). Never pool the stopped v1 OFF
+sessions with v2 ON sessions. Production behavior, fixtures and scoring are unchanged.

@@ -13,6 +13,8 @@ import os
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -32,6 +34,20 @@ REPLY_SCHEMA = {
 }
 
 
+SHOPPER_PROTOCOL_VERSION = "shopper-v2-scoped-disclosures"
+
+
+def reply_schema(keys: Sequence[str]) -> dict:
+    """Constrain identifiers to this visit, without constraining the shopper's prose."""
+    schema = deepcopy(REPLY_SCHEMA)
+    schema["additionalProperties"] = False
+    reveals = schema["properties"]["reveals"]
+    reveals["maxItems"] = 2 if keys else 0
+    if keys:
+        reveals["items"]["enum"] = list(keys)
+    return schema
+
+
 class SimulatorError(RuntimeError):
     """A simulator fault with a safe code; never carries prompts or secrets."""
 
@@ -42,6 +58,7 @@ class SimulatorError(RuntimeError):
 
 @dataclass(frozen=True)
 class SimulatorConfig:
+    protocol_version: str = field(default=SHOPPER_PROTOCOL_VERSION, init=False)
     model: str = "llama3.1:latest"
     url: str = "http://127.0.0.1:11434"
     temperature: float = 0.0
@@ -206,13 +223,13 @@ class OllamaShopper:
         self.config = config or SimulatorConfig.from_env()
         self.transport = transport or _post_json
 
-    def _call(self, messages):
+    def _call(self, messages, reveal_keys):
         c = self.config
         payload = {
             "model": c.model,
             "messages": messages,
             "stream": False,
-            "format": REPLY_SCHEMA,
+            "format": reply_schema(reveal_keys),
             "options": {
                 "temperature": c.temperature,
                 "seed": c.seed,
@@ -264,7 +281,7 @@ class OllamaShopper:
         )
         while attempts <= self.config.max_malformed_retries:
             attempts += 1
-            content, usage = self._call(messages)
+            content, usage = self._call(messages, [f.key for f in memory.profile.facts])
             for key, value in usage.items():
                 if isinstance(value, (int, float)):
                     totals[key] = totals.get(key, 0) + value

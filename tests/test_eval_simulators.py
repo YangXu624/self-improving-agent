@@ -10,12 +10,12 @@ from test_eval_memory import profile, view
 
 from astra_eval.memory import ShopperMemory
 from astra_eval.simulators import (
-    REPLY_SCHEMA,
     OllamaShopper,
     ScriptedShopper,
     SimulatorConfig,
     SimulatorError,
     check_ollama,
+    reply_schema,
 )
 
 
@@ -148,7 +148,9 @@ class OllamaAdapterTests(unittest.TestCase):
         payload = self.transport.payloads[0]
         self.assertEqual(payload["model"], "llama3.1:latest")
         self.assertIs(payload["stream"], False)
-        self.assertEqual(payload["format"], REPLY_SCHEMA)
+        self.assertEqual(
+            payload["format"], reply_schema([f.key for f in profile().facts])
+        )
         self.assertEqual(
             payload["options"],
             {"temperature": 0.2, "seed": 3, "num_ctx": 2048, "num_predict": 150},

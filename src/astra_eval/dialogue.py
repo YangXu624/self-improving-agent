@@ -5,6 +5,7 @@ shopper receives only ASTRA's visible words and product cards. Ground truth is u
 for one thing only: an audit that the shopper did not leak a product identifier or title.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 
@@ -196,21 +197,21 @@ class DialogueRunner:
                 violations = list(
                     {(v.code, v.detail): v for v in violations + extra}.values()
                 )
-                memory.transcript.append(
-                    {
-                        "role": "simulator_audit",
-                        "attempt": attempt + 1,
-                        "parsed_reply": result.reply.model_dump(),
-                        "raw_content": result.raw_content,
-                        "raw_sha256": result.raw_sha256,
-                        "prompt_info": result.prompt_info,
-                        "verified_disclosures": supported,
-                        "violations": [
-                            {"code": v.code, "level": v.level, "detail": v.detail}
-                            for v in violations
-                        ],
-                    }
-                )
+            memory.transcript.append(
+                {
+                    "role": "simulator_audit",
+                    "attempt": attempt + 1,
+                    "parsed_reply": result.reply.model_dump(),
+                    "raw_content": result.raw_content,
+                    "raw_sha256": result.raw_sha256,
+                    "prompt_info": result.prompt_info,
+                    "verified_disclosures": supported,
+                    "violations": [
+                        {"code": v.code, "level": v.level, "detail": v.detail}
+                        for v in violations
+                    ],
+                }
+            )
             for v in violations:
                 stats["violations"][v.code] = stats["violations"].get(v.code, 0) + 1
             hard = errors(violations)
@@ -226,6 +227,19 @@ class DialogueRunner:
                 return reply, [v.code for v in violations], unverified
             stats["consistency_retries"] += 1
             feedback = [f"{v.code}: {v.detail}".strip(": ") for v in hard]
+            feedback.append(
+                "Rejected response (not accepted dialogue): "
+                + json.dumps(result.reply.model_dump(), ensure_ascii=False)
+            )
+            for violation in hard:
+                fact = memory.profile.fact(violation.detail)
+                if violation.code == "claimed_reveal_missing" and fact is not None:
+                    feedback.append(
+                        f"{fact.key} means {fact.statement!r}. Only list that key if your "
+                        "message actually communicates this frozen fact. Context and "
+                        "goals do not replace profile requirements. For a comment or "
+                        "question that states no fact value, use reveals=[]."
+                    )
             last = [v.code for v in hard]
         raise SimulatorFailure("simulator_inconsistent", ",".join(last))
 
