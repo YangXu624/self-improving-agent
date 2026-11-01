@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import time
 from typing import Protocol
 from uuid import uuid4
@@ -23,7 +24,12 @@ from .context import (
 )
 from .contracts import Decision
 from .experience.cues import catalogue_categories, decision_cues
-from .memory_views import FORMATS, compact_user_memory, expand_decision
+from .memory_views import (
+    FORMATS,
+    compact_user_memory,
+    expand_decision,
+    redundant_retractions,
+)
 from .provider import PolicyReply, ProviderError
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
@@ -42,6 +48,7 @@ class ActionError(ValueError):
 # closed with a fixed message; the model cannot spend more budget or invent a result.
 UNEXECUTABLE_SEARCH = {
     "search_budget_exhausted",
+    "repeated_empty_search",
     "search_requires_a_remaining_decision_call",
 }
 CLOSURE_MESSAGE = (
@@ -431,10 +438,27 @@ class ShoppingAgent:
                     contract = (
                         MemoryDecision if self.user_memory is not None else Decision
                     )
+                    ignored_retractions = []
                     if compact:
                         try:
+                            goal_start = min(
+                                (
+                                    e.state_version
+                                    for e in session.events
+                                    if e.type == "state_committed"
+                                    and e.payload["state"].get("goal_epoch", 0)
+                                    == session.state.goal_epoch
+                                ),
+                                default=0,
+                            )
+                            cleaned, ignored_retractions = redundant_retractions(
+                                reply.content,
+                                decision_state,
+                                message,
+                                goal_start_version=goal_start,
+                            )
                             decision = expand_decision(
-                                reply.content, decision_state, memory_view
+                                cleaned, decision_state, memory_view
                             )
                         except ValidationError:
                             raise
@@ -454,6 +478,10 @@ class ShoppingAgent:
                     session.append(
                         "decision_validated", decision.model_dump(), request_id
                     )
+                    for ignored in ignored_retractions:
+                        session.append(
+                            "redundant_retraction_ignored", ignored, request_id
+                        )
                     if state.version != session.state.version:
                         session.commit(
                             state,
@@ -519,6 +547,39 @@ class ShoppingAgent:
                             "resolve_state_conflicts_before_search_or_recommendation"
                         )
                     if action.type == "SEARCH":
+                        fingerprint = hashlib.sha256(
+                            dumps(
+                                {
+                                    "catalogue": self.search.catalogue_version,
+                                    "strategy": self.search.strategy_version,
+                                    "query": sorted(
+                                        set(re.findall(r"\w+", action.query.casefold()))
+                                    ),
+                                    "mode": action.mode,
+                                    "goal_epoch": session.state.goal_epoch,
+                                    "requirements": sorted(
+                                        [
+                                            {
+                                                "field": r.field,
+                                                "op": r.op,
+                                                "value": r.value,
+                                                "strength": r.strength,
+                                            }
+                                            for r in session.state.requirements
+                                            if r.status == "active"
+                                        ],
+                                        key=lambda r: dumps(r),
+                                    ),
+                                }
+                            ).encode()
+                        ).hexdigest()
+                        if any(
+                            e.type == "search_result"
+                            and e.payload.get("request_fingerprint") == fingerprint
+                            and not e.payload.get("candidates")
+                            for e in session.events
+                        ):
+                            raise ActionError("repeated_empty_search")
                         if searches >= self.max_searches:
                             raise ActionError("search_budget_exhausted")
                         if calls >= self.max_calls:
@@ -541,6 +602,7 @@ class ShoppingAgent:
                             found = self.search.search(action, session.state)
                         except ValueError:
                             raise ActionError("invalid_search_query_or_state") from None
+                        found["request_fingerprint"] = fingerprint
                         session.append("search_result", found, request_id)
                         session.append(
                             "tool_completed",
@@ -649,7 +711,11 @@ class ShoppingAgent:
                     {
                         "status": "ok",
                         "action": "RESPOND",
-                        "message": CLOSURE_MESSAGE,
+                        "message": (
+                            "This search already returned no verified matches. Please change the query or requirements before trying again; no products are recommended."
+                            if closure == "repeated_empty_search"
+                            else CLOSURE_MESSAGE
+                        ),
                         "products": [],
                         "closure": closure,
                     }

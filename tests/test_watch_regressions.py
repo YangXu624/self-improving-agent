@@ -1,6 +1,6 @@
 """Synthetic regressions from the watch incident; no private traces or live API.
 
-Two expected failures describe the pending product-type vocabulary fix. They are deliberately
+One remaining expected failure describe the pending product-type vocabulary fix. They are deliberately
 not correctness passes; remove each marker when its reviewed fix is implemented.
 """
 
@@ -172,7 +172,6 @@ class WatchRegressionTests(unittest.TestCase):
             self.assertEqual([r["state_version"] for r in results], [1, 1, 2, 2])
             self.assertFalse(any(e.type == "recommendation" for e in session.events))
 
-    @unittest.expectedFailure
     def test_singular_watch_does_not_filter_out_wearable_watch(self):
         """Pending: literal 'watch' currently admits accessories but drops 'Watches'."""
         ids = {p["id"] for p in self.candidates(self.type_state("watch"))}

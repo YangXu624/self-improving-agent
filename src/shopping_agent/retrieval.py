@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from .category_matching import category_contains
 from .contracts import Search, ShoppingState
 from .sessions import dumps
 from .state import normalized
@@ -258,8 +259,11 @@ def assess(record, state):
             continue
         # Category product-type matching is explicitly lexical evidence, not an inferred ontology.
         if r.field == "product_type" and isinstance(expected, list):
-            matches = [compare(value, "contains", v) for v in expected]
+            matches = [category_contains(value, v) for v in expected]
             passed = not any(matches) if r.op == "not_in" else any(matches)
+        elif r.field == "product_type":
+            present = category_contains(value, expected)
+            passed = not present if op == "not_contains" else present
         else:
             passed = compare(value, op, expected)
         if passed:
@@ -361,6 +365,7 @@ class LexicalSearch:
             "state_version": state.version,
             "catalogue_version": self.catalogue_version,
             "strategy_version": self.strategy_version,
+            "category_match_version": "number-inflection-v2",
             "query": action.query,
             "match_mode": action.mode,
             "applied_hard_filters": [r.model_dump() for r in hard_filters],

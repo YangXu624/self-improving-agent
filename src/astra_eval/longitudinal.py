@@ -50,8 +50,11 @@ class LongitudinalConfig:
     memory_format: str = "legacy"
     execution_order: Literal["counterbalanced", "off_then_on"] = "counterbalanced"
     stop_on_error: bool = False
+    max_consecutive_simulator_failures: int = 3
 
     def __post_init__(self):
+        if not 1 <= self.max_consecutive_simulator_failures <= 20:
+            raise ValueError("Simulator failure threshold must be 1..20")
         if self.max_cost_usd is not None:
             from .api_budget import money
 
@@ -91,6 +94,40 @@ class LongitudinalConfig:
             raise ValueError("Primary K must be 1..5 and included in k_values")
 
 
+def failure_scope(record) -> str:
+    """Classify execution faults without changing official scoring or validity labels."""
+    code = (record.error or "").split(":", 1)[0]
+    if (
+        record.termination
+        in {
+            "provider_error",
+            "harness_error",
+            "agent_exception",
+            "run_budget_exhausted",
+        }
+        or code.startswith(
+            (
+                "shopper_provider_",
+                "shopper_cost_",
+                "shopper_spending_",
+                "shopper_call_budget_",
+                "shopper_session_",
+                "simulator_http_",
+                "simulator_unreachable",
+            )
+        )
+        or any((t.error or "").startswith("provider_") for t in record.turns)
+    ):
+        return "infrastructure"
+    if record.termination in {"simulator_failure", "simulator_error"}:
+        return "isolated_simulator"
+    return (
+        "agent_quality"
+        if record.termination in {"agent_error", "budget_exhausted", "search_stalled"}
+        else "none"
+    )
+
+
 def _prepare(config: LongitudinalConfig):
     data = load_customers(config.customers)
     compiled = validate_dataset(data, config.catalogue)
@@ -123,6 +160,8 @@ def _plan(config, customers, tasks):
         "memory_format": config.memory_format,
         "execution_order": config.execution_order,
         "stop_on_error": config.stop_on_error,
+        "max_consecutive_simulator_failures": config.max_consecutive_simulator_failures,
+        "stopping_policy": "isolated-timeline-global-infrastructure-v2",
         "development_only": True,
         "customers": len(customers),
         "sessions": len(tasks) * len(CONDITIONS),
@@ -291,6 +330,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
     oracle = CatalogueOracle(config.catalogue)
     search = LexicalSearch(config.index, expected_catalogue_hash=data.catalogue_sha256)
     rows, blocked, stopped = [], [], None
+    consecutive_simulator_failures = 0
     try:
         stores, memories, agents = {}, {}, {}
         for name, enabled in CONDITIONS:
@@ -387,6 +427,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     "evaluation_mode": task.visit.evaluation_mode,
                     "recipient": task.visit.recipient,
                     "termination": record.termination,
+                    "failure_scope": failure_scope(record),
                     "turn_budget": max_turns,
                     "efficiency_to_first_success": {
                         "searches": sum(t.searches for t in prefix),
@@ -423,20 +464,28 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                 rows.append(row)
                 if record.termination == "run_budget_exhausted":
                     stopped = "run_model_call_budget_exhausted"
-                infrastructure_error = (
-                    not score.get("valid", False)
-                    or record.termination
-                    in {"agent_exception", "harness_error", "simulator_error"}
-                    or any(
-                        (t.error or "").startswith("provider_") for t in record.turns
-                    )
+                sim_failure = record.termination in {
+                    "simulator_failure",
+                    "simulator_error",
+                }
+                systemic = failure_scope(record) == "infrastructure"
+                consecutive_simulator_failures = (
+                    consecutive_simulator_failures + 1 if sim_failure else 0
                 )
-                if config.stop_on_error and infrastructure_error and stopped is None:
+                threshold = (
+                    consecutive_simulator_failures
+                    >= config.max_consecutive_simulator_failures
+                )
+                # Isolated bad dialogue cannot supply valid causal history to later visits.
+                # Independent customer/condition timelines remain eligible to run.
+                if systemic and stopped is None:
                     stopped = "session_error:" + record.termination
+                elif threshold and stopped is None:
+                    stopped = "simulator_failure_threshold"
                 if (
                     not score.get("valid", False)
                     or record.termination == "agent_exception"
-                    or (config.stop_on_error and infrastructure_error)
+                    or systemic
                 ):
                     blocked.extend(
                         {
@@ -459,6 +508,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
         if budget
         else sum(r["score"]["resources"]["model_calls"] for r in rows),
         "stopped_early": stopped,
+        "consecutive_simulator_failures": consecutive_simulator_failures,
         "blocked_visits": blocked,
         "shared_config_sha256": shared_hash,
     }

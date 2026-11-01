@@ -395,6 +395,12 @@ class DialogueRunner:
                     "error": agent_turn.error,
                 },
             )
+            if agent_turn.closure == "repeated_empty_search":
+                record.termination, record.error = (
+                    "search_stalled",
+                    "repeated_empty_search",
+                )
+                break
             if target_rule is not None:
                 try:
                     rank = target_rule.check(response, agent_turn.recommended_ids)
