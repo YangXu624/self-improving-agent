@@ -91,6 +91,67 @@ def _contains(value: str, text: str) -> bool:
     )
 
 
+def _check_first_person_ownership(evidence: str, proposal: MemoryProposal) -> bool:
+    if proposal.op == "RETRACT":
+        return bool(re.search(r"\b(?:forget|remove|withdraw)\s+my\b", evidence))
+
+    # Reject third-party attribution or reported speech within the evidence
+    if re.search(
+        r"\b(?:he|she|they|someone|anyone|dad|mom|mum|father|mother|"
+        r"friend|sister|brother|wife|husband|partner|boss|coworker|colleague|trainer)\s+"
+        r"(?:said|says|told|thinks|thought|believes|claims|suggested|recommended)\b",
+        evidence,
+    ):
+        return False
+
+    # Strip optional discourse markers and topical framing like "For bags, ...", "In general, ..."
+    leading = re.match(
+        r"^(?:(?:actually|remember(?: that)?|from now on|going forward|usually|generally|typically|normally)[,: ]+)?"
+        r"(?:(?:for|as for|when it comes to|in)\s+[a-z0-9_\- ']+[,: ]+)?"
+        r"(?:(?:actually|remember(?: that)?|from now on|going forward)[,: ]+)?",
+        evidence,
+    )
+    clause = evidence[leading.end() :] if leading else evidence
+
+    # Form 1: Direct first-person subject (e.g., "I generally go with black", "I tend to prefer...")
+    if re.match(r"^(?:i\b|i'm\b|i've\b)", clause):
+        return True
+
+    # Form 2: First-person possessive subject (e.g., "My usual go-to is black", "My favorite is...")
+    if re.match(
+        r"^my\s+(?:usual\s+|general\s+|personal\s+)?(?:preference|dislike|size|go-to|goto|favorite|favourite|choice)\b",
+        clause,
+    ):
+        return True
+
+    # Form 3: Inverted predicate nominal (e.g., "Black is usually my go-to for workout stuff", "Silver jewelry is my favorite")
+    inverted = re.match(
+        r"^([a-z0-9_\- ']+?)\s+(?:is|are|isn't|is not|aren't|are not|was|were|used to be|would be|could be)\s+"
+        r"(?:(?:always|usually|generally|typically|normally|regularly|simply|definitely|currently|just|previously|formerly|not|never)\s+)?"
+        r"my\s+(?:usual\s+|general\s+|personal\s+)?(?:go-to|goto|favorite|favourite|choice|preference)\b",
+        clause,
+    )
+    if inverted:
+        subject = inverted.group(1).strip()
+        # Verify the subject does not contain third-person attribution
+        if re.search(
+            r"\b(?:he|she|they|someone|anyone|everybody|everyone|dad|mom|mum|father|mother|"
+            r"friend|sister|brother|wife|husband|partner|boss|coworker|colleague|trainer|"
+            r"said|says|told|thinks|thought|believes|claims)\b",
+            subject,
+        ):
+            return False
+        # Subject must correspond to the proposal's value or scope
+        if _contains(proposal.value, subject) or _contains(subject, proposal.value):
+            return True
+        if proposal.scope != "general" and (
+            _contains(proposal.scope, subject) or _contains(subject, proposal.scope)
+        ):
+            return True
+
+    return False
+
+
 def validate_proposal(proposal: MemoryProposal, message: str) -> None:
     """Conservative English evidence gate, not a semantic proof of a user's beliefs.
 
@@ -108,22 +169,14 @@ def validate_proposal(proposal: MemoryProposal, message: str) -> None:
     prefix = message[:offset].rstrip()
     if prefix and prefix[-1] not in ".!?;\n":
         raise UserMemoryError("memory_quote_requires_own_statement")
-    owner = re.match(
-        r"^(?:(?:actually|remember(?: that)?|from now on|going forward)[,: ]+)?"
-        r"(?:i\b|i'm\b|my (?:usual |general )?(?:preference|dislike|size)\b|"
-        r"(?:forget|remove|withdraw) my\b)",
-        evidence,
-    )
-    if not owner:
-        raise UserMemoryError("memory_requires_first_person_ownership")
     if proposal.op != "RETRACT" and re.search(
         r"\b(?:do not|don't|never) (?:remember|save|store)\b", text
     ):
         raise UserMemoryError("user_declined_memory_storage")
     # A mixed gift/one-off turn fails closed; the model can ask for a separate statement.
     if re.search(
-        r"\b(?:gift|for (?:my |a |the )?(?:dad|mom|mum|mother|father|friend|wife|husband|partner|daughter|son)|"
-        r"this (?:time|trip|purchase|order|occasion)|just today|only today|one[- ]off|temporar(?:y|ily))\b",
+        r"\b(?:gift|present|for (?:my |a |the )?(?:dad|mom|mum|mother|father|friend|wife|husband|partner|daughter|son|sister|brother|colleague|coworker|boss)|"
+        r"this (?:time|trip|purchase|order|occasion|season)|just (?:for )?today|only (?:for )?today|one[- ]off|temporar(?:y|ily))\b",
         text,
     ):
         raise UserMemoryError("temporary_or_recipient_information_not_persistent")
@@ -134,15 +187,33 @@ def validate_proposal(proposal: MemoryProposal, message: str) -> None:
         ):
             raise UserMemoryError("memory_withdrawal_requires_explicit_request")
         return
-    negation = r"\b(?:not|never|no|don't|cannot|can't|isn't|aren't)\b"
+    # Hypothetical / conditional statements fail closed
+    if re.search(
+        r"\b(?:would|could)\s+(?:be|prefer|like|love|choose|pick|go)\b|\bif\s+(?:i|he|she|they|one|we|you)\b|\b(?:suppose|supposing|assuming|hypothetically)\b",
+        evidence,
+    ):
+        raise UserMemoryError("hypothetical_preference_not_persistent")
+    # Former preferences cannot be added as active memories
+    if proposal.op == "ADD" and re.search(
+        r"\b(?:used to|formerly|previously|in the past|back then|no longer)\b",
+        evidence,
+    ):
+        raise UserMemoryError("former_preference_not_persistent")
+    negation = r"\b(?:not|never|no|don't|cannot|can't|isn't|aren't|neither|nor)\b"
     if (
         proposal.category != "dislike"
         and re.search(negation, evidence)
         and not re.search(negation, proposal.value.casefold())
     ):
         raise UserMemoryError("memory_value_must_preserve_negation")
+    if not _check_first_person_ownership(evidence, proposal):
+        raise UserMemoryError("memory_requires_first_person_ownership")
+    positive_pref = (
+        r"\b(?:prefer|prefers|preference|like|likes|love|loves|"
+        r"go[- ]to|goto|favorite|favourite|go with|goes with|choice)\b"
+    )
     if proposal.category == "preference" and not re.search(
-        r"\b(?:prefer|like|love|preference)\b", evidence
+        positive_pref, evidence
     ):
         raise UserMemoryError("preference_requires_positive_preference_evidence")
     if proposal.category == "dislike" and not re.search(
@@ -200,6 +271,21 @@ def validate_proposal(proposal: MemoryProposal, message: str) -> None:
                 "do",
                 "not",
                 "dont",
+                "is",
+                "are",
+                "favorite",
+                "favourite",
+                "go",
+                "to",
+                "goto",
+                "with",
+                "tend",
+                "tends",
+                "choice",
+                "for",
+                "stuff",
+                "items",
+                "things",
             }
         )
         start = end - len(value_words)
@@ -218,7 +304,8 @@ def validate_proposal(proposal: MemoryProposal, message: str) -> None:
     else:
         persistent = re.search(
             r"\b(?:always|usually|generally|typically|regularly|frequent|frequently|in general|"
-            r"remember|from now on|going forward|no longer|now prefer|now dislike)\b",
+            r"remember|from now on|going forward|no longer|now prefer|now dislike|"
+            r"tend to|tends to|favorite|favourite|go[- ]to|goto)\b",
             evidence,
         )
         if not persistent:

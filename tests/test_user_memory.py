@@ -384,3 +384,249 @@ class UserMemoryStoreTests(unittest.TestCase):
                 ],
                 "fact0",
             )
+
+    def test_natural_language_first_person_ownership_positive(self):
+        cases = [
+            # Exact Stage 2 failure
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black is usually my go-to for workout stuff",
+                    basis="confirmed",
+                ),
+                "Hi! I'm looking for a casual tank top to wear to the gym. Nothing fancy, and I'd like to keep it affordable, under $50 ideally. Black is usually my go-to for workout stuff if you have any.",
+            ),
+            # Inverted favorite
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="silver",
+                    scope="jewelry",
+                    quote="Silver jewelry is my favorite",
+                    basis="confirmed",
+                ),
+                "Silver jewelry is my favorite.",
+            ),
+            # Topical framing before subject I
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="bags",
+                    quote="For bags, I generally go with black",
+                    basis="confirmed",
+                ),
+                "For bags, I generally go with black.",
+            ),
+            # Tendency / habitual preference
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="lightweight",
+                    scope="materials",
+                    quote="I tend to prefer lightweight materials",
+                    basis="confirmed",
+                ),
+                "I tend to prefer lightweight materials.",
+            ),
+        ]
+        for idx, (proposal, message) in enumerate(cases):
+            with self.subTest(idx=idx, quote=proposal.quote):
+                result = self.save(proposal, message)
+                self.assertFalse(result.get("idempotent", False))
+                records = self.memory.read("alice").records
+                active = [r for r in records if r.status == "active"]
+                self.assertEqual(active[-1].value, proposal.value)
+                self.assertEqual(active[-1].attribute, proposal.attribute)
+                self.assertEqual(active[-1].quote, proposal.quote)
+
+    def test_natural_language_first_person_ownership_negative_and_edge_cases(self):
+        cases = [
+            # Third-party speech within quote
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="My dad said black is usually my go-to for workout stuff",
+                ),
+                None,
+                "memory_requires_first_person_ownership",
+            ),
+            # Third-party speech in message outside quote
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black is usually my go-to for workout stuff",
+                ),
+                'My sister told me "Black is usually my go-to for workout stuff"',
+                "memory_quote_requires_own_statement",
+            ),
+            # Third-party possessive
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="My friend's go-to is black for workout stuff",
+                ),
+                None,
+                "memory_requires_first_person_ownership",
+            ),
+            # Third-party favorite
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="silver",
+                    scope="jewelry",
+                    quote="Silver jewelry is my sister's favorite",
+                ),
+                None,
+                "memory_requires_first_person_ownership",
+            ),
+            # Reported attribution
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="silver",
+                    scope="jewelry",
+                    quote="She told me that silver jewelry is my favorite",
+                ),
+                None,
+                "memory_requires_first_person_ownership",
+            ),
+            # Negated go-to
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black is not my go-to for workout stuff",
+                ),
+                None,
+                "memory_value_must_preserve_negation",
+            ),
+            # Negated favorite
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="silver",
+                    scope="jewelry",
+                    quote="Silver jewelry isn't my favorite",
+                ),
+                None,
+                "memory_value_must_preserve_negation",
+            ),
+            # Hypothetical condition
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="If I worked out, black would be my go-to for workout stuff",
+                ),
+                None,
+                "hypothetical_preference_not_persistent",
+            ),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black would be my go-to for workout stuff",
+                ),
+                None,
+                "hypothetical_preference_not_persistent",
+            ),
+            # Former preference
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black used to be my go-to for workout stuff",
+                ),
+                None,
+                "former_preference_not_persistent",
+            ),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="silver",
+                    scope="jewelry",
+                    quote="In the past, silver jewelry was my favorite",
+                ),
+                None,
+                "former_preference_not_persistent",
+            ),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="material",
+                    value="lightweight",
+                    scope="materials",
+                    quote="I used to prefer lightweight materials",
+                ),
+                None,
+                "former_preference_not_persistent",
+            ),
+            # Recipient / gift
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Black is usually my go-to for my sister's birthday gift for workout stuff",
+                ),
+                None,
+                "temporary_or_recipient_information_not_persistent",
+            ),
+            # Temporary
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="workout",
+                    quote="Just for today, black is my go-to for workout stuff",
+                ),
+                None,
+                "temporary_or_recipient_information_not_persistent",
+            ),
+            # Arbitrary sentences containing 'my'
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="black",
+                    scope="bag",
+                    quote="Look at my black bag",
+                ),
+                None,
+                "memory_requires_first_person_ownership",
+            ),
+        ]
+        for proposal, message, expected_err in cases:
+            with self.subTest(quote=proposal.quote, expected_err=expected_err):
+                with self.assertRaisesRegex(UserMemoryError, expected_err):
+                    self.save(proposal, message)
