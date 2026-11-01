@@ -202,3 +202,9 @@ the rejected sampling parameter. Two actual Claude-only replies succeeded (US$0.
 estimate); no DeepSeek request or longitudinal session was run. Shared evaluation cost reservations
 are tested. Correct natural paraphrases can remain unverified by the unchanged disclosure auditor;
 review dialogue and accepted memory evidence during the proposed pilot. Full execution awaits approval.
+
+The approved Claude V3 pilot was launched once and [stopped after three OFF visits](reviews/claude-v3-memory-pilot.md):
+two valid failures and one audit-invalid visit. ON never started, so there is no memory-effectiveness
+comparison. The stop exposed a prior-recommendation context gap in the shopper audit; the live
+traces also show category-token and stale-state-edit failures in ASTRA. Runtime/scoring remained
+unchanged. The pilot's conservative token-cost estimate is US$0.072132224; prior uncertainty is retained.
