@@ -12,6 +12,7 @@ from astra_eval.shopper_providers import (
     RequestJournal,
     V3Config,
     claude_key,
+    claude_model,
 )
 from astra_eval.simulators import SimulatorError
 
@@ -133,3 +134,74 @@ class ProviderTests(unittest.TestCase):
         path.write_text("DEEPSEEK_API_KEY=not-a-shopper-setting\n")
         with self.assertRaises(ValueError):
             claude_key(path, {})
+
+    def test_shared_env_loads_claude_model_without_crossing_deepseek_settings(self):
+        from shopping_agent.provider import DeepSeekPolicy
+
+        path = self.root / ".env"
+        path.write_text(
+            "DEEPSEEK_API_KEY=deepseek-fixture\nDEEPSEEK_MODEL=deepseek-flash\nANTHROPIC_API_KEY=claude-fixture\nANTHROPIC_MODEL=claude-sonnet-5-5\n"
+        )
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(claude_key(path, {}), "claude-fixture")
+            self.assertEqual(claude_model(path, {}), "claude-sonnet-5-5")
+            self.assertEqual(
+                DeepSeekPolicy.from_env_file(path)._key, "deepseek-fixture"
+            )
+            self.assertEqual(DeepSeekPolicy.from_env_file(path).model, "deepseek-flash")
+
+    def test_claude_model_precedence_blank_and_secret_safe_errors(self):
+        path = self.root / ".env"
+        path.write_text("ANTHROPIC_MODEL=claude-sonnet-5-5\n")
+        self.assertEqual(
+            claude_model(path, {"ANTHROPIC_MODEL": "claude-fixture"}), "claude-fixture"
+        )
+        for value in ("", "secret-invalid model"):
+            with self.assertRaises(ValueError) as error:
+                claude_model(path, {"ANTHROPIC_MODEL": value})
+            self.assertNotIn("secret-invalid model", str(error.exception))
+        with self.assertRaises(ValueError):
+            claude_key(path, {"ANTHROPIC_API_KEY": ""})
+
+    def test_cli_uses_shared_model_field_and_explicit_model_wins(self):
+        from astra_eval.cli import parser, sim_config
+
+        path = self.root / ".env"
+        path.write_text(
+            "ANTHROPIC_MODEL=claude-sonnet-5-5\nANTHROPIC_API_KEY=fixture\nDEEPSEEK_API_KEY=other-fixture\n"
+        )
+        args = [
+            "longitudinal",
+            "--output",
+            str(self.root / "unused"),
+            "--shopper-version",
+            "v3",
+            "--shopper-provider",
+            "claude",
+            "--env-file",
+            str(path),
+        ]
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch(
+                "urllib.request.urlopen",
+                side_effect=AssertionError("Network forbidden"),
+            ),
+        ):
+            self.assertEqual(
+                sim_config(parser().parse_args(args)).model, "claude-sonnet-5-5"
+            )
+            self.assertEqual(
+                sim_config(
+                    parser().parse_args(args + ["--sim-model", "claude-override"])
+                ).model,
+                "claude-override",
+            )
+            alternate = self.root / ".env.shopper"
+            alternate.write_text("ANTHROPIC_MODEL=claude-alternate\n")
+            self.assertEqual(
+                sim_config(
+                    parser().parse_args(args + ["--shopper-env-file", str(alternate)])
+                ).model,
+                "claude-alternate",
+            )

@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Protocol
 
+from shopping_agent.configuration import read_env_file
+
 from .simulators import SimulatorConfig, SimulatorError
 
 V3_VERSION = "shopper-v3-autonomous-1"
@@ -94,31 +96,22 @@ def post_json(url: str, payload: dict, headers: dict, timeout: float) -> dict:
     return json.loads(data)
 
 
+def claude_model(path: Path, environ: dict) -> str:
+    """Resolve a configured shopper model, without mutating the process or contacting an API."""
+    settings = read_env_file(path) if "ANTHROPIC_MODEL" not in environ else {}
+    model = environ.get("ANTHROPIC_MODEL", settings.get("ANTHROPIC_MODEL", ""))
+    if not re.fullmatch(r"claude-[A-Za-z0-9._:/-]{1,93}", model):
+        raise ValueError("Set ANTHROPIC_MODEL or --sim-model to a Claude model ID")
+    return model
+
+
 def claude_key(path: Path, environ: dict) -> str:
-    """Separate ignored .env.shopper; never change ASTRA's .env parser or log its contents."""
-    if environ.get("ANTHROPIC_API_KEY"):
-        return environ["ANTHROPIC_API_KEY"]
-    path = Path(path)
-    if not path.exists():
+    """Read a shared .env or explicit shopper file; never log or cache credentials."""
+    settings = read_env_file(path) if "ANTHROPIC_API_KEY" not in environ else {}
+    key = environ.get("ANTHROPIC_API_KEY", settings.get("ANTHROPIC_API_KEY", ""))
+    if not key.strip():
         raise ValueError("Missing ANTHROPIC_API_KEY")
-    if path.stat().st_size > 16000:
-        raise ValueError("Shopper environment file too large")
-    settings = {}
-    for line in path.read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        key, sep, value = line.partition("=")
-        if not sep or key.strip() != "ANTHROPIC_API_KEY":
-            raise ValueError("Unsupported shopper environment setting")
-        value = value.strip()
-        if value[:1] in {"'", '"'}:
-            if len(value) < 2 or value[-1] != value[0]:
-                raise ValueError("Invalid shopper environment syntax")
-            value = value[1:-1]
-        settings[key.strip()] = value
-    if not settings.get("ANTHROPIC_API_KEY"):
-        raise ValueError("Missing ANTHROPIC_API_KEY")
-    return settings["ANTHROPIC_API_KEY"]
+    return key
 
 
 class JsonShopperProvider:

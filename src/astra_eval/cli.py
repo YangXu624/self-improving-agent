@@ -31,12 +31,21 @@ def add_sim_args(p):
 
 def sim_config(args):
     cls, extra = SimulatorConfig, {}
+    model = args.sim_model
     if getattr(args, "shopper_version", "v2") == "v3":
         from .shopper_providers import V3Config
 
         cls, extra = V3Config, {"provider": args.shopper_provider}
+        if args.shopper_provider == "claude" and model is None:
+            import os
+
+            from .shopper_providers import claude_model
+
+            model = claude_model(
+                Path(args.shopper_env_file or args.env_file), os.environ
+            )
     return cls.from_env(
-        model=args.sim_model,
+        model=model,
         url=args.sim_url,
         temperature=args.sim_temperature,
         seed=args.sim_seed,
@@ -191,7 +200,9 @@ def parser():
     longitudinal.add_argument(
         "--shopper-provider", choices=("ollama", "claude"), default="ollama"
     )
-    longitudinal.add_argument("--shopper-env-file", default=".env.shopper")
+    longitudinal.add_argument(
+        "--shopper-env-file", help="Shopper settings file (default: --env-file)"
+    )
     longitudinal.add_argument("--max-shopper-calls", type=int)
     add_sim_args(longitudinal)
     return p
@@ -215,8 +226,6 @@ def run_command(args):
 
         if args.shopper_version == "v2" and args.shopper_provider != "ollama":
             raise ValueError("Claude requires --shopper-version v3")
-        if args.shopper_provider == "claude" and not args.sim_model:
-            raise ValueError("Claude requires an explicit --sim-model")
         config = LongitudinalConfig(
             customers=Path(args.customers),
             catalogue=Path(args.catalogue),
@@ -262,7 +271,7 @@ def run_command(args):
             from .shopper_v3 import AutonomousShopper
 
             key = (
-                claude_key(Path(args.shopper_env_file), os.environ)
+                claude_key(Path(args.shopper_env_file or args.env_file), os.environ)
                 if args.shopper_provider == "claude"
                 else None
             )

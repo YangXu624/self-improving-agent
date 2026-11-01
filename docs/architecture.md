@@ -15,7 +15,7 @@ runtime scripted module was removed. `ui.py` constructs DeepSeekPolicy from the 
 project env file, then passes it to ChatService. The service requires a policy; there is no
 implicit default/fallback. Only tests contain deterministic decision/HTTP fixtures.
 
-`configuration.py` parses the two supported settings without shell evaluation or value
+`configuration.py` parses the supported DeepSeek/Claude environment settings without shell evaluation or value
 logging. Process settings take precedence. File secrets are not cached into os.environ.
 The CLI retains its compatible `load_env` interface; UI/provider composition uses fresh file
 resolution. Missing configuration disables the chat; provider errors stop a turn safely.

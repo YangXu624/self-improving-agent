@@ -233,7 +233,7 @@ sessions with v2 ON sessions. Production behavior, fixtures and scoring are unch
 
 The default flow above remains V2/Ollama. `--shopper-version v3` uses autonomous generated
 openings/replies and Python-derived disclosure evidence; `--shopper-provider claude` additionally
-requires an explicit Claude model. Actual prior-visit history is isolated by customer/condition.
+requires a Claude model via `--sim-model` or `ANTHROPIC_MODEL` in the selected environment file. Actual prior-visit history is isolated by customer/condition.
 V3 ignores frozen sentence/disclosure schedules while retaining their original protected data.
 The dry plan records provider settings and intended journal path; live execution records its
 actual journal and enforces a matching shopper-call cap in addition to the DeepSeek cap.

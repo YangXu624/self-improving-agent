@@ -54,7 +54,7 @@ No action is selected by a predetermined disclosure order.
   journaled locally without credentials. Failed attempts consume an explicit shopper-call cap.
 - Claude Messages API and local Ollama are thin transports under one contract. No agent
   framework/SDK dependency is needed. Provider construction is network-free. Claude requires
-  an explicit model and separate credentials; no ASTRA environment-file parser changes.
+  an explicit model (CLI or configuration) and separately named credentials in a shared or explicit environment file.
 
 ## Naturalness versus reproducibility
 
@@ -156,7 +156,9 @@ A **dry plan**, with actual catalogue validation but no credentials/network/outp
 ```
 
 For a Claude dry plan, replace provider/model with `--shopper-provider claude --sim-model
-YOUR_EXPLICIT_CLAUDE_MODEL_ID` (an actual `claude-...` model ID is required). Model availability
+claude-sonnet-5-5`, or omit `--sim-model` and set `ANTHROPIC_MODEL` in `.env`.
+A command-line model overrides the configured value; process `ANTHROPIC_MODEL` overrides the file.
+The default shopper settings file is `--env-file` (`.env`); `--shopper-env-file` selects a separate file. Model availability
 and real API compatibility have not been exercised. `num_ctx` controls our conservative input
 budget in both providers; Claude receives no Ollama seed or `num_ctx` API parameter. Keep the
 same context cap and output cap across the comparison; record provider-specific settings.
@@ -164,8 +166,10 @@ same context cap and output cap across the comparison; record provider-specific 
 **Do not add `--live` until a separate budget is approved.** Live V3 requires both global
 `--max-model-calls` (ASTRA/DeepSeek) and `--max-shopper-calls` (shopper, including failures and
 validation retries). It also requires a fresh output and a fresh sibling journal path. Claude
-reads `ANTHROPIC_API_KEY` from the process or a separate ignored `.env.shopper` containing only
-that setting; ASTRA's `.env` stays separate. No keys should be pasted into logs or commands.
+reads `ANTHROPIC_API_KEY` from the process or the selected ignored environment file.
+The shared `.env` accepts `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `ANTHROPIC_API_KEY` and
+`ANTHROPIC_MODEL`; each provider uses its own fields. A separate `.env.shopper` remains optional
+via `--shopper-env-file`. No keys should be pasted into logs or commands.
 
 Exact provider payloads, raw responses, errors, elapsed time, returned model identity, usage,
 text evidence and session lifecycle are written to `<output>.shopper-v3.jsonl`. These private
@@ -206,3 +210,23 @@ The functional tests use synthetic catalogues and mocked policies/transports. Th
 mechanics and deterministic safeguards, not autonomous model quality, real API compatibility,
 linguistic-audit completeness, reduced simulator failures or improved ASTRA performance.
 Original scoring source, benchmark fixtures, transcripts and databases were not edited.
+
+### Shared local provider configuration
+
+```dotenv
+DEEPSEEK_API_KEY=your_local_deepseek_key
+DEEPSEEK_MODEL=deepseek-flash
+ANTHROPIC_API_KEY=your_local_claude_key
+ANTHROPIC_MODEL=claude-sonnet-5-5
+```
+
+Sonnet's configured ID is from the [official model overview](https://platform.claude.com/docs/en/models/overview).
+No model availability or key validity has been tested with a live call. Selecting Claude still
+requires `--shopper-version v3 --shopper-provider claude`; adding configuration never starts a run.
+Dry planning may read the model setting from the local file; it does not use credentials or
+contact a provider. This supersedes the separate-file-only setup in the initial checkpoint.
+
+Configuration follow-up verification: 38 focused V3 tests and four configuration tests passed;
+full regression run: 595 tests, 592 ordinary passes, one missing-tokenizer skip and two existing
+expected watch-retrieval failures. Lint, formatting and diff checks passed. Local key presence
+was checked without displaying it; no provider request was made.

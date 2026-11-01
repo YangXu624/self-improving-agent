@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def read_env_file(path: str | Path) -> dict[str, str]:
-    """Parse the two supported settings without changing the process environment."""
+    """Parse supported DeepSeek/Claude settings without changing the process environment."""
     path = Path(path)
     if not path.exists():
         return {}
@@ -18,7 +18,12 @@ def read_env_file(path: str | Path) -> dict[str, str]:
             continue
         key, sep, value = line.partition("=")
         key, value = key.strip(), value.strip()
-        if not sep or key not in {"DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"}:
+        if not sep or key not in {
+            "DEEPSEEK_API_KEY",
+            "DEEPSEEK_MODEL",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_MODEL",
+        }:
             raise ValueError("Unsupported environment file syntax or setting")
         if value[:1] in {"'", '"'}:
             if len(value) < 2 or value[-1] != value[0]:
