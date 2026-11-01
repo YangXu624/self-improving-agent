@@ -1,9 +1,11 @@
 # Current evaluation status
 
-Stage 1 user profiles are opt-in in the application; this evaluator remains user-memory OFF
-and its scenarios/scoring are unchanged. A future returning-customer evaluator and separate
-user/procedural-memory factors are specified as proposed interfaces in
-[user-memory.md](user-memory.md), not implemented evaluation capabilities.
+Stage 1 profiles are opt-in in the application. Existing single-session evaluators remain
+user-memory OFF and their scenarios/scoring are unchanged. Stage 2 adds a separate thin
+[returning-customer orchestration](longitudinal-evaluation.md) with development-only customers,
+user memory OFF/ON, procedural memory OFF, existing scorers and per-customer reports. Only
+deterministic/mocked runs have been executed. The four-arm comparison and external learner
+remain future work.
 
 Preference and target-item evaluation are implemented. Two real memory-OFF learning sessions
 produced candidate procedural templates; a real memory-ON/OFF transfer result is not yet

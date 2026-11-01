@@ -220,3 +220,18 @@ override advisory memory. Purchase records require explicit confirmation, not re
 Rejected memory writes are visible without discarding valid shopping actions. Default OFF is
 explicit opt-in and leaves existing evaluation conditions unchanged. Future learner/timeline
 interfaces are documentation only; no new evaluator, paid calls or source-code editing.
+
+## Stage 2: thin returning-customer orchestration
+
+Reuse Scenario/ShopperProfile, DialogueRunner, OllamaShopper, CatalogueOracle and both existing
+scorers. Add customer/visit contracts and explicit current-boundary projection rather than a
+parallel dialogue loop. Optional stable-owner/private-context parameters preserve single-session
+defaults. Isolate complete OFF/ON timelines by condition storage; rotate whole customer arms,
+not visit order. User memory starts empty and forms only through normal message evidence.
+Procedural memory remains OFF. Invalid earlier sessions block later visits in that arm.
+
+Curated development witnesses use explicit catalogue facts and frozen evidence hashes. Targets
+may be ambiguous; exact ID discovery and graded suitability stay separate. Memory exposure and
+product associations are diagnostics, not causal application or disclosed-constraint violations.
+Reported usage and missing-coverage flags preserve the inherited failed-shopper accounting limit.
+These fixtures/tests establish infrastructure only; no live run or held-out expansion is approved.
