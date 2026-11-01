@@ -1,6 +1,6 @@
 # Autonomous shopper V3: design and prototype boundary
 
-Status: design checkpoint before implementation. V2 remains available and is not replaced.
+Status: opt-in V3 prototype implemented; live provider quality is unverified. V2 remains available and is not replaced.
 No new paid request, protected fixture/scoring edit, or automatic merge is authorized.
 
 ## Why V2 is insufficient
@@ -97,5 +97,112 @@ Provider documentation consulted: [Claude structured outputs](https://platform.c
 
 Provider checkpoint: thin Ollama/Claude transports, separate Claude key loading, exact local
 request/response journaling and an explicit failed-attempt-inclusive shopper-call cap are
-implemented. Six mocked-provider tests passed; no live model was contacted. Autonomous
-policy, evidence derivation and loop integration are next. No quality or memory benefit is claimed.
+implemented. Autonomous policy, text evidence, generated openings, condition-isolated actual
+visit history and opt-in longitudinal CLI integration are implemented. Mocked end-to-end tests
+exercise both providers and unchanged preference/target stopping. No live model was contacted
+and no quality or memory benefit is claimed. See the [comparison protocol](../experiments/longitudinal/shopper-v3-comparison.md).
+
+## Prototype interface and limitations
+
+Implemented opt-in modules: `shopper_providers.py` (transport/budget/journal),
+`shopper_v3.py` (policy/private view/history), `shopper_evidence.py` (independent text audit).
+`DialogueRunner` reuses the original scoring lifecycle. The longitudinal CLI is the prototype
+entry point; the application shopping agent and single-session CLI are unchanged. V2 remains
+its default. No dependencies were added.
+
+The private JSON contains persona, current situation, typed verified needs, relevant ongoing
+preference scope, verified facts already communicated, bounded actual dialogue and up to three
+prior visits. Ongoing preferences are selected from current compiled facts and omitted for
+gifts. V3 ignores legacy disclosure schedules, frozen opening sentences, fact statements and
+`no_preference_reply`. It does not force persistent-preference words into a message. Therefore
+storage/recall frequency can change: measure it rather than assuming V2 and V3 equivalence.
+
+Model output is only `message`/`action`. Existing transcript `reveals` fields are retained for
+replay compatibility, populated **by Python** from verified text evidence, not model labels.
+Each fact also has an observation: verified/contradicted/unverified and an actual character
+span when recognized. Unknown paraphrases can reach ASTRA but are not promoted to verified
+ledger evidence. A recognized contradiction is retried at most once with a generic error code;
+no canonical answer is supplied. Malformed JSON fails the session without a hidden repair call.
+
+The English audit handles literal attribute values, a few aliases, nearby negation, simple
+numeric/number-word budgets and explicit historical preferences. It is intentionally bounded:
+complex conjunctions, ranges, indirect language, novel brands/sizes, descriptions and subtle
+contradictions need human inspection. It is **not** a general hallucination detector. Target
+ID/full unseen-name guards remain; distinctive fragments and combination-based identity hints
+still need manual leakage review. A more capable provider does not remove these limitations.
+
+The shopper receives publicly presented product titles/prices plus only evidenced product
+attributes; no target ID is transmitted. A title may naturally identify a product already
+shown by ASTRA. Internal product IDs are stripped from shopper options and prior-visit cards.
+The evaluator still receives real IDs and scores exactly the presented recommendation list.
+
+History is held in the evaluator process by `(owner, condition)`, with accepted text and
+presented cards mirrored to the journal. Invalid sessions do not become prior visits. A fresh
+run starts empty; restarting a timeline from saved history is deliberately unsupported. Prompt
+budgeting drops oldest prior visits then oldest dialogue; full records remain locally available.
+There is no summarizer, persistent agent learning or change to ASTRA's memory implementations.
+
+## Safe operation
+
+A **dry plan**, with actual catalogue validation but no credentials/network/output creation:
+
+```sh
+.venv/bin/python -m astra_eval longitudinal \
+  --customers experiments/longitudinal/customers.dev-expanded.json \
+  --output data/eval/longitudinal/v3-ollama-review \
+  --limit-customers 1 --memory-format compact --execution-order off_then_on \
+  --shopper-version v3 --shopper-provider ollama --sim-model llama3.1:latest \
+  --max-model-calls 144 --max-shopper-calls 96 --stop-on-error
+```
+
+For a Claude dry plan, replace provider/model with `--shopper-provider claude --sim-model
+YOUR_EXPLICIT_CLAUDE_MODEL_ID` (an actual `claude-...` model ID is required). Model availability
+and real API compatibility have not been exercised. `num_ctx` controls our conservative input
+budget in both providers; Claude receives no Ollama seed or `num_ctx` API parameter. Keep the
+same context cap and output cap across the comparison; record provider-specific settings.
+
+**Do not add `--live` until a separate budget is approved.** Live V3 requires both global
+`--max-model-calls` (ASTRA/DeepSeek) and `--max-shopper-calls` (shopper, including failures and
+validation retries). It also requires a fresh output and a fresh sibling journal path. Claude
+reads `ANTHROPIC_API_KEY` from the process or a separate ignored `.env.shopper` containing only
+that setting; ASTRA's `.env` stays separate. No keys should be pasted into logs or commands.
+
+Exact provider payloads, raw responses, errors, elapsed time, returned model identity, usage,
+text evidence and session lifecycle are written to `<output>.shopper-v3.jsonl`. These private
+journals are ignored by Git. Request headers/credentials are never written. Transport errors
+record safe exception type/status rather than potentially sensitive exception bodies. Failed
+attempts consume the cap. Session attempt totals include malformed/transport failures; parsed
+envelope usage is counted even if its message is malformed. Missing usage on failed or invalid
+envelopes remains unknown: use raw journal/provider billing to reconcile costs. Existing
+reports do not calculate Claude prices; count cache input/create/read separately using the
+approved provider price sheet at execution time. Do not label an unknown cost zero.
+
+## Verified checkpoint (1 November 2026)
+
+- `python -m unittest discover -s tests -p 'test_shopper_v3*.py' -q`: **35 passed**.
+  Includes six provider-contract tests and 29 autonomous/evidence/integration regressions.
+- `python -W error::ResourceWarning -m unittest discover -s tests -q`: **592 run**:
+  589 ordinary passes, one skipped pinned-tokenizer asset test and two existing expected
+  watch/wristwatch category-matching failures. Those retrieval defects remain unresolved.
+- `ruff check src tests`, `ruff format --check src tests`, `git diff --check`: passed.
+- Both Ollama and Claude **dry plans** validated the actual expanded catalogue fixture/index;
+  neither created its proposed run directory or journal. Claude used a fixture model string
+  for planning, not an availability check. The expanded compiler validates all 36 visits
+  before selecting the one-customer plan. No live Ollama, Claude or DeepSeek call was made.
+- All **232 pre-existing protected files** from the interrupted-task inventory match their
+  original hashes, including the original pilot's 51 files. The canonical sorted path/hash
+  inventory fingerprint before and after is
+  `885bcddd866cbc00b70002a1bda11c0094be3234b4fda76c36e3eb8686f02ae6`.
+
+| Protected artifact | Before SHA-256 = after SHA-256 |
+| --- | --- |
+| Catalogue | `da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67` |
+| Search index | `f0aac92a51c7618ac9df12a76cbe9e47358a28e530fdd6b2e913beb9d572e5bb` |
+| Original development customers | `38f00c804c1062507429371cf7228f42dc3e55bffd29d94354ebcb9e14746c41` |
+| Expanded development customers | `cc087acaf159c3d63a0cbc65fdb7934e6c12ce285d890280d4551874f3650dd4` |
+| Procedural pilot SQLite | `b9f334a4c59e62c2363bcaa30e0f394968bd14dda06fb7933dca72c550702065` |
+
+The functional tests use synthetic catalogues and mocked policies/transports. They verify
+mechanics and deterministic safeguards, not autonomous model quality, real API compatibility,
+linguistic-audit completeness, reduced simulator failures or improved ASTRA performance.
+Original scoring source, benchmark fixtures, transcripts and databases were not edited.

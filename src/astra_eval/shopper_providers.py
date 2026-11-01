@@ -20,6 +20,7 @@ V3_VERSION = "shopper-v3-autonomous-1"
 class V3Config(SimulatorConfig):
     protocol_version: str = field(default=V3_VERSION, init=False)
     provider: Literal["ollama", "claude"] = "ollama"
+    max_malformed_retries: int = field(default=0, init=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -42,6 +43,8 @@ class Completion:
 
 class ShopperProvider(Protocol):
     config: V3Config
+    journal: "RequestJournal"
+    usage: dict[str, float]
 
     def complete(
         self, messages: list[dict], schema: dict, context: dict
@@ -137,6 +140,7 @@ class JsonShopperProvider:
             raise ValueError("Missing or invalid Claude shopper credential")
         self.config, self.journal = config, journal
         self._key, self.transport = api_key, transport or post_json
+        self.usage: dict[str, float] = {}
 
     def complete(self, messages: list[dict], schema: dict, context: dict) -> Completion:
         c = self.config
@@ -236,4 +240,6 @@ class JsonShopperProvider:
                 raise ValueError("Invalid model identity")
         except (KeyError, TypeError, ValueError):
             raise SimulatorError("shopper_invalid_envelope") from None
+        for key, value in usage.items():
+            self.usage[key] = self.usage.get(key, 0) + value
         return Completion(content, usage, model)

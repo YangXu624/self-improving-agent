@@ -71,13 +71,20 @@ class SessionRecord:
     applied_experience: list = field(default_factory=list)
 
 
-def card(product):
+def card(product, *, include_facts=False):
     facts = product.get("facts") or {}
-    return {
+    result = {
         "id": product.get("id"),
         "title": product.get("title", ""),
         "price": facts.get("price"),
     }
+    if include_facts:
+        result["facts"] = {
+            k: v
+            for k, v in facts.items()
+            if k in product.get("evidence", {}) and v is not None
+        }
+    return result
 
 
 def extract_turn(events, request_id, response, turn, wall_ms):
@@ -177,26 +184,31 @@ class DialogueRunner:
                 value = result.usage.get(key)
                 if isinstance(value, (int, float)):
                     stats["usage"][key] = stats["usage"].get(key, 0) + value
-            violations = check_reply(
-                result.reply,
-                memory.profile,
-                shown_text=view.text,
-                shown_titles=" ".join(p.get("title", "") for p in view.products),
-                shown_prices=[
-                    p["price"]
-                    for p in view.products
-                    if isinstance(p.get("price"), (int, float))
-                ],
-                has_products=bool(view.products),
-                forbidden=forbidden,
-                config=self.consistency,
-            )
-            supported = None
-            if getattr(self, "target_mode", False):
-                supported, extra = target_disclosures(result.reply, memory)
-                violations = list(
-                    {(v.code, v.detail): v for v in violations + extra}.values()
+            if getattr(self.simulator, "autonomous", False):
+                supported, violations = self.simulator.audit_reply(
+                    memory, view, result, forbidden
                 )
+            else:
+                violations = check_reply(
+                    result.reply,
+                    memory.profile,
+                    shown_text=view.text,
+                    shown_titles=" ".join(p.get("title", "") for p in view.products),
+                    shown_prices=[
+                        p["price"]
+                        for p in view.products
+                        if isinstance(p.get("price"), (int, float))
+                    ],
+                    has_products=bool(view.products),
+                    forbidden=forbidden,
+                    config=self.consistency,
+                )
+                supported = None
+                if getattr(self, "target_mode", False):
+                    supported, extra = target_disclosures(result.reply, memory)
+                    violations = list(
+                        {(v.code, v.detail): v for v in violations + extra}.values()
+                    )
             memory.transcript.append(
                 {
                     "role": "simulator_audit",
@@ -226,6 +238,10 @@ class DialogueRunner:
                 )
                 return reply, [v.code for v in violations], unverified
             stats["consistency_retries"] += 1
+            if getattr(self.simulator, "autonomous", False):
+                feedback = self.simulator.retry_feedback(hard)
+                last = [v.code for v in hard]
+                continue
             feedback = [f"{v.code}: {v.detail}".strip(": ") for v in hard]
             feedback.append(
                 "Rejected response (not accepted dialogue): "
@@ -282,9 +298,50 @@ class DialogueRunner:
         }
         max_turns = turn_limit or scenario.max_user_turns
         message = scenario.opening
-        memory.record_shopper(1, message, scenario.profile.opening_keys)
+        autonomous = getattr(self.simulator, "autonomous", False)
+        if autonomous:
+            shopper_calls_before = self.simulator.provider.journal.calls
+            shopper_usage_before = dict(self.simulator.provider.usage)
+            self.simulator.start_session(user, condition, sid)
+            if self.budget is not None and not self.budget.allow(self.agent.max_calls):
+                record.termination = "run_budget_exhausted"
+            else:
+                try:
+                    opening, flags, unverified = self.shopper_reply(
+                        memory,
+                        AssistantView("", turn=0, turns_left=max_turns),
+                        forbidden,
+                        stats,
+                    )
+                    message = opening.message
+                    memory.apply(1, opening, flags, unverified)
+                    if opening.action == "give_up":
+                        record.termination = (
+                            "shopper_ended" if target_rule is not None else "gave_up"
+                        )
+                except SimulatorFailure as failure:
+                    record.termination = (
+                        "simulator_error"
+                        if target_rule is not None
+                        else "simulator_failure"
+                    )
+                    record.error = failure.code + (
+                        f":{failure.detail}" if failure.detail else ""
+                    )
+                    memory.transcript.append(
+                        {
+                            "role": "simulator_audit",
+                            "turn": 0,
+                            "failure": failure.code,
+                            "detail": failure.detail,
+                        }
+                    )
+        else:
+            memory.record_shopper(1, message, scenario.profile.opening_keys)
         consecutive_errors = 0
         for turn in range(1, max_turns + 1):
+            if record.termination != "running":
+                break
             if self.budget is not None and not self.budget.allow(self.agent.max_calls):
                 record.termination = "run_budget_exhausted"
                 break
@@ -319,7 +376,10 @@ class DialogueRunner:
                 self.budget.charge(agent_turn.model_calls)
             view = AssistantView(
                 text=agent_turn.message,
-                products=tuple(card(p) for p in response.get("products", [])),
+                products=tuple(
+                    card(p, include_facts=autonomous)
+                    for p in response.get("products", [])
+                ),
                 turn=turn,
                 turns_left=max_turns - turn,
             )
@@ -429,6 +489,16 @@ class DialogueRunner:
                 for r in session.state.requirements
                 if r.status == "active"
             ]
+        if autonomous:
+            # Include failed transport / malformed-output attempts, not only parsed replies.
+            stats["calls"] = stats["attempts"] = (
+                self.simulator.provider.journal.calls - shopper_calls_before
+            )
+            stats["usage"] = {
+                k: v - shopper_usage_before.get(k, 0)
+                for k, v in self.simulator.provider.usage.items()
+            }
+            self.simulator.finish_session(memory, record.termination)
         record.simulator = stats
         record.transcript = memory.transcript.entries
         record.ledger = memory.ledger()

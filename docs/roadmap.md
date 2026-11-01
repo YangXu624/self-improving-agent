@@ -276,3 +276,11 @@ profiles and schema-2 current snapshots. Canonical events/validation and all fro
 are retained. Evaluations remain legacy by default; longitudinal compact mode is explicit
 and recorded. See [memory representations](memory-representations.md). Semantic/embedding
 retrieval will be evaluated separately; no new retrieval or live experiment belongs here.
+
+## Shopper V3 prototype checkpoint
+
+Opt-in Ollama/Claude provider interface, autonomous openings/replies, conservative independent
+disclosure evidence, returning-visit history and budgeted longitudinal entry point are implemented.
+V2 and frozen scoring/fixtures remain available. Deterministic/mock verification precedes PR
+review. Real provider compatibility, realism, disclosure reliability and memory effectiveness
+remain unverified; paid tests require a separately approved budget. [Protocol](../experiments/longitudinal/shopper-v3-comparison.md).

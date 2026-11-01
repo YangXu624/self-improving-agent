@@ -30,7 +30,12 @@ def add_sim_args(p):
 
 
 def sim_config(args):
-    return SimulatorConfig.from_env(
+    cls, extra = SimulatorConfig, {}
+    if getattr(args, "shopper_version", "v2") == "v3":
+        from .shopper_providers import V3Config
+
+        cls, extra = V3Config, {"provider": args.shopper_provider}
+    return cls.from_env(
         model=args.sim_model,
         url=args.sim_url,
         temperature=args.sim_temperature,
@@ -39,6 +44,7 @@ def sim_config(args):
         max_tokens=args.sim_max_tokens,
         timeout=args.sim_timeout,
         window_turns=args.window_turns,
+        **extra,
     )
 
 
@@ -181,6 +187,12 @@ def parser():
     longitudinal.add_argument(
         "--memory-format", choices=("legacy", "compact"), default="legacy"
     )
+    longitudinal.add_argument("--shopper-version", choices=("v2", "v3"), default="v2")
+    longitudinal.add_argument(
+        "--shopper-provider", choices=("ollama", "claude"), default="ollama"
+    )
+    longitudinal.add_argument("--shopper-env-file", default=".env.shopper")
+    longitudinal.add_argument("--max-shopper-calls", type=int)
     add_sim_args(longitudinal)
     return p
 
@@ -201,6 +213,10 @@ def run_command(args):
             run_longitudinal,
         )
 
+        if args.shopper_version == "v2" and args.shopper_provider != "ollama":
+            raise ValueError("Claude requires --shopper-version v3")
+        if args.shopper_provider == "claude" and not args.sim_model:
+            raise ValueError("Claude requires an explicit --sim-model")
         config = LongitudinalConfig(
             customers=Path(args.customers),
             catalogue=Path(args.catalogue),
@@ -216,6 +232,7 @@ def run_command(args):
             ),
             session_max_model_calls=args.session_max_model_calls,
             max_model_calls=args.max_model_calls,
+            max_shopper_calls=args.max_shopper_calls,
             memory_format=args.memory_format,
             execution_order=args.execution_order,
             stop_on_error=args.stop_on_error,
@@ -227,15 +244,38 @@ def run_command(args):
             return 0
         if config.max_model_calls is None:
             raise ValueError("--live requires --max-model-calls")
+        if args.shopper_version == "v3" and config.max_shopper_calls is None:
+            raise ValueError("Live V3 requires --max-shopper-calls")
         from shopping_agent.provider import DeepSeekPolicy
 
         if config.output.exists():
             raise ValueError("Use a new longitudinal output directory")
-        result = run_longitudinal(
-            config,
-            simulator=OllamaShopper(config.simulator),
-            policy=DeepSeekPolicy.from_env_file(args.env_file),
-        )
+        policy = DeepSeekPolicy.from_env_file(args.env_file)
+        if args.shopper_version == "v3":
+            import os
+
+            from .shopper_providers import (
+                JsonShopperProvider,
+                RequestJournal,
+                claude_key,
+            )
+            from .shopper_v3 import AutonomousShopper
+
+            key = (
+                claude_key(Path(args.shopper_env_file), os.environ)
+                if args.shopper_provider == "claude"
+                else None
+            )
+            journal = RequestJournal(
+                config.output.with_name(config.output.name + ".shopper-v3.jsonl"),
+                config.max_shopper_calls,
+            )
+            simulator = AutonomousShopper(
+                JsonShopperProvider(config.simulator, journal, api_key=key)
+            )
+        else:
+            simulator = OllamaShopper(config.simulator)
+        result = run_longitudinal(config, simulator=simulator, policy=policy)
         print(json.dumps(result, indent=2, sort_keys=True))
         print(f"Report: {config.output / 'report.md'}")
         return 0
