@@ -9,9 +9,9 @@ live recommendation quality, token savings or memory benefit. Frozen artifacts a
 Stage 1 profiles are opt-in in the application. Existing single-session evaluators remain
 user-memory OFF and their scenarios/scoring are unchanged. Stage 2 adds a separate thin
 [returning-customer orchestration](longitudinal-evaluation.md) with development-only customers,
-user memory OFF/ON, procedural memory OFF, existing scorers and per-customer reports. Only
-deterministic/mocked runs have been executed. The four-arm comparison and external learner
-remain future work.
+user memory OFF/ON, procedural memory OFF, existing scorers and per-customer reports. A first live pilot stopped after five OFF sessions because of a shopper fault; ON never
+started, so no user-memory effectiveness result exists. The four-arm comparison and external
+learner remain future work. See [simulator diagnosis and recovery](reviews/shopper-disclosure-integrity.md).
 
 The separate [expanded customer fixture](reviews/expanded-development-customers.md) is
 human-directed development data: 11 customers / 36 visits, preserving the original three.

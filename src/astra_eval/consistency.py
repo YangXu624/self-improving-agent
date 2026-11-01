@@ -2,7 +2,8 @@
 
 Lexical on purpose: cheap, explainable and independent of any LLM. Errors trigger one
 re-ask with feedback and then invalidate the session (a simulator fault, not an agent
-fault); warnings are only logged. These checks measure whether Llama is reliable enough;
+fault); unsupported claimed disclosures are errors, not harmless warnings. Other warnings
+are logged. These checks measure whether Llama is reliable enough;
 they are not a proof of consistency.
 """
 
@@ -10,7 +11,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from .models import ShopperProfile, ShopperReply
+from .models import Fact, ShopperProfile, ShopperReply
 from .oracle import norm, tokens
 
 COLORS = {
@@ -162,6 +163,55 @@ def numbers_in(text):
     }
 
 
+def price_disclosure(fact: Fact, text: str) -> tuple[bool, list[Violation]]:
+    """Existing literal budget evidence, shared by both disclosure protocols."""
+    flags = []
+    stated = any(abs(float(fact.value) - n) < 0.01 for n in numbers_in(text))
+    val = float(fact.value)
+    val_str = f"{val:g}"
+    val_pattern = re.escape(val_str)
+    if val.is_integer() and val >= 1000:
+        thousands = f"{int(val):,}"
+        val_pattern = rf"(?:{re.escape(val_str)}|{re.escape(thousands)})"
+    opposite = re.search(
+        r"\b(over|above|at least|more than)\s*\$?\s*" + val_pattern + r"\b",
+        text,
+        re.I,
+    )
+    below = re.search(
+        r"\b(under|below|at most|less than)\s*\$?\s*" + val_pattern + r"\b",
+        text,
+        re.I,
+    )
+    if opposite and fact.op in {"lt", "lte"}:
+        flags.append(Violation("contradicts_budget_operator", "error", fact.key))
+        stated = False
+    elif below and fact.op in {"gt", "gte"}:
+        flags.append(Violation("contradicts_budget_operator", "error", fact.key))
+        stated = False
+    return stated, flags
+
+
+def text_disclosure(
+    fact: Fact, message_words: set[str], positive_words: set[str]
+) -> bool:
+    """Complete literal value evidence, preserving explicit negative predicates."""
+    wanted = fact_words(fact)
+    positive = positive_words
+    mentioned = message_words
+    if fact.field == "color":
+        wanted = canonical_words(wanted)
+        positive = canonical_words(positive)
+        mentioned = canonical_words(mentioned)
+    if fact.op in {"neq", "not_contains", "not_in"}:
+        return (
+            bool(wanted)
+            and wanted <= mentioned
+            and bool(message_words & (NEGATIONS | {"avoid", "dislike", "hate"}))
+        )
+    return bool(wanted) and wanted <= positive
+
+
 def check_reply(
     reply: ShopperReply,
     profile: ShopperProfile,
@@ -258,22 +308,19 @@ def check_reply(
         fact = profile.fact(key)
         if fact is None or key in unknown:
             continue
-        if fact.field in {"color", "material", "brand", "size"}:
-            stated = bool(fact_words(fact) & message_words)
+        if fact.field in {"color", "material", "brand", "size", "product_type"}:
+            stated = text_disclosure(fact, message_words, positive_words)
         elif fact.field == "price":
-            stated = any(
-                abs(n - float(v)) < 0.01
-                for n in numbers_in(reply.message)
-                for v in (fact.value if isinstance(fact.value, list) else [fact.value])
-            )
+            stated, price_flags = price_disclosure(fact, reply.message)
+            out.extend(price_flags)
         elif fact.field == "department":
             stated = bool(
-                departments_in(fact_words(fact)) & departments_in(message_words)
+                departments_in(fact_words(fact)) & departments_in(positive_words)
             )
         else:
             stated = True
         if not stated:
-            out.append(Violation("claimed_reveal_missing", "warning", key))
+            out.append(Violation("claimed_reveal_missing", "error", key))
     shown = (shown_text + " " + shown_titles).lower()
     leaked_titles = [
         s
@@ -311,54 +358,19 @@ def target_disclosures(reply, memory):
     }
     positive_words = words - negated
     for fact in memory.profile.facts:
-        f_words = (
-            canonical_words(fact_words(fact))
-            if fact.field == "color"
-            else fact_words(fact)
-        )
-        pos_words = (
-            canonical_words(positive_words) if fact.field == "color" else positive_words
-        )
         if fact.field == "price":
-            stated = any(
-                abs(float(fact.value) - n) < 0.01 for n in numbers_in(norm_msg)
-            )
-            val = float(fact.value)
-            val_str = f"{val:g}"
-            val_pattern = re.escape(val_str)
-            if val.is_integer() and val >= 1000:
-                thousands = f"{int(val):,}"
-                val_pattern = rf"(?:{re.escape(val_str)}|{re.escape(thousands)})"
-            opposite = re.search(
-                r"\b(over|above|at least|more than)\s*\$?\s*" + val_pattern + r"\b",
-                norm_msg,
-                re.I,
-            )
-            below = re.search(
-                r"\b(under|below|at most|less than)\s*\$?\s*" + val_pattern + r"\b",
-                norm_msg,
-                re.I,
-            )
-            if opposite and fact.op in {"lt", "lte"}:
-                flags.append(
-                    Violation("contradicts_budget_operator", "error", fact.key)
-                )
-                stated = False
-            elif below and fact.op in {"gt", "gte"}:
-                flags.append(
-                    Violation("contradicts_budget_operator", "error", fact.key)
-                )
-                stated = False
+            stated, price_flags = price_disclosure(fact, norm_msg)
+            flags.extend(price_flags)
         elif fact.field == "department":
             stated = bool(
                 departments_in(fact_words(fact)) & departments_in(positive_words)
             )
         else:
-            stated = bool(f_words) and f_words <= pos_words
+            stated = text_disclosure(fact, words, positive_words)
         if stated:
             supported.append(fact.key)
         elif fact.key in reply.reveals:
-            flags.append(Violation("claimed_reveal_missing", "warning", fact.key))
+            flags.append(Violation("claimed_reveal_missing", "error", fact.key))
     new = set(supported) - set(memory.revealed)
     if len(new) > 2:
         flags.append(

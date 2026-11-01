@@ -208,11 +208,21 @@ class ShopperMemory:
                 else ""
             )
             + f"Hidden profile (JSON): {json.dumps(facts, ensure_ascii=False)}\n"
+            f"Allowed disclosure keys: {json.dumps([f.key for f in self.profile.facts])}. "
+            "Only these hidden-profile keys may appear in reveals; names from the private "
+            "roleplay context (such as current_goal) and ledger are never disclosure keys. "
+            "Context goals describe the situation; they do not replace or broaden the "
+            "fixed requirements in the hidden profile. "
+            "Use reveals=[] for questions, acknowledgments, or comments that state no "
+            "profile fact value. Mentioning 'my budget' without its amount does not disclose "
+            "a budget. Never claim a disclosure unless your message communicates that fact. "
+            "Repeating an already-disclosed fact is allowed if you actually state it again. "
             f"If asked about something not in the profile say: {self.profile.no_preference_reply!r}\n"
             "Rules: reveal information progressively, at most two profile facts per message, "
             "preferably only what the assistant asked about. Never invent a requirement, "
             "price, colour, brand or size that is not in the profile. Never change an earlier "
             "answer. If asked something you already answered, repeat the same answer briefly. "
+            "Do not say you have no preference about an attribute that the profile specifies. "
             "Do not name or guess a specific product. Use action 'accept' only if the "
             "products shown fit your firm needs, 'give_up' only if you want to stop, "
             "otherwise 'reply'. Respond with ONLY a JSON object: "
@@ -248,9 +258,21 @@ class ShopperMemory:
             "turns_left": view.turns_left,
         }
         system = self.system_prompt()
+        if feedback:
+            system += (
+                "\nCORRECTION REQUIRED: the previous response was rejected and did not "
+                "update the disclosure ledger. Every key you claim must be supported in "
+                "the corrected message, including keys that were valid previously. "
+                "For this correction, include each claimed key's what_you_would_say "
+                "sentence verbatim in your message, with optional surrounding prose; "
+                "or use reveals=[] if you only comment or ask a question. Choose the "
+                "facts yourself; do not reveal more than two. Validation feedback: "
+                + "\n".join(feedback)
+            )
 
         def render(dialogue):
             payload = {
+                "valid_disclosure_keys": [f.key for f in self.profile.facts],
                 "ledger_of_what_you_already_said": self.ledger(),
                 "recent_dialogue": dialogue,
                 "now": now,

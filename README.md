@@ -48,6 +48,10 @@ select `--memory-format compact`. No semantic/embedding retrieval change is incl
 
 ### Stage 2: returning-customer evaluation
 
+The first live pilot stopped during OFF; no paired memory result exists. The evaluation-only
+[shopper integrity fix and fresh restart plan](docs/reviews/shopper-disclosure-integrity.md)
+retain the failed run and require separate approval before another paid evaluation.
+
 An optional [expanded development fixture](experiments/longitudinal/customers.dev-expanded.json)
 adds eight catalogue-grounded customers while preserving the original three. See its
 [offline verification and limitations](docs/reviews/expanded-development-customers.md).
