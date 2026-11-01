@@ -267,3 +267,12 @@ Claude shopper settings may share `.env` with DeepSeek using separately named
 application still loads its DeepSeek settings when Claude fields are present. An explicit
 shopper file remains supported; model precedence is CLI, process, file. No implicit provider
 switch or model request occurs when configuration is read.
+
+## Sonnet 5.5 transport and capped evaluation
+
+Omit Claude sampling parameters rather than advertise ineffective temperature control.
+Use Sonnet between-tools/low-effort settings to bound a text-only shopper and test an explicit
+512-token cap. Preserve prompts/auditor/scoring. Record envelope usage before rejecting refusals
+or truncations. A shared evaluation-only Decimal ledger reserves conservative costs before
+either provider call; missing usage retains the reserve and stops. This is client accounting
+with explicit billing-bound limitations, not a provider invoice or guarantee of run completion.

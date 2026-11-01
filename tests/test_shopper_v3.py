@@ -547,3 +547,72 @@ class AutonomousTests(F.EvalCase):
             ),
             2,
         )
+
+    def test_cost_budget_is_shared_across_real_longitudinal_loop_and_both_arms(self):
+        from astra_eval.api_budget import ApiCostBudget, BudgetedPolicy
+
+        root = self.root / "budgeted-run"
+        root.mkdir()
+        source, catalogue, index, _ = make_dataset(root)
+        shopper = self.shopper(
+            [self.reply("I need boots under $60."), self.reply("Thanks.", "accept")]
+            * 8,
+            provider="claude",
+            cap=16,
+        )
+        # Use the real verified model identity for the accounting seam; wire remains mocked.
+        shopper.config = shopper.provider.config = V3Config(
+            provider="claude", model="claude-sonnet-5-5"
+        )
+
+        def with_cache_counts(url, payload, headers, timeout):
+            response = original(url, payload, headers, timeout)
+            response["usage"].update(
+                cache_read_input_tokens=0, cache_creation_input_tokens=0
+            )
+            return response
+
+        original = shopper.provider.transport
+        shopper.provider.transport = with_cache_counts
+        budget = ApiCostBudget(root / "cost.jsonl", 1, 0.05)
+        shopper.provider.cost_budget = budget
+        base = F.HeuristicPolicy(ask_department=False)
+        base.model = "deepseek-flash"
+        config = LongitudinalConfig(
+            customers=source,
+            catalogue=catalogue,
+            index=index,
+            output=root / "run",
+            simulator=shopper.config,
+            max_model_calls=144,
+            max_shopper_calls=16,
+            max_cost_usd=1,
+            prior_cost_usd=0.05,
+            execution_order="off_then_on",
+        )
+        result = run_longitudinal(
+            config, simulator=shopper, policy=BudgetedPolicy(base, budget)
+        )
+        self.assertEqual(result["sessions"], 8)
+        self.assertFalse(budget.blocked)
+        self.assertLess(budget.total, 1)
+        rows = [json.loads(r) for r in budget.path.read_text().splitlines()]
+        self.assertEqual(
+            {r["provider"] for r in rows if r["kind"] == "usage_settled"},
+            {"claude", "deepseek"},
+        )
+
+    def test_cost_limit_is_a_provider_failure_and_stops_before_shopper_followup(self):
+        from astra_eval.api_budget import ApiCostBudget, BudgetedPolicy
+
+        shopper = self.shopper([self.reply("I need boots under $50.")])
+        budget = ApiCostBudget(self.root / "tiny.jsonl", 0.00001)
+        base = F.HeuristicPolicy(ask_department=False)
+        base.model = "deepseek-flash"
+        record = self.runner(shopper, policy=BudgetedPolicy(base, budget)).run(
+            scenario([TYPE, BUDGET], [], "unused")
+        )
+        self.assertEqual(record.termination, "provider_error")
+        self.assertIn("spending_budget_exhausted", record.error)
+        self.assertEqual(shopper.provider.journal.calls, 1)
+        self.assertFalse(base.contexts)

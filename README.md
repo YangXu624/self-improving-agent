@@ -374,3 +374,8 @@ V3 Claude shopper configuration can share the ignored `.env`: set `ANTHROPIC_API
 `ANTHROPIC_MODEL=claude-sonnet-5-5` (see `.env.example`). Use `--shopper-version v3
 --shopper-provider claude`; `--sim-model` overrides the configured model, and
 `--shopper-env-file` can select a separate settings file. No calls run just from setting these fields.
+
+Claude Sonnet 5.5 compatibility and two-call live smoke are now verified for V3. Sampling
+parameters are omitted; use `--sim-max-tokens 512`. Live longitudinal Claude requires a shared
+`--max-cost-usd` ceiling; carry prior costs via `--prior-cost-usd`. See the [readiness report and
+exact approval-gated run command](docs/reviews/claude-sonnet55-readiness.md). No memory-effectiveness result exists.

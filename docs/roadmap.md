@@ -284,3 +284,7 @@ disclosure evidence, returning-visit history and budgeted longitudinal entry poi
 V2 and frozen scoring/fixtures remain available. Deterministic/mock verification precedes PR
 review. Real provider compatibility, realism, disclosure reliability and memory effectiveness
 remain unverified; paid tests require a separately approved budget. [Protocol](../experiments/longitudinal/shopper-v3-comparison.md).
+
+Sonnet 5.5 transport compatibility is fixed with deterministic regressions and a successful
+two-reply Claude-only smoke. Shared financial reservations prepare a capped 24-session run;
+full DeepSeek execution and merge remain approval-gated. [Readiness report](reviews/claude-sonnet55-readiness.md).

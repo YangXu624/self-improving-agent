@@ -196,3 +196,9 @@ The authorized four-customer Claude V3 run stopped at its live preflight: one Cl
 returned HTTP 400 for an unsupported `temperature` parameter; zero shopping sessions or
 DeepSeek calls started. There is no OFF/ON result. See the [preserved preflight report](reviews/claude-v3-four-customer-preflight.md)
 for the exact error, unknown billing usage, unchanged artifacts and required transport/cost checks.
+
+The [Sonnet compatibility/readiness checkpoint](reviews/claude-sonnet55-readiness.md) fixes
+the rejected sampling parameter. Two actual Claude-only replies succeeded (US$0.005158 token-based
+estimate); no DeepSeek request or longitudinal session was run. Shared evaluation cost reservations
+are tested. Correct natural paraphrases can remain unverified by the unchanged disclosure auditor;
+review dialogue and accepted memory evidence during the proposed pilot. Full execution awaits approval.
