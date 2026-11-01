@@ -193,3 +193,30 @@ platform differences can still change behaviour. Existing benchmarks/results are
 
 Stop after Stage 2 for customer-data and implementation review. A four-arm procedural-memory
 comparison, external LLM learner and held-out customer set are not implemented here.
+
+## Explicit phase order and error stopping
+
+The default remains customer-counterbalanced. For a blocked development pilot,
+`--execution-order off_then_on` completes every selected customer's OFF timeline before
+starting any ON timeline; each timeline preserves chronological visits. The plan and frozen
+shared configuration record the order explicitly. Profile stores remain condition/owner
+isolated, and ON is not preseeded.
+
+`--stop-on-error` stops the complete run after an invalid session or a provider, simulator,
+agent-exception or harness infrastructure error. Partial session artifacts and reports are
+preserved. Ordinary unsuccessful recommendations and bounded agent-quality failures remain
+outcomes, not reasons to change settings. No automatic resume or retry of a stopped experiment
+is introduced. Existing simulator retry settings are unchanged.
+
+Example non-live phase plan (use a separately frozen selected-customer file):
+
+```sh
+.venv/bin/python -m astra_eval longitudinal \
+  --customers /path/to/customers.selected.json --output /path/to/new-run \
+  --memory-format compact --execution-order off_then_on --stop-on-error \
+  --headline-k 5 --session-max-model-calls 18 --max-model-calls 432
+```
+
+OFF/ON still compares the existing full user-memory feature: ON adds memory guidance and
+an update-capable decision schema. It is not a comparison with byte-identical prompts or a
+retrieval-only ablation. See [the live development pilot](reviews/longitudinal-live-pilot.md).

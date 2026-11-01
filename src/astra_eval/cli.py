@@ -173,6 +173,12 @@ def parser():
     longitudinal.add_argument("--env-file", default=".env")
     longitudinal.add_argument("--live", action="store_true")
     longitudinal.add_argument(
+        "--execution-order",
+        choices=("counterbalanced", "off_then_on"),
+        default="counterbalanced",
+    )
+    longitudinal.add_argument("--stop-on-error", action="store_true")
+    longitudinal.add_argument(
         "--memory-format", choices=("legacy", "compact"), default="legacy"
     )
     add_sim_args(longitudinal)
@@ -211,6 +217,8 @@ def run_command(args):
             session_max_model_calls=args.session_max_model_calls,
             max_model_calls=args.max_model_calls,
             memory_format=args.memory_format,
+            execution_order=args.execution_order,
+            stop_on_error=args.stop_on_error,
         )
         longitudinal_plan = plan_longitudinal(config)
         if not args.live:
