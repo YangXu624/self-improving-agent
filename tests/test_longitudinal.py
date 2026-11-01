@@ -12,7 +12,7 @@ from astra_eval.longitudinal import (
     plan_longitudinal,
     run_longitudinal,
 )
-from astra_eval.simulators import ScriptedShopper
+from astra_eval.simulators import ScriptedShopper, SimulatorError
 from shopping_agent.provider import ProviderError
 from shopping_agent.sessions import SessionStore
 from shopping_agent.user_memory import UserMemoryStore
@@ -226,3 +226,75 @@ class LongitudinalTests(unittest.TestCase):
         )
         with self.assertRaises(FileExistsError):
             self.run_it(config)
+
+    def test_off_then_on_completes_all_off_timelines_before_on(self):
+        other = self.root / "phase-fixture"
+        other.mkdir()
+        self.source, self.catalogue, self.index, self.data = make_dataset(
+            other, second_customer=True
+        )
+        config = self.config(execution_order="off_then_on", stop_on_error=True)
+        plan = plan_longitudinal(config)
+        self.assertEqual(plan["execution_order"], "off_then_on")
+        self.assertEqual(
+            plan["timeline_order"],
+            [
+                {"customer_id": user, "condition": condition}
+                for condition in ("user_memory_off", "user_memory_on")
+                for user in ("alice", "bob")
+            ],
+        )
+        self.run_it(config)
+        self.assertEqual(
+            [(r["customer_id"], r["condition"], r["sequence"]) for r in self.rows],
+            [
+                (user, condition, sequence)
+                for condition in ("user_memory_off", "user_memory_on")
+                for user in ("alice", "bob")
+                for sequence in range(1, 5)
+            ],
+        )
+        self.assertIsNone(self.summary["stopped_early"])
+        # ON's first request sees an empty owner profile after every OFF session.
+        for row in self.rows:
+            if row["condition"] == "user_memory_on" and row["sequence"] == 1:
+                prompt = next(e for e in self.events(row) if e.type == "model_request")
+                sent = json.loads(prompt.payload["messages"][-1]["content"])
+                self.assertEqual(sent["user_memory"]["records"], [])
+
+    def test_stop_on_provider_error_does_not_start_on_phase(self):
+        class BrokenPolicy:
+            def complete(self, messages):
+                raise ProviderError("provider_fixture_failure")
+
+        self.run_it(
+            self.config(execution_order="off_then_on", stop_on_error=True),
+            policy=BrokenPolicy(),
+        )
+        self.assertEqual(self.summary["sessions"], 1)
+        self.assertEqual(self.summary["stopped_early"], "session_error:provider_error")
+        self.assertTrue(all(r["condition"] == "user_memory_off" for r in self.rows))
+
+    def test_execution_order_is_validated(self):
+        with self.assertRaisesRegex(ValueError, "execution order"):
+            self.config(execution_order="interleaved-typo")
+
+    def test_stop_on_simulator_error_preserves_partial_session(self):
+        class BrokenShopper(ScriptedShopper):
+            def respond(self, memory, view, feedback=()):
+                raise SimulatorError("simulator_fixture_failure")
+
+        config = self.config(execution_order="off_then_on", stop_on_error=True)
+        summary = run_longitudinal(
+            config, simulator=BrokenShopper(), policy=MemoryPolicy()
+        )
+        self.assertEqual(summary["sessions"], 1)
+        self.assertEqual(summary["stopped_early"], "session_error:simulator_failure")
+        rows = [
+            json.loads(line)
+            for line in (config.output / "results.jsonl").read_text().splitlines()
+        ]
+        self.assertEqual(rows[0]["condition"], "user_memory_off")
+        path = config.output / rows[0]["session_dir"]
+        self.assertTrue((path / "transcript.jsonl").exists())
+        self.assertTrue((path / "trace.json").exists())

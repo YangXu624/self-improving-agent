@@ -3,6 +3,7 @@
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from shopping_agent.agent import ShoppingAgent
 from shopping_agent.context import PROMPT_VERSION, USER_MEMORY_PROMPT_VERSION
@@ -44,8 +45,12 @@ class LongitudinalConfig:
     session_max_model_calls: int = 18
     max_model_calls: int | None = None
     memory_format: str = "legacy"
+    execution_order: Literal["counterbalanced", "off_then_on"] = "counterbalanced"
+    stop_on_error: bool = False
 
     def __post_init__(self):
+        if self.execution_order not in {"counterbalanced", "off_then_on"}:
+            raise ValueError("Unknown longitudinal execution order")
         if self.memory_format not in FORMATS:
             raise ValueError("Unknown memory format")
         if not 1 <= self.agent_max_calls <= 6 or not 1 <= self.agent_max_searches <= 3:
@@ -81,10 +86,23 @@ def _prepare(config: LongitudinalConfig):
     return data, customers, tasks
 
 
+def _timelines(config, customers):
+    """Order whole customer timelines without changing visit or model behavior."""
+    if config.execution_order == "off_then_on":
+        return [(c, name) for name, _ in CONDITIONS for c in customers]
+    return [
+        (c, name)
+        for i, c in enumerate(customers)
+        for name, _ in CONDITIONS[i % 2 :] + CONDITIONS[: i % 2]
+    ]
+
+
 def _plan(config, customers, tasks):
     return {
         "evaluation_mode": "longitudinal_user_memory",
         "memory_format": config.memory_format,
+        "execution_order": config.execution_order,
+        "stop_on_error": config.stop_on_error,
         "development_only": True,
         "customers": len(customers),
         "sessions": len(tasks) * len(CONDITIONS),
@@ -94,9 +112,17 @@ def _plan(config, customers, tasks):
         ],
         "customer_order": [c.user_id for c in customers],
         "condition_order": {
-            c.user_id: [name for name, _ in CONDITIONS[i % 2 :] + CONDITIONS[: i % 2]]
-            for i, c in enumerate(customers)
+            c.user_id: [
+                name
+                for customer, name in _timelines(config, customers)
+                if customer == c
+            ]
+            for c in customers
         },
+        "timeline_order": [
+            {"customer_id": c.user_id, "condition": name}
+            for c, name in _timelines(config, customers)
+        ],
         "tasks": [
             {
                 "customer_id": t.customer_id,
@@ -219,139 +245,144 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                 experience=None,
                 memory_format=config.memory_format,
             )
-        for customer_index, customer in enumerate(customers):
-            order = CONDITIONS[customer_index % 2 :] + CONDITIONS[: customer_index % 2]
+        for customer, name in _timelines(config, customers):
             visits = [t for t in tasks if t.customer_id == customer.user_id]
-            for name, _enabled in order:
-                for task_index, task in enumerate(visits):
-                    directory = (
-                        config.output
-                        / "sessions"
-                        / name
-                        / customer.user_id
-                        / task.visit.task_id
+            for task_index, task in enumerate(visits):
+                directory = (
+                    config.output
+                    / "sessions"
+                    / name
+                    / customer.user_id
+                    / task.visit.task_id
+                )
+                directory.mkdir(parents=True)
+                max_turns = config.score.turn_budget or task.visit.max_user_turns
+                runner = DialogueRunner(
+                    agents[name],
+                    stores[name],
+                    simulator,
+                    run_id=shared_hash[:8],
+                    consistency=ConsistencyConfig(),
+                    budget=budget,
+                )
+                record = runner.run(
+                    task.scenario,
+                    condition=name,
+                    transcript_path=directory / "transcript.jsonl",
+                    forbidden=(task.target_truth.target_title,)
+                    if task.target_truth.target_title
+                    else (),
+                    target_rule=TargetRule(
+                        task.target_truth.target_id, config.score.headline_k
                     )
-                    directory.mkdir(parents=True)
-                    max_turns = config.score.turn_budget or task.visit.max_user_turns
-                    runner = DialogueRunner(
-                        agents[name],
-                        stores[name],
-                        simulator,
-                        run_id=shared_hash[:8],
-                        consistency=ConsistencyConfig(),
-                        budget=budget,
-                    )
-                    record = runner.run(
-                        task.scenario,
-                        condition=name,
-                        transcript_path=directory / "transcript.jsonl",
-                        forbidden=(task.target_truth.target_title,)
-                        if task.target_truth.target_title
-                        else (),
-                        target_rule=TargetRule(
-                            task.target_truth.target_id, config.score.headline_k
-                        )
-                        if task.visit.evaluation_mode == "target_item"
-                        else None,
-                        session_max_calls=config.session_max_model_calls,
-                        turn_limit=max_turns,
-                        session_user_id=customer.user_id,
-                        shopper_context=task.shopper_context,
-                    )
-                    suitability = score_session(
+                    if task.visit.evaluation_mode == "target_item"
+                    else None,
+                    session_max_calls=config.session_max_model_calls,
+                    turn_limit=max_turns,
+                    session_user_id=customer.user_id,
+                    shopper_context=task.shopper_context,
+                )
+                suitability = score_session(
+                    record,
+                    task.preference_truth,
+                    oracle,
+                    config.score,
+                    max_turns=max_turns,
+                )
+                score = (
+                    target_score(
                         record,
-                        task.preference_truth,
+                        task.target_truth,
                         oracle,
                         config.score,
                         max_turns=max_turns,
                     )
-                    score = (
-                        target_score(
-                            record,
-                            task.target_truth,
-                            oracle,
-                            config.score,
-                            max_turns=max_turns,
-                        )
-                        if task.visit.evaluation_mode == "target_item"
-                        else suitability
-                    )
-                    disclosed = compliance(record, oracle)
-                    first_success = score.get(
-                        "first_success_turn", score.get("turns_to_first_success")
-                    )
-                    prefix = [
-                        turn
-                        for turn in record.turns
-                        if first_success is not None and turn.turn <= first_success
-                    ]
-                    with stores[name].open(
-                        customer.user_id, record.astra_session_id
-                    ) as session:
-                        audit = memory_audit(session.events, customer, task, oracle)
-                    row = {
+                    if task.visit.evaluation_mode == "target_item"
+                    else suitability
+                )
+                disclosed = compliance(record, oracle)
+                first_success = score.get(
+                    "first_success_turn", score.get("turns_to_first_success")
+                )
+                prefix = [
+                    turn
+                    for turn in record.turns
+                    if first_success is not None and turn.turn <= first_success
+                ]
+                with stores[name].open(
+                    customer.user_id, record.astra_session_id
+                ) as session:
+                    audit = memory_audit(session.events, customer, task, oracle)
+                row = {
+                    "customer_id": customer.user_id,
+                    "user_id": record.user_id,
+                    "task_id": task.visit.task_id,
+                    "sequence": task.visit.sequence,
+                    "astra_session_id": record.astra_session_id,
+                    "condition": name,
+                    "evaluation_mode": task.visit.evaluation_mode,
+                    "recipient": task.visit.recipient,
+                    "termination": record.termination,
+                    "turn_budget": max_turns,
+                    "efficiency_to_first_success": {
+                        "searches": sum(t.searches for t in prefix),
+                        "clarifications": sum(t.action == "CLARIFY" for t in prefix),
+                    }
+                    if first_success is not None
+                    else None,
+                    "shared_config_sha256": shared_hash,
+                    "session_dir": str(directory.relative_to(config.output)),
+                    "score": score,
+                    "suitability": suitability,
+                    "disclosed_requirement_compliance": disclosed,
+                    "user_memory": audit,
+                    "token_accounting": {
+                        "simulator_failure_may_have_unreported_attempts": record.termination
+                        in {"simulator_error", "simulator_failure"}
+                    },
+                }
+                write_json(
+                    directory / "trace.json",
+                    {
                         "customer_id": customer.user_id,
-                        "user_id": record.user_id,
                         "task_id": task.visit.task_id,
                         "sequence": task.visit.sequence,
-                        "astra_session_id": record.astra_session_id,
                         "condition": name,
-                        "evaluation_mode": task.visit.evaluation_mode,
-                        "recipient": task.visit.recipient,
+                        "astra_session_id": record.astra_session_id,
                         "termination": record.termination,
-                        "turn_budget": max_turns,
-                        "efficiency_to_first_success": {
-                            "searches": sum(t.searches for t in prefix),
-                            "clarifications": sum(
-                                t.action == "CLARIFY" for t in prefix
-                            ),
-                        }
-                        if first_success is not None
-                        else None,
-                        "shared_config_sha256": shared_hash,
-                        "session_dir": str(directory.relative_to(config.output)),
-                        "score": score,
-                        "suitability": suitability,
-                        "disclosed_requirement_compliance": disclosed,
+                        "turns": [asdict(t) for t in record.turns],
                         "user_memory": audit,
-                        "token_accounting": {
-                            "simulator_failure_may_have_unreported_attempts": record.termination
-                            in {"simulator_error", "simulator_failure"}
-                        },
-                    }
-                    write_json(
-                        directory / "trace.json",
+                    },
+                )
+                write_json(directory / "result.json", row)
+                append_line(config.output / "results.jsonl", row)
+                rows.append(row)
+                if record.termination == "run_budget_exhausted":
+                    stopped = "run_model_call_budget_exhausted"
+                infrastructure_error = (
+                    not score.get("valid", False)
+                    or record.termination
+                    in {"agent_exception", "harness_error", "simulator_error"}
+                    or any(
+                        (t.error or "").startswith("provider_") for t in record.turns
+                    )
+                )
+                if config.stop_on_error and infrastructure_error and stopped is None:
+                    stopped = "session_error:" + record.termination
+                if (
+                    not score.get("valid", False)
+                    or record.termination == "agent_exception"
+                    or (config.stop_on_error and infrastructure_error)
+                ):
+                    blocked.extend(
                         {
                             "customer_id": customer.user_id,
-                            "task_id": task.visit.task_id,
-                            "sequence": task.visit.sequence,
                             "condition": name,
-                            "astra_session_id": record.astra_session_id,
-                            "termination": record.termination,
-                            "turns": [asdict(t) for t in record.turns],
-                            "user_memory": audit,
-                        },
+                            "task_id": remaining.visit.task_id,
+                            "reason": "prior_session_invalid",
+                        }
+                        for remaining in visits[task_index + 1 :]
                     )
-                    write_json(directory / "result.json", row)
-                    append_line(config.output / "results.jsonl", row)
-                    rows.append(row)
-                    if record.termination == "run_budget_exhausted":
-                        stopped = "run_model_call_budget_exhausted"
-                    if (
-                        not score.get("valid", False)
-                        or record.termination == "agent_exception"
-                    ):
-                        blocked.extend(
-                            {
-                                "customer_id": customer.user_id,
-                                "condition": name,
-                                "task_id": remaining.visit.task_id,
-                                "reason": "prior_session_invalid",
-                            }
-                            for remaining in visits[task_index + 1 :]
-                        )
-                        break
-                if stopped:
                     break
             if stopped:
                 break

@@ -165,6 +165,43 @@ class LongitudinalReportTests(unittest.TestCase):
             self.assertEqual(main(args), 2)
         self.assertFalse(self.config.output.exists())
 
+    def test_cli_phase_plan_records_flags_without_contacting_models(self):
+        args = [
+            "longitudinal",
+            "--customers",
+            str(self.path),
+            "--catalogue",
+            str(self.catalogue),
+            "--index",
+            str(self.index),
+            "--output",
+            str(self.config.output),
+            "--memory-format",
+            "compact",
+            "--execution-order",
+            "off_then_on",
+            "--stop-on-error",
+            "--max-model-calls",
+            "144",
+        ]
+        with (
+            patch(
+                "shopping_agent.provider.DeepSeekPolicy.from_env_file",
+                side_effect=AssertionError("credentials forbidden"),
+            ),
+            patch(
+                "astra_eval.simulators._post_json",
+                side_effect=AssertionError("network forbidden"),
+            ),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            self.assertEqual(main(args), 0)
+        plan, _ = json.JSONDecoder().raw_decode(output.getvalue())
+        self.assertEqual(plan["plan"]["execution_order"], "off_then_on")
+        self.assertEqual(plan["plan"]["memory_format"], "compact")
+        self.assertTrue(plan["plan"]["stop_on_error"])
+        self.assertFalse(self.config.output.exists())
+
     def test_existing_report_command_dispatches_longitudinal_mode(self):
         self.rows()
         with redirect_stdout(io.StringIO()) as output:
