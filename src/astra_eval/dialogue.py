@@ -368,6 +368,7 @@ class DialogueRunner:
                 break
             wall_ms = (time.perf_counter() - started) * 1000
             with self.store.open(user, sid) as session:
+                goal_epoch = session.state.goal_epoch
                 agent_turn = extract_turn(
                     session.events, response["request_id"], response, turn, wall_ms
                 )
@@ -390,6 +391,7 @@ class DialogueRunner:
                     "action": agent_turn.action,
                     "searches": agent_turn.searches,
                     "recommended": agent_turn.recommended_ids,
+                    "goal_epoch": goal_epoch,
                     "error": agent_turn.error,
                 },
             )

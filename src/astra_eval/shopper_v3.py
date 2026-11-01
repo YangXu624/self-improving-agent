@@ -90,11 +90,13 @@ class AutonomousShopper:
         self.provider, self.config = provider, provider.config
         self.history: dict[tuple[str, str], list[dict]] = {}
         self.identity: SessionIdentity | None = None
+        self._session_memory: ShopperMemory | None = None
 
     def start_session(self, owner: str, condition: str, session: str) -> None:
         if self.identity is not None:
             raise ValueError("Shopper already bound to a session")
         self.identity = SessionIdentity(owner, condition, session)
+        self._session_memory = None
 
     def finish_session(self, memory: ShopperMemory, termination: str) -> None:
         if self.identity is None:
@@ -141,12 +143,19 @@ class AutonomousShopper:
             accepted_conversation=entries,
         )
         self.identity = None
+        self._session_memory = None
+
+    def _bind_memory(self, memory):
+        if self.identity is None:
+            raise SimulatorError("shopper_session_not_bound")
+        if self._session_memory is not None and memory is not self._session_memory:
+            raise SimulatorError("shopper_session_memory_mismatch")
+        self._session_memory = memory
 
     def build_messages(
         self, memory: ShopperMemory, view: AssistantView, feedback=()
     ) -> tuple[list[dict], dict]:
-        if self.identity is None:
-            raise SimulatorError("shopper_session_not_bound")
+        self._bind_memory(memory)
         private = memory.private_context or {}
         situation = {
             k: private[k]
@@ -260,25 +269,51 @@ class AutonomousShopper:
         result: SimulatorResult,
         forbidden=(),
     ):
+        self._bind_memory(memory)
+        # Only accepted, actually presented recommendations in this session/current goal.
+        assistants = [e for e in memory.transcript.entries if e["role"] == "assistant"]
+        epoch = assistants[-1].get("goal_epoch", 0) if assistants else 0
+        offers = {}
+        for entry in assistants:
+            if (
+                entry.get("goal_epoch", 0) == epoch
+                and entry.get("action") == "RECOMMEND"
+                and entry.get("status", "ok") == "ok"
+            ):
+                offers.update(
+                    {
+                        p["id"]: p
+                        for p in entry.get("products", [])
+                        if isinstance(p.get("id"), str)
+                    }
+                )
+        offers.update(
+            {p.get("id", f"current-{i}"): p for i, p in enumerate(view.products)}
+        )
         audit = derive_disclosures(
             result.reply.message,
             memory.profile,
             assistant_text=view.text,
-            shown_titles=" ".join(p.get("title", "") for p in view.products),
+            shown_titles=" ".join(p.get("title", "") for p in offers.values()),
             shown_prices=[
                 p["price"]
-                for p in view.products
+                for p in offers.values()
                 if isinstance(p.get("price"), (float, int))
             ],
             forbidden=forbidden,
         )
         violations = list(audit.violations)
-        if result.reply.action == "accept" and not view.products:
+        if result.reply.action == "accept" and not offers:
             violations.append(Violation("accepted_without_recommendation", "error"))
         self.provider.journal.append(
             "dialogue_evidence",
             session=self.identity.session,
             auditor=AUDITOR_VERSION,
+            offer_scope={
+                "session": self.identity.session,
+                "goal_epoch": epoch,
+                "presented_ids": list(offers),
+            },
             response_sha256=result.raw_sha256,
             observations=audit.observations,
             violations=[
