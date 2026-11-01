@@ -379,3 +379,8 @@ Claude Sonnet 5.5 compatibility and two-call live smoke are now verified for V3.
 parameters are omitted; use `--sim-max-tokens 512`. Live longitudinal Claude requires a shared
 `--max-cost-usd` ceiling; carry prior costs via `--prior-cost-usd`. See the [readiness report and
 exact approval-gated run command](docs/reviews/claude-sonnet55-readiness.md). No memory-effectiveness result exists.
+
+A [conversation reliability pass](docs/reviews/conversation-reliability.md) adds complete offline
+lifecycle regressions, session-scoped offer auditing, category number matching, empty-search
+guards and safer state corrections. Isolated invalid timelines now preserve independent
+customers; infrastructure faults stop globally. No paid rerun or memory benefit is claimed.

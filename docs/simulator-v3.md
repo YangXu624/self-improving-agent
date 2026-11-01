@@ -240,3 +240,12 @@ The proposed run explicitly uses a 512-token output cap. Two actual Claude respo
 the schema and no-error audit, while some correct paraphrases remained unverified. Live Claude
 longitudinal runs now require `--max-cost-usd`; use `--prior-cost-usd` to carry previous known
 costs and unresolved allowances. No full DeepSeek evaluation has started.
+
+## Session-offer reliability update
+
+Acceptance/price auditing now uses accepted RECOMMEND offers in the current session and goal
+epoch, including cards before text-only follow-ups. Prior visits, other conditions and search-only
+results do not authorize acceptance. Bound memory identity and explicit unsupported references
+are checked. The auditor remains lexical and can misinterpret novel paraphrases. See the
+[full lifecycle tests and failure policy](reviews/conversation-reliability.md). Old failed pilot
+labels remain unchanged; no live retry was made during this hardening pass.

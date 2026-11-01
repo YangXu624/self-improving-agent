@@ -288,3 +288,11 @@ remain unverified; paid tests require a separately approved budget. [Protocol](.
 Sonnet 5.5 transport compatibility is fixed with deterministic regressions and a successful
 two-reply Claude-only smoke. Shared financial reservations prepare a capped 24-session run;
 full DeepSeek execution and merge remain approval-gated. [Readiness report](reviews/claude-sonnet55-readiness.md).
+
+## Reliability gate before further paid experiments
+
+Session offer history, category inflection, empty-search guards, conditional color validation,
+redundant retractions and failure-scope isolation are implemented with full lifecycle regressions.
+The [readiness decision](reviews/conversation-reliability.md) is GO for deterministic review,
+NO-GO for an unattended paid rerun or a memory-effectiveness claim. Human review and a separately
+authorized controlled canary precede any fresh full pilot.

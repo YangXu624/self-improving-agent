@@ -235,3 +235,12 @@ effective thinking/effort configuration. `api_budget` is an evaluation-only shar
 wrapping the existing policy without changing messages and reserving before transport I/O.
 It retains uncertain charges and stops on missing usage. CLI and longitudinal configuration
 validate that both providers share the recorded fresh ledger. Production ASTRA is unchanged.
+
+## Conversation reliability boundaries
+
+V3 offer validation uses only accepted current-session/current-goal recommendations, not prior
+customer history or arbitrary retrieved cards. Category predicates use bounded English number
+matching without changing FTS/BM25 or the scoring oracle. The executor fingerprints empty logical
+searches, rejects conditional hard-color proposals and audits narrowly redundant retractions.
+Longitudinal failure scope separates dependent timelines from global infrastructure. See the
+[hardening report](reviews/conversation-reliability.md) for tested contracts and remaining limits.
