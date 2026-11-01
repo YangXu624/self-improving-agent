@@ -4,6 +4,10 @@ This is a thin orchestration layer above the existing session evaluator. It comp
 complete Stage 1 user-memory feature OFF/ON. Procedural experience is OFF in both arms.
 No external learner, held-out customer benchmark or live effectiveness result is implemented.
 
+Representation update: the default remains legacy for controlled comparisons. Explicit
+`--memory-format compact` uses v7 shopping/text-memory views in both arms and records the
+format in shared settings. The private personas and scoring contracts do not change.
+
 ## Data flow
 
 ```mermaid

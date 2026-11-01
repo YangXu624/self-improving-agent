@@ -6,6 +6,7 @@ from pathlib import Path
 
 from shopping_agent.agent import ShoppingAgent
 from shopping_agent.context import PROMPT_VERSION, USER_MEMORY_PROMPT_VERSION
+from shopping_agent.memory_views import COMPACT_PROMPT_VERSION, FORMATS
 from shopping_agent.retrieval import LexicalSearch, file_hash
 from shopping_agent.sessions import SessionStore
 from shopping_agent.user_memory import UserMemoryStore
@@ -42,8 +43,11 @@ class LongitudinalConfig:
     agent_max_searches: int = 2
     session_max_model_calls: int = 18
     max_model_calls: int | None = None
+    memory_format: str = "legacy"
 
     def __post_init__(self):
+        if self.memory_format not in FORMATS:
+            raise ValueError("Unknown memory format")
         if not 1 <= self.agent_max_calls <= 6 or not 1 <= self.agent_max_searches <= 3:
             raise ValueError("Invalid agent bounds")
         if self.session_max_model_calls < self.agent_max_calls:
@@ -80,6 +84,7 @@ def _prepare(config: LongitudinalConfig):
 def _plan(config, customers, tasks):
     return {
         "evaluation_mode": "longitudinal_user_memory",
+        "memory_format": config.memory_format,
         "development_only": True,
         "customers": len(customers),
         "sessions": len(tasks) * len(CONDITIONS),
@@ -156,9 +161,18 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                 for t in tasks
             ]
         ),
-        "decision_policy": policy_descriptor(policy),
+        "decision_policy": {
+            **policy_descriptor(policy),
+            "prompt_version": COMPACT_PROMPT_VERSION
+            if config.memory_format == "compact"
+            else PROMPT_VERSION,
+        },
         "prompt_versions": {
-            name: USER_MEMORY_PROMPT_VERSION if enabled else PROMPT_VERSION
+            name: COMPACT_PROMPT_VERSION
+            if config.memory_format == "compact"
+            else USER_MEMORY_PROMPT_VERSION
+            if enabled
+            else PROMPT_VERSION
             for name, enabled in CONDITIONS
         },
         "simulator": asdict(config.simulator),
@@ -191,7 +205,9 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
         stores, memories, agents = {}, {}, {}
         for name, enabled in CONDITIONS:
             root = config.output / "astra" / name
-            stores[name] = SessionStore(root / "sessions")
+            stores[name] = SessionStore(
+                root / "sessions", snapshot_format=config.memory_format
+            )
             memories[name] = UserMemoryStore(root / "user-memory") if enabled else None
             agents[name] = ShoppingAgent(
                 stores[name],
@@ -201,6 +217,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                 max_searches=config.agent_max_searches,
                 user_memory=memories[name],
                 experience=None,
+                memory_format=config.memory_format,
             )
         for customer_index, customer in enumerate(customers):
             order = CONDITIONS[customer_index % 2 :] + CONDITIONS[: customer_index % 2]

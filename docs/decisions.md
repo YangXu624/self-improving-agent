@@ -235,3 +235,19 @@ may be ambiguous; exact ID discovery and graded suitability stay separate. Memor
 product associations are diagnostics, not causal application or disclosed-constraint violations.
 Reported usage and missing-coverage flags preserve the inherited failed-shopper accounting limit.
 These fixtures/tests establish infrastructure only; no live run or held-out expansion is approved.
+
+## Memory representation simplification
+
+Retain canonical state/event validation and separate a compact attribute-based shopping view.
+Model edits use current field/index paths; the executor resolves IDs and binds the captured
+revision. Actual product/search identities stay visible and verified; soft-match UUIDs become
+preference paths without losing evidence. Current snapshots can omit historical/provenance
+fields because authoritative events retain them. No new state engine or retrieval algorithm.
+
+User Markdown displays only active prose, with exact canonical records/history in a collapsed
+audit section in the same atomic file. Rendering is deterministic and consistency-validated,
+so prose and metadata are not independently editable sources of truth. Old profiles load
+without migration; accepted writes use the new format. Readability can increase file bytes.
+Normal app defaults to compact v7; library/experiment defaults remain legacy, with an explicit
+longitudinal format option. Protect historical conditions and measure API characters separately
+from billed tokens. Semantic retrieval, LLM summarization and live trials remain separate.

@@ -9,6 +9,7 @@ from .agent import ShoppingAgent
 from .cards import PROFILES
 from .configuration import load_env
 from .context import builder_for_profile
+from .memory_views import FORMATS
 from .provider import DeepSeekPolicy, ProviderError
 from .retrieval import LexicalSearch, build_index, file_hash
 from .sessions import SessionError, SessionStore
@@ -37,6 +38,12 @@ def parser():
     chat.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
     chat.add_argument("--env-file", default=".env")
     chat.add_argument("--cards-profile", choices=tuple(PROFILES), default="baseline")
+    chat.add_argument(
+        "--memory-format",
+        choices=FORMATS,
+        default="compact",
+        help="Compact state/text memories, or historical legacy policy format",
+    )
     chat.add_argument(
         "--user-memory",
         action="store_true",
@@ -119,7 +126,7 @@ def main(argv=None):
             args.index, expected_catalogue_hash=file_hash(args.catalogue)
         )
         try:
-            store = SessionStore(args.sessions_root)
+            store = SessionStore(args.sessions_root, snapshot_format=args.memory_format)
             sid = args.session or store.create(args.user)
             # Validate ownership even when the interactive user exits immediately.
             with store.open(args.user, sid):
@@ -128,7 +135,10 @@ def main(argv=None):
                 store,
                 search,
                 policy,
-                context_builder=builder_for_profile(args.cards_profile),
+                context_builder=builder_for_profile(
+                    args.cards_profile, memory_format=args.memory_format
+                ),
+                memory_format=args.memory_format,
                 user_memory=UserMemoryStore(args.user_memory_root)
                 if args.user_memory
                 else None,

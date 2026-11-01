@@ -34,8 +34,9 @@ class SessionError(ValueError):
 
 
 class Session:
-    def __init__(self, directory, user_id, session_id):
+    def __init__(self, directory, user_id, session_id, *, snapshot_format="legacy"):
         self.directory, self.user_id, self.id = directory, user_id, session_id
+        self.snapshot_format = snapshot_format
         self.events, self.state = [], ShoppingState()
         seen_ids = set()
         path = directory / "events.jsonl"
@@ -142,6 +143,16 @@ class Session:
             "attribute_ledger": attribute_ledger(self),
             "state": self.state.model_dump(exclude_defaults=True, exclude_none=True),
         }
+        if self.snapshot_format == "compact":
+            from .memory_views import compact_state
+
+            value["schema_version"] = 2
+            value["state"] = compact_state(self)
+            value.pop("attribute_ledger")
+            value["_audit"] = {
+                "state_version": self.state.version,
+                "goal_epoch": self.state.goal_epoch,
+            }
         fd, temp = tempfile.mkstemp(dir=self.directory, prefix=".state-", suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as handle:
@@ -158,7 +169,10 @@ class SessionStore:
     _locks: ClassVar[dict] = {}
     _guard = threading.Lock()
 
-    def __init__(self, root="data/sessions"):
+    def __init__(self, root="data/sessions", *, snapshot_format="legacy"):
+        if snapshot_format not in {"legacy", "compact"}:
+            raise ValueError("Unknown snapshot format")
+        self.snapshot_format = snapshot_format
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
@@ -210,7 +224,12 @@ class SessionStore:
                 except BlockingIOError as exc:
                     raise SessionError("session_busy") from exc
                 try:
-                    session = Session(directory, user_id, session_id)
+                    session = Session(
+                        directory,
+                        user_id,
+                        session_id,
+                        snapshot_format=self.snapshot_format,
+                    )
                     yield session
                     session.snapshot()
                 finally:

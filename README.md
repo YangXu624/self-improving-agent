@@ -36,6 +36,16 @@ and [decision record](docs/decisions.md).
 
 ## Setup
 
+### Compact memory representations
+
+Normal chat now sends attribute-based current state and selected user memories as short
+ref/text entries, with audit IDs and revisions kept in the executor. User profile Markdown
+shows active sentences and a collapsed audit section. Legacy logs/profiles remain readable.
+See [formats, examples and measured size checks](docs/memory-representations.md).
+Chat `--memory-format legacy` or UI process setting `ASTRA_MEMORY_FORMAT=legacy` retains the
+historical policy format. Evaluators default to legacy; longitudinal runs can explicitly
+select `--memory-format compact`. No semantic/embedding retrieval change is included.
+
 ### Stage 2: returning-customer evaluation
 
 Three development customers have four catalogue-validated visits each. The thin timeline

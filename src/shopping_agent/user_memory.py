@@ -6,6 +6,7 @@ hosted authentication). Models propose records, never paths or filesystem operat
 
 import fcntl
 import hashlib
+import html
 import json
 import os
 import re
@@ -229,7 +230,7 @@ def validate_proposal(proposal: MemoryProposal, message: str) -> None:
         raise UserMemoryError("memory_correction_requires_explicit_change")
 
 
-def render_profile(profile: UserProfile) -> str:
+def _render_legacy_profile(profile: UserProfile) -> str:
     """One authoritative Markdown document; JSON-escaped bullets are safely reversible."""
     lines = [
         "# ASTRA user memory",
@@ -249,7 +250,7 @@ def render_profile(profile: UserProfile) -> str:
     return "\n".join(lines) + "\n"
 
 
-def parse_profile(text: str) -> UserProfile:
+def _parse_legacy_profile(text: str) -> UserProfile:
     header, records, current = {}, [], None
     for line in text.splitlines():
         if line.startswith("### "):
@@ -262,11 +263,79 @@ def parse_profile(text: str) -> UserProfile:
                 raise UserMemoryError("duplicate_profile_field")
             destination[key] = json.loads(raw)
     profile = UserProfile.model_validate({**header, "records": records})
-    if render_profile(profile) != text:
+    if _render_legacy_profile(profile) != text:
         raise UserMemoryError("invalid_profile_markdown")
     if len({r.id for r in profile.records}) != len(profile.records):
         raise UserMemoryError("duplicate_memory_record_id")
     return profile
+
+
+def render_profile(profile: UserProfile) -> str:
+    """Readable active memories, with portable audit data in one collapsed section."""
+    from .memory_views import memory_text
+
+    def escaped(text):
+        text = html.escape(text.replace("\n", " "), quote=False)
+        return re.sub(r"([\\`*_{}\[\]#+|])", r"\\\1", text)
+
+    lines = [
+        "# ASTRA user memory",
+        "<!-- astra-user-memory-v2 -->",
+        "",
+        "User: " + escaped(profile.user_id),
+    ]
+    for category, heading in SECTIONS.items():
+        lines.extend(["", "## " + heading])
+        active = [
+            r
+            for r in profile.records
+            if r.status == "active" and r.category == category
+        ]
+        lines.extend("- " + escaped(memory_text(r.model_dump())) for r in active)
+        if not active:
+            lines.append("- None recorded.")
+    data = {
+        "format": 2,
+        "profile": profile.model_dump(exclude_defaults=True, exclude_none=True),
+    }
+    payload = (
+        json.dumps(data, ensure_ascii=True, separators=(",", ":"))
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+    lines.extend(
+        [
+            "",
+            "<details>",
+            "<summary>Audit metadata (managed by ASTRA)</summary>",
+            "",
+            "```json",
+            payload,
+            "```",
+            "</details>",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def parse_profile(text: str) -> UserProfile:
+    """Read both historical bullet profiles and the prose/audit representation."""
+    if not text.startswith("# ASTRA user memory\n<!-- astra-user-memory-v2 -->\n"):
+        return _parse_legacy_profile(text)
+    try:
+        body = text.split("\n```json\n", 1)[1].split("\n```\n</details>\n", 1)[0]
+        data = json.loads(body)
+        if data.get("format") != 2 or set(data) != {"format", "profile"}:
+            raise ValueError("invalid_profile_format")
+        profile = UserProfile.model_validate(data["profile"])
+        if (
+            len({r.id for r in profile.records}) != len(profile.records)
+            or render_profile(profile) != text
+        ):
+            raise ValueError("profile_content_mismatch")
+        return profile
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise UserMemoryError("invalid_profile_markdown") from exc
 
 
 class UserMemoryStore:

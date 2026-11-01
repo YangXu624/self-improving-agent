@@ -172,6 +172,9 @@ def parser():
     longitudinal.add_argument("--price-output-per-million", type=float)
     longitudinal.add_argument("--env-file", default=".env")
     longitudinal.add_argument("--live", action="store_true")
+    longitudinal.add_argument(
+        "--memory-format", choices=("legacy", "compact"), default="legacy"
+    )
     add_sim_args(longitudinal)
     return p
 
@@ -207,6 +210,7 @@ def run_command(args):
             ),
             session_max_model_calls=args.session_max_model_calls,
             max_model_calls=args.max_model_calls,
+            memory_format=args.memory_format,
         )
         longitudinal_plan = plan_longitudinal(config)
         if not args.live:

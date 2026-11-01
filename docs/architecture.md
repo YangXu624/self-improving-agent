@@ -1,5 +1,9 @@
 # Current baseline architecture
 
+Representation simplification: [memory-representations.md](memory-representations.md) describes
+the compact policy/snapshot view and readable user profiles. Internal validation/audit state
+is retained; legacy experiment formats remain available. Semantic retrieval is a separate step.
+
 Status: CLI and Streamlit UI use DeepSeek decisions with session memory and optional user
 profiles. Stage 1 profiles were tested with mocked calls on 1 November 2026. The earlier
 two-turn live baseline smoke does not establish memory quality or broad shopping performance.
@@ -18,7 +22,7 @@ resolution. Missing configuration disables the chat; provider errors stop a turn
 The adapter retains JSON mode, disabled thinking, output/timeout bounds and no hidden retries.
 
 The existing ShoppingAgent owns validation, state commits, trusted search and recommendation
-gates. Its memory-OFF context is `shopping-baseline-v5-experience`: active requirement IDs and
+gates. Its legacy evaluation context is `shopping-baseline-v5-experience`: active requirement IDs and
 predicates, concise dialogue, and all current candidates with facts, provenance and distinct
 supporting text. Generated schema titles, presentation fields and repeated fact values are
 omitted; omitted facts mean unknown. Candidate IDs/order and deterministic gates are retained.
@@ -157,8 +161,9 @@ rebuild it on reopen. Existing state schema 1 and storage codec versions remain 
 Question-only changes do not increment requirement versions or invalidate search results.
 NEW_GOAL scopes both ledgers to the current goal, including its initiating user message.
 Compact working context references active requirements instead of repeating their values.
-Current prompts are `shopping-baseline-v5-experience` (user memory OFF) and
-`shopping-baseline-v6-user-memory` (ON); old prompts/events are retained unchanged.
+Legacy evaluation prompts are `shopping-baseline-v5-experience` (user memory OFF) and
+`shopping-baseline-v6-user-memory` (ON). Normal chat uses compact v7; old prompts/events remain
+unchanged. See the representation guide for explicit mode selection and compatibility.
 
 CLARIFY uses separate `size`, `width`, `price`, `currency`, `product_type` and
 `product_subtype` attributes. Resolved exact attributes are rejected after current edits;
@@ -205,8 +210,9 @@ Historical snapshots missing this evidence are unknown; extraction completeness 
 atomic updates, explicit corrections/withdrawals and bounded relevance selection. See
 [user-memory.md](user-memory.md) for storage authority, validation limits and checkpoint status.
 It reuses existing user/session identities and does not replace session or procedural memory.
-The normal CLI/UI can opt in; the evaluator remains OFF. Enabled context uses
-`shopping-baseline-v6-user-memory` and an enabled-only `MemoryDecision` contract. Memory
+The normal CLI/UI can opt in. Normal compact v7 uses text memories and short references;
+legacy user-memory evaluation uses v6/MemoryDecision. Single-session evaluation remains OFF,
+while the longitudinal runner explicitly compares OFF/ON. Memory
 selection, actual prompt inclusion and profile writes/rejections are traced independently.
 Current hard state remains authoritative; recalled profile records are advisory, not filters.
 The external LLM learner remains future work. Stage 2 adds a development returning-customer
