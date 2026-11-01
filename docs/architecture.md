@@ -195,3 +195,10 @@ accepted, signature-matching actions establish application. Reviewed lesson reco
 be changed by candidate insertion. New recommendation events snapshot active hard state so
 independent per-presentation compliance is separate from hidden-target-profile mismatches.
 Historical snapshots missing this evidence are unknown; extraction completeness is not proved.
+
+## Persistent user profiles (Stage 1)
+
+`user_memory.py` adds a separate per-user Markdown store with evidence-linked proposals,
+atomic updates, explicit corrections/withdrawals and bounded relevance selection. See
+[user-memory.md](user-memory.md) for storage authority, validation limits and checkpoint status.
+It reuses existing user/session identities and does not replace session or procedural memory.

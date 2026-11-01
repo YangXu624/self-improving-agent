@@ -77,6 +77,8 @@ secrets/
 # Session files, including explicit CLI roots outside data/
 **/events.jsonl
 **/state.json
+# Private profiles, including custom roots outside data/.
+**/profile.md
 
 # Generated experiment outputs; source protocols are not blanket-ignored
 /artifacts/
