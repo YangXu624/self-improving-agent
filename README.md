@@ -12,8 +12,9 @@ loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI n
 DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
 been removed; mocked responses remain confined to automated tests. Target/preference evaluation
 and an explicitly reviewed procedural-memory MVP are implemented. Two learning sessions produced
-candidates; no real memory-ON transfer benefit is established. Longitudinal evaluation,
-external LLM lesson extraction and code self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
+candidates; no real memory-ON transfer benefit is established. A development-only returning-customer
+evaluator now compares user memory OFF/ON across ordered visits. External LLM lesson extraction
+and code self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
 pilot commands](docs/experience-pilot.md).
 
 This is a new implementation inspired by
@@ -34,6 +35,22 @@ See [current architecture](docs/architecture.md), [proposed evaluation](docs/eva
 and [decision record](docs/decisions.md).
 
 ## Setup
+
+### Stage 2: returning-customer evaluation
+
+Three development customers have four catalogue-validated visits each. The thin timeline
+runner reuses the existing shopper, dialogue loop and scorers with stable users, fresh session
+UUIDs and isolated OFF/ON profile roots. Procedural memory is OFF in both arms. Free plan:
+
+```bash
+.venv/bin/python -m astra_eval longitudinal \
+  --output data/eval/longitudinal/dev-review --limit-customers 1
+```
+
+Without `--live`, the command only reads inputs/catalogue/index for validation: no model
+requests, credential reads, profile access or output creation. See [Stage 2 architecture,
+metrics, commands and limits](docs/longitudinal-evaluation.md). Fixtures await manual review;
+mocked integration tests do not establish live memory benefit.
 
 ### Stage 1: optional persistent user profiles
 

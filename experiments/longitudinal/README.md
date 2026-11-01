@@ -33,6 +33,7 @@ category-token ontology, not necessarily an exact leaf category. Ambiguity is ex
 witness can share its complete documented profile with other products. Exact-target metrics
 must therefore remain distinct from graded suitability.
 
-This first checkpoint implements input contracts and validation. The next checkpoint adds
-the thin timeline runner, isolated memory conditions and reports. The source fixture should
-be reviewed/refined before a separately frozen held-out set is designed.
+The input contracts, thin timeline runner, isolated user-memory conditions and reports are
+implemented. See [commands, architecture and limits](../../docs/longitudinal-evaluation.md).
+The source fixture should be reviewed/refined before a separately frozen held-out set is
+designed. No live model experiment has been run and no effectiveness claim is made.

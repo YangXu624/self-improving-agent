@@ -255,3 +255,11 @@ Stage 1 stops for PR review. Returning-customer timelines, a longitudinal evalua
 evaluation CLI, external LLM lesson extraction and source-code optimisation are not implemented.
 Existing procedural Lesson 1 activation and live paired trials remain separately approval-gated.
 User-profile persistence tests are integration evidence, not measured shopping improvement.
+
+## Current Stage 2: returning-customer development evaluator
+
+PR #18 (Stage 1) is merged. Stage 2 adds a thin timeline layer around existing session
+evaluation, three four-visit development customers, isolated user-memory OFF/ON conditions,
+catalogue validation and per-session/customer metrics. See [Stage 2](longitudinal-evaluation.md).
+No live DeepSeek/Ollama evaluation, new held-out benchmark or procedural activation has run.
+Stop for implementation and customer-data review before expanding fixtures or experiments.

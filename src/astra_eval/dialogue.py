@@ -239,10 +239,16 @@ class DialogueRunner:
         target_rule=None,
         session_max_calls=None,
         turn_limit=None,
+        session_user_id: str | None = None,
+        shopper_context: dict | None = None,
     ):
         self.target_mode = target_rule is not None
-        # One ASTRA user per scenario: nothing user-scoped can ever leak between scenarios.
-        user = f"{self.user_id}-{scenario.id}"
+        # Single-session defaults isolate scenarios; timelines explicitly retain an owner.
+        user = (
+            session_user_id
+            if session_user_id is not None
+            else f"{self.user_id}-{scenario.id}"
+        )
         sid = self.store.create(user)
         record = SessionRecord(scenario.id, condition, sid, user_id=user)
         memory = ShopperMemory(
@@ -250,6 +256,7 @@ class DialogueRunner:
             window_turns=self.simulator.config.window_turns,
             transcript=Transcript(transcript_path),
             disclosure_protocol="target-v1" if target_rule is not None else "legacy",
+            private_context=shopper_context,
         )
         stats = {
             "calls": 0,

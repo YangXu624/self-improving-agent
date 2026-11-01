@@ -209,4 +209,8 @@ The normal CLI/UI can opt in; the evaluator remains OFF. Enabled context uses
 `shopping-baseline-v6-user-memory` and an enabled-only `MemoryDecision` contract. Memory
 selection, actual prompt inclusion and profile writes/rejections are traced independently.
 Current hard state remains authoritative; recalled profile records are advisory, not filters.
-The external LLM learner and returning-customer evaluator remain future work.
+The external LLM learner remains future work. Stage 2 adds a development returning-customer
+evaluator; see [longitudinal-evaluation.md](longitudinal-evaluation.md). It compiles current
+private persona state into existing scenarios, reuses DialogueRunner with optional stable
+owner/current-context inputs, and isolates ON/OFF stores. Default single-session behaviour
+and frozen benchmarks are unchanged; procedural memory is OFF in the new comparison.

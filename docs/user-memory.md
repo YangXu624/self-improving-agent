@@ -141,9 +141,12 @@ There is still no purchase record unless Alice explicitly confirms buying someth
 
 The current single-session evaluator is unchanged and constructs agents with user memory OFF,
 even when procedural memory is ON. Existing frozen tasks/results are not migrated or rescored.
-Stage 1 does not implement a longitudinal evaluator or a four-condition experiment CLI.
+Stage 1 did not implement a longitudinal evaluator. Stage 2 now provides
+[development timeline orchestration](longitudinal-evaluation.md) using these application
+interfaces. The four-condition experiment CLI remains unimplemented.
 
-Proposed future interfaces (documentation only, no placeholder implementations):
+Interfaces originally proposed in Stage 1 (see Stage 2 documentation for implemented timeline
+types and orchestration; the external learner below remains documentation only):
 
 - **Customer timeline input:** stable `user_id`, private persona/background, ordered frozen
   shopping goals, optional dated preference changes and per-goal scoring truth.

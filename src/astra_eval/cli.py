@@ -153,6 +153,26 @@ def parser():
     )
     fl.add_argument("--output", required=True, help="output JSON path for snapshot")
     fl.add_argument("--snapshot-id", help="snapshot identifier")
+    longitudinal = sub.add_parser(
+        "longitudinal",
+        help="validate/plan returning-customer evaluation; models only with --live",
+    )
+    longitudinal.add_argument(
+        "--customers", default="experiments/longitudinal/customers.dev.json"
+    )
+    longitudinal.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
+    longitudinal.add_argument("--index", default="data/index/catalogue.sqlite")
+    longitudinal.add_argument("--output", required=True)
+    longitudinal.add_argument("--limit-customers", type=int)
+    longitudinal.add_argument("--headline-k", type=int, default=5)
+    longitudinal.add_argument("--turn-budget", type=int)
+    longitudinal.add_argument("--session-max-model-calls", type=int, default=18)
+    longitudinal.add_argument("--max-model-calls", type=int)
+    longitudinal.add_argument("--price-input-per-million", type=float)
+    longitudinal.add_argument("--price-output-per-million", type=float)
+    longitudinal.add_argument("--env-file", default=".env")
+    longitudinal.add_argument("--live", action="store_true")
+    add_sim_args(longitudinal)
     return p
 
 
@@ -165,6 +185,48 @@ def main(argv=None):
 
 
 def run_command(args):
+    if args.command == "longitudinal":
+        from .longitudinal import (
+            LongitudinalConfig,
+            plan_longitudinal,
+            run_longitudinal,
+        )
+
+        config = LongitudinalConfig(
+            customers=Path(args.customers),
+            catalogue=Path(args.catalogue),
+            index=Path(args.index),
+            output=Path(args.output),
+            limit_customers=args.limit_customers,
+            simulator=sim_config(args),
+            score=ScoreConfig(
+                headline_k=args.headline_k,
+                turn_budget=args.turn_budget,
+                price_input_per_million=args.price_input_per_million,
+                price_output_per_million=args.price_output_per_million,
+            ),
+            session_max_model_calls=args.session_max_model_calls,
+            max_model_calls=args.max_model_calls,
+        )
+        longitudinal_plan = plan_longitudinal(config)
+        if not args.live:
+            print(json.dumps({"plan": longitudinal_plan}, indent=2, sort_keys=True))
+            print("Dry run: no models contacted and no output or user memory created.")
+            return 0
+        if config.max_model_calls is None:
+            raise ValueError("--live requires --max-model-calls")
+        from shopping_agent.provider import DeepSeekPolicy
+
+        if config.output.exists():
+            raise ValueError("Use a new longitudinal output directory")
+        result = run_longitudinal(
+            config,
+            simulator=OllamaShopper(config.simulator),
+            policy=DeepSeekPolicy.from_env_file(args.env_file),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        print(f"Report: {config.output / 'report.md'}")
+        return 0
     if args.command == "extract-lessons":
         from shopping_agent.experience import (
             ExperienceStore,
@@ -330,7 +392,16 @@ def run_command(args):
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["probe_ok"] else 1
     if args.command == "report":
-        write_report(args.run_dir)
+        run_meta = json.loads((Path(args.run_dir) / "run.json").read_text())
+        if (
+            run_meta["shared_config"].get("evaluation_mode")
+            == "longitudinal_user_memory"
+        ):
+            from .longitudinal_report import write_longitudinal_report
+
+            write_longitudinal_report(Path(args.run_dir))
+        else:
+            write_report(args.run_dir)
         print((Path(args.run_dir) / "report.md").read_text(encoding="utf-8"))
         return 0
     if args.command == "show":

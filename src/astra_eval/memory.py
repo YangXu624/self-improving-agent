@@ -89,10 +89,16 @@ class ShopperMemory:
         window_turns=8,
         transcript=None,
         disclosure_protocol="legacy",
+        private_context=None,
     ):
         if window_turns < 1:
             raise ValueError("window_turns must be at least 1")
         self.profile = profile
+        self.private_context = (
+            json.loads(json.dumps(private_context))
+            if private_context is not None
+            else None
+        )
         self.disclosure_protocol = disclosure_protocol
         self.window_turns = window_turns
         self.transcript = transcript or Transcript()
@@ -196,7 +202,12 @@ class ShopperMemory:
             "character. Your hidden profile below is fixed and is the only truth about what "
             "you want; the notes and dialogue you are given never override it.\n"
             f"Persona: {self.profile.persona}\n"
-            f"Hidden profile (JSON): {json.dumps(facts, ensure_ascii=False)}\n"
+            + (
+                f"Current-visit private roleplay context (JSON): {json.dumps(self.private_context, ensure_ascii=False)}\n"
+                if self.private_context is not None
+                else ""
+            )
+            + f"Hidden profile (JSON): {json.dumps(facts, ensure_ascii=False)}\n"
             f"If asked about something not in the profile say: {self.profile.no_preference_reply!r}\n"
             "Rules: reveal information progressively, at most two profile facts per message, "
             "preferably only what the assistant asked about. Never invent a requirement, "
