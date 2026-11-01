@@ -251,3 +251,19 @@ without migration; accepted writes use the new format. Readability can increase 
 Normal app defaults to compact v7; library/experiment defaults remain legacy, with an explicit
 longitudinal format option. Protect historical conditions and measure API characters separately
 from billed tokens. Semantic retrieval, LLM summarization and live trials remain separate.
+
+## Autonomous shopper V3, opt-in
+
+Give the shopper typed current needs and actual history rather than canned sentences or
+model-generated disclosure labels. Keep transport, roleplay context and text evidence separate.
+Derive bounded evidence from accepted language, leaving unknown paraphrases unverified and
+recognized contradictions rejected. Preserve V2, independent catalogue validation and existing
+scoring. This trades exact conversational repeatability for autonomy; request replay, isolated
+condition histories, provider budgets and explicit audit limitations keep the change inspectable.
+No new framework/dependency or production memory layer is introduced. [Details](simulator-v3.md).
+
+Claude shopper settings may share `.env` with DeepSeek using separately named
+`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` fields. Reuse the literal, allowlisted parser so the
+application still loads its DeepSeek settings when Claude fields are present. An explicit
+shopper file remains supported; model precedence is CLI, process, file. No implicit provider
+switch or model request occurs when configuration is read.

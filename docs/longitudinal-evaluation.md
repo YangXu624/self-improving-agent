@@ -228,3 +228,13 @@ validation and audited corrections. Unsupported disclosure claims now cause boun
 and simulator failure rather than harmless warnings. See the [evidence, limits and exact
 fresh-run commands](reviews/shopper-disclosure-integrity.md). Never pool the stopped v1 OFF
 sessions with v2 ON sessions. Production behavior, fixtures and scoring are unchanged.
+
+## Optional V3 shopper
+
+The default flow above remains V2/Ollama. `--shopper-version v3` uses autonomous generated
+openings/replies and Python-derived disclosure evidence; `--shopper-provider claude` additionally
+requires a Claude model via `--sim-model` or `ANTHROPIC_MODEL` in the selected environment file. Actual prior-visit history is isolated by customer/condition.
+V3 ignores frozen sentence/disclosure schedules while retaining their original protected data.
+The dry plan records provider settings and intended journal path; live execution records its
+actual journal and enforces a matching shopper-call cap in addition to the DeepSeek cap.
+See [V3 operation and audit limits](simulator-v3.md). Scoring and memory conditions are unchanged.

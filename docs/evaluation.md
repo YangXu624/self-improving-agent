@@ -182,3 +182,12 @@ same version, not against v3 runs with a different policy. Old v1 scenarios and 
 are not rewritten. Offline regressions cover question evidence, dispositions, correction,
 goal scope, history truncation, bounded rejections and legacy replay. This change supplies
 no target IDs, simulator state or experience-learning capability to the shopping agent.
+
+## Opt-in autonomous shopper prototype
+
+[V3](simulator-v3.md) changes the conversation generator, not the protected fixtures or
+preference/target scorers. Generated openings and free paraphrasing mean results must not be
+pooled with V2. Python-derived disclosures are conservative evidence, not proof of complete
+semantic consistency. The [Ollama/Claude protocol](../experiments/longitudinal/shopper-v3-comparison.md)
+requires separate reliability/naturalness review before a new effectiveness study. No V3
+live comparison has run. Claude costs and missing failure usage need separate billing reconciliation.

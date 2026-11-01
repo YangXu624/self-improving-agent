@@ -44,6 +44,7 @@ class LongitudinalConfig:
     agent_max_searches: int = 2
     session_max_model_calls: int = 18
     max_model_calls: int | None = None
+    max_shopper_calls: int | None = None
     memory_format: str = "legacy"
     execution_order: Literal["counterbalanced", "off_then_on"] = "counterbalanced"
     stop_on_error: bool = False
@@ -51,6 +52,15 @@ class LongitudinalConfig:
     def __post_init__(self):
         if self.execution_order not in {"counterbalanced", "off_then_on"}:
             raise ValueError("Unknown longitudinal execution order")
+        if self.max_shopper_calls is not None:
+            if (
+                isinstance(self.max_shopper_calls, bool)
+                or not isinstance(self.max_shopper_calls, int)
+                or self.max_shopper_calls < 1
+            ):
+                raise ValueError("Shopper cap must be a positive integer")
+            if not getattr(self.simulator, "provider", None):
+                raise ValueError("Shopper call cap requires V3")
         if self.memory_format not in FORMATS:
             raise ValueError("Unknown memory format")
         if not 1 <= self.agent_max_calls <= 6 or not 1 <= self.agent_max_searches <= 3:
@@ -60,6 +70,7 @@ class LongitudinalConfig:
         for value in (
             self.limit_customers,
             self.max_model_calls,
+            self.max_shopper_calls,
             self.score.turn_budget,
         ):
             if value is not None and value < 1:
@@ -143,6 +154,15 @@ def _plan(config, customers, tasks):
             for t in tasks
         ),
         "max_model_calls": config.max_model_calls,
+        "shopper": {
+            "settings": asdict(config.simulator),
+            "max_calls": config.max_shopper_calls,
+            "journal": str(
+                config.output.with_name(config.output.name + ".shopper-v3.jsonl")
+            )
+            if getattr(config.simulator, "provider", None)
+            else None,
+        },
     }
 
 
@@ -171,7 +191,25 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
         raise ValueError(
             "Actual shopper settings must match recorded simulator settings"
         )
+    if getattr(simulator, "autonomous", False):
+        if (
+            simulator.history
+            or simulator.identity is not None
+            or simulator.provider.journal.calls
+        ):
+            raise ValueError(
+                "A V3 longitudinal run requires fresh shopper history and journal"
+            )
+        if (
+            config.max_shopper_calls is None
+            or simulator.provider.journal.max_calls != config.max_shopper_calls
+        ):
+            raise ValueError(
+                "Actual V3 shopper cap must match recorded max_shopper_calls"
+            )
     plan = _plan(config, customers, tasks)
+    if getattr(simulator, "autonomous", False):
+        plan["shopper"]["journal"] = str(simulator.provider.journal.path)
     shared = {
         "evaluation_mode": "longitudinal_user_memory",
         "dataset_id": data.dataset_id,

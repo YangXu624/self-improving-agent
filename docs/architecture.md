@@ -15,7 +15,7 @@ runtime scripted module was removed. `ui.py` constructs DeepSeekPolicy from the 
 project env file, then passes it to ChatService. The service requires a policy; there is no
 implicit default/fallback. Only tests contain deterministic decision/HTTP fixtures.
 
-`configuration.py` parses the two supported settings without shell evaluation or value
+`configuration.py` parses the supported DeepSeek/Claude environment settings without shell evaluation or value
 logging. Process settings take precedence. File secrets are not cached into os.environ.
 The CLI retains its compatible `load_env` interface; UI/provider composition uses fresh file
 resolution. Missing configuration disables the chat; provider errors stop a turn safely.
@@ -220,3 +220,12 @@ evaluator; see [longitudinal-evaluation.md](longitudinal-evaluation.md). It comp
 private persona state into existing scenarios, reuses DialogueRunner with optional stable
 owner/current-context inputs, and isolates ON/OFF stores. Default single-session behaviour
 and frozen benchmarks are unchanged; procedural memory is OFF in the new comparison.
+
+## Autonomous shopper V3 prototype
+
+The opt-in evaluator path separates provider transport (`shopper_providers`), conversational
+policy/private context/history (`shopper_v3`) and bounded deterministic text evidence
+(`shopper_evidence`). It plugs into `DialogueRunner`; ASTRA, BM25, memory stores and scorers
+are unchanged. Actual prior dialogue is isolated by customer and condition, with current
+verified needs authoritative. No sentence templates or model disclosure labels are used.
+V2 remains the default. See [design, trace contract and limitations](simulator-v3.md).

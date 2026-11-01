@@ -364,3 +364,13 @@ explicit human confirmation before becoming active. Retrieval matches behavioral
 decision context cues. Injected procedural guidance and observable action compliance are
 tracked separately, and immutable content-hashed snapshots enable side-by-side evaluation
 (`--experience-snapshot`) across distinct tasks.
+
+An opt-in [autonomous shopper V3 prototype](docs/simulator-v3.md) supports Ollama or Claude
+for longitudinal evaluation, generated openings/replies, dialogue-derived disclosure evidence
+and actual prior-visit continuity. V2 remains default. Both transports are tested with mocks;
+no V3 live quality or memory benefit is established. [Provider comparison protocol](experiments/longitudinal/shopper-v3-comparison.md).
+
+V3 Claude shopper configuration can share the ignored `.env`: set `ANTHROPIC_API_KEY` and
+`ANTHROPIC_MODEL=claude-sonnet-5-5` (see `.env.example`). Use `--shopper-version v3
+--shopper-provider claude`; `--sim-model` overrides the configured model, and
+`--shopper-env-file` can select a separate settings file. No calls run just from setting these fields.
