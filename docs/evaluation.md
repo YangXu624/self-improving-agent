@@ -191,3 +191,8 @@ pooled with V2. Python-derived disclosures are conservative evidence, not proof 
 semantic consistency. The [Ollama/Claude protocol](../experiments/longitudinal/shopper-v3-comparison.md)
 requires separate reliability/naturalness review before a new effectiveness study. No V3
 live comparison has run. Claude costs and missing failure usage need separate billing reconciliation.
+
+The authorized four-customer Claude V3 run stopped at its live preflight: one Claude request
+returned HTTP 400 for an unsupported `temperature` parameter; zero shopping sessions or
+DeepSeek calls started. There is no OFF/ON result. See the [preserved preflight report](reviews/claude-v3-four-customer-preflight.md)
+for the exact error, unknown billing usage, unchanged artifacts and required transport/cost checks.
