@@ -13,14 +13,11 @@ def group(categories: list[str]) -> str:
     """Reporting buckets only, not a new product ontology or scoring rule."""
     if "Shoes" in categories:
         return "Footwear"
-    if any(
-        label in categories
-        for label in ("Handbags & Wallets", "Backpacks", "Briefcases", "Duffels")
-    ) and not any("Wallet" in label for label in categories[2:]):
-        return "Bags"
-    # Handbags & Wallets also contains bags; exclude only the wallet branch.
-    if "Handbags & Wallets" in categories and not any(
+    wallet_branch = any(
         label == "Wallets" or "Card Cases" in label for label in categories[3:]
+    )
+    if ("Handbags & Wallets" in categories and not wallet_branch) or any(
+        label in categories for label in ("Backpacks", "Briefcases", "Duffels")
     ):
         return "Bags"
     if "Clothing" in categories or "Sport Specific Clothing" in categories:
@@ -61,9 +58,12 @@ def inventory(catalogue: Path, index: Path, fixture: Path) -> str:
         raise ValueError("Expected the approved 50k catalogue and index")
 
     def examples(counter: Counter) -> str:
-        return "; ".join(f"{value} ({n})" for value, n in counter.most_common(3)).replace(
-            "|", "\\|"
-        ) or "—"
+        return (
+            "; ".join(f"{value} ({n})" for value, n in counter.most_common(3)).replace(
+                "|", "\\|"
+            )
+            or "—"
+        )
 
     lines = [
         "# Local TechJam catalogue inventory",
@@ -100,13 +100,21 @@ def inventory(catalogue: Path, index: Path, fixture: Path) -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--catalogue", type=Path, default=Path("data/catalogue/catalog.jsonl"))
-    parser.add_argument("--index", type=Path, default=Path("data/index/catalogue.sqlite"))
     parser.add_argument(
-        "--fixture", type=Path, default=Path("experiments/longitudinal/customers.dev.json")
+        "--catalogue", type=Path, default=Path("data/catalogue/catalog.jsonl")
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("docs/reviews/longitudinal-catalogue-inventory.md")
+        "--index", type=Path, default=Path("data/index/catalogue.sqlite")
+    )
+    parser.add_argument(
+        "--fixture",
+        type=Path,
+        default=Path("experiments/longitudinal/customers.dev.json"),
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("docs/reviews/longitudinal-catalogue-inventory.md"),
     )
     args = parser.parse_args()
     args.output.write_text(inventory(args.catalogue, args.index, args.fixture))

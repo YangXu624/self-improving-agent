@@ -37,3 +37,27 @@ The input contracts, thin timeline runner, isolated user-memory conditions and r
 implemented. See [commands, architecture and limits](../../docs/longitudinal-evaluation.md).
 The source fixture should be reviewed/refined before a separately frozen held-out set is
 designed. No live model experiment has been run and no effectiveness claim is made.
+
+## Expanded development fixture
+
+`customers.dev-expanded.json` preserves those three customers and adds eight human-directed
+three-visit customers: 11 customers / 36 visits. It is opt-in; the CLI default and original
+fixture are unchanged. All 24 new visits use preference scoring, with verified raw-catalogue
+witnesses and frozen suitability-set hashes. They cover stable recall, cross-category reuse,
+shirt-only non-transfer, gift recipient isolation, and one explicit new bag-color change.
+
+See the [full catalogue inventory](../../docs/reviews/longitudinal-catalogue-inventory.md)
+and [curation, substitutions, validation and cost report](../../docs/reviews/expanded-development-customers.md).
+Some blueprint categories/colors were infeasible; these substitutions are part of the
+development-fixture design, not changes to scoring or proof of memory improvement.
+
+Non-live validation (no output directory or clients created):
+
+```sh
+.venv/bin/python -m astra_eval longitudinal \
+  --customers experiments/longitudinal/customers.dev-expanded.json \
+  --output /tmp/astra-expanded-plan-only --max-model-calls 1296
+```
+
+This plans 72 OFF/ON sessions with a worst-case 1,296 DeepSeek calls, not 72 calls.
+Do not add `--live` without separate approval.

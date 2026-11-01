@@ -13,6 +13,11 @@ user memory OFF/ON, procedural memory OFF, existing scorers and per-customer rep
 deterministic/mocked runs have been executed. The four-arm comparison and external learner
 remain future work.
 
+The separate [expanded customer fixture](reviews/expanded-development-customers.md) is
+human-directed development data: 11 customers / 36 visits, preserving the original three.
+Its eight new customers and 24 preference-scored visits have been checked offline against
+the catalogue; no live comparison or effectiveness result is implied.
+
 Preference and target-item evaluation are implemented. Two real memory-OFF learning sessions
 produced candidate procedural templates; a real memory-ON/OFF transfer result is not yet
 established. See [the focused integrity checkpoint and exact proposed pilot](experience-pilot.md).

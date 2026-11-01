@@ -48,6 +48,10 @@ select `--memory-format compact`. No semantic/embedding retrieval change is incl
 
 ### Stage 2: returning-customer evaluation
 
+An optional [expanded development fixture](experiments/longitudinal/customers.dev-expanded.json)
+adds eight catalogue-grounded customers while preserving the original three. See its
+[offline verification and limitations](docs/reviews/expanded-development-customers.md).
+
 Three development customers have four catalogue-validated visits each. The thin timeline
 runner reuses the existing shopper, dialogue loop and scorers with stable users, fresh session
 UUIDs and isolated OFF/ON profile roots. Procedural memory is OFF in both arms. Free plan:
