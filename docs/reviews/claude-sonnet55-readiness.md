@@ -96,7 +96,8 @@ changed. The opt-in longitudinal CLI records `--max-cost-usd` and `--prior-cost-
 requires the ceiling. Both actual provider objects must share the recorded fresh budget.
 
 Before each request, reserve conservative input/output expense. Reservations use ASCII-escaped
-wire-body bytes plus 4,096 framing/schema tokens, output-token caps, and the most expensive
+request bytes (Claude body; DeepSeek model/messages, with fixed transport fields covered by the
+allowance) plus 4,096 framing/schema tokens, output-token caps, and the most expensive
 supported input rate. Reconcile reported counts afterward. Unknown usage/transport errors
 retain the full reservation and block further calls. Monetary denial occurs before I/O and
 becomes a safe provider failure so the existing error policy stops. Journals cannot overwrite
