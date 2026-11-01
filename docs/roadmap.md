@@ -262,7 +262,10 @@ PR #18 (Stage 1) is merged. Stage 2 adds a thin timeline layer around existing s
 evaluation, three four-visit development customers, isolated user-memory OFF/ON conditions,
 catalogue validation and per-session/customer metrics. See [Stage 2](longitudinal-evaluation.md).
 No live DeepSeek/Ollama evaluation, new held-out benchmark or procedural activation has run.
-Stop for implementation and customer-data review before expanding fixtures or experiments.
+An opt-in expansion now contains the original three plus eight new development customers
+(36 visits), with offline catalogue evidence validation. See the
+[curation report](reviews/expanded-development-customers.md). Stop for customer-data review
+before any live expanded experiment; memory benefit remains unmeasured.
 
 ## Current representation simplification
 

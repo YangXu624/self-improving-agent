@@ -1,0 +1,2427 @@
+{
+  "schema_version": 1,
+  "dataset_id": "returning-customers-dev-expanded-v1",
+  "split": "development",
+  "catalogue_sha256": "da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67",
+  "provenance": "Human-directed DEVELOPMENT fixture: original three customers preserved; eight synthetic timelines grounded from reviewed candidate blueprints (SHA-256 cb07fb1adbba37cb93aed76c1db533f4a4c78a23b8369012369396634a01c363). Not a held-out benchmark or evidence of memory effectiveness. See docs/reviews/expanded-development-customers.md for substitutions and limits.",
+  "customers": [
+    {
+      "user_id": "dev-traveler",
+      "personality": "Practical, brief and cooperative; answers exactly what is asked.",
+      "background": "Travels frequently for work and keeps rain gear at home and the office.",
+      "interests": [
+        "work travel",
+        "commuting"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "umbrellas",
+          "fact": {
+            "key": "umbrella_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Yellow",
+            "statement": "I generally prefer Yellow umbrellas.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "traveler-01",
+          "sequence": 1,
+          "goal": "Replace a commuting umbrella.",
+          "category": "Folding Umbrellas",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Folding Umbrellas. I generally prefer Yellow umbrellas.",
+          "opening_keys": [
+            "type",
+            "umbrella_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Folding Umbrellas",
+              "statement": "I need Folding Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "umbrella_color"
+          ],
+          "witness_id": "B08MDRTL62",
+          "evidence": {
+            "acceptable_count": 6,
+            "acceptable_ids_sha256": "ffccb7283d02f1665c54228319501636bd588d8af23892c67bbe0214b8e8c5ac",
+            "best_ids_sha256": "aa401a25f972eb2fc66a37aa3d604ef5a5a7881e2af897260312ac8622cd0f5e",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "umbrella_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "traveler-02",
+          "sequence": 2,
+          "goal": "Keep a second umbrella at the office.",
+          "category": "Stick Umbrellas",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Stick Umbrellas.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Stick Umbrellas",
+              "statement": "I need Stick Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "umbrella_color"
+          ],
+          "witness_id": "B0714MVRLH",
+          "evidence": {
+            "acceptable_count": 8,
+            "acceptable_ids_sha256": "73cf2934cd072044358f924341073cbd9cb8f5ccb8bcb248bca62588f802e316",
+            "best_ids_sha256": "d9d77b2d85d89fcee1d19e89e3abe8723e4310a8ae7f2688000415fd1c30a2df",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "umbrella_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "traveler-03",
+          "sequence": 3,
+          "goal": "Buy a wallet for travel documents.",
+          "category": "Travel Wallets",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Travel Wallets.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Travel Wallets",
+              "statement": "I need Travel Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 30.0,
+              "statement": "My budget is under 30 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B010LVBVKA",
+          "evidence": {
+            "acceptable_count": 5,
+            "acceptable_ids_sha256": "9c109ea0715fbbc490db394d524910ec470617722e542e5997900b3f7234e65d",
+            "best_ids_sha256": "9c109ea0715fbbc490db394d524910ec470617722e542e5997900b3f7234e65d",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "traveler-04",
+          "sequence": 4,
+          "goal": "Buy a Blue umbrella as a gift for a friend.",
+          "category": "Folding Umbrellas",
+          "recipient": "gift",
+          "evaluation_mode": "target_item",
+          "opening": "I need Folding Umbrellas. This is a gift for my friend.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Folding Umbrellas",
+              "statement": "I need Folding Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [
+            {
+              "key": "recipient_color",
+              "kind": "soft",
+              "field": "color",
+              "op": "eq",
+              "value": "Blue",
+              "statement": "My friend prefers Blue.",
+              "keywords": [
+                "color",
+                "colour"
+              ]
+            }
+          ],
+          "persistent_keys": [],
+          "witness_id": "B08GQSNWN2",
+          "evidence": {
+            "acceptable_count": 6,
+            "acceptable_ids_sha256": "ffccb7283d02f1665c54228319501636bd588d8af23892c67bbe0214b8e8c5ac",
+            "best_ids_sha256": "c4d3ee667418522ab08504ba21a518c72c38a4bf18efe02e9989dcc513da94ae",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "recipient_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-fashion",
+      "personality": "Friendly and interested in matching accessories; stays consistent.",
+      "background": "Builds a small jewelry collection and enjoys coordinating accessories.",
+      "interests": [
+        "jewelry",
+        "accessories"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "jewelry",
+          "fact": {
+            "key": "jewelry_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Silver",
+            "statement": "I generally prefer Silver jewelry.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        },
+        {
+          "category": "dislike",
+          "scope": "bangles",
+          "fact": {
+            "key": "bangle_material",
+            "kind": "soft",
+            "field": "material",
+            "op": "not_contains",
+            "value": "Leather",
+            "statement": "I generally avoid Leather bangles.",
+            "keywords": [
+              "material"
+            ]
+          }
+        }
+      ],
+      "changes": [
+        {
+          "before_sequence": 4,
+          "updates": [
+            {
+              "category": "preference",
+              "scope": "jewelry",
+              "fact": {
+                "key": "jewelry_color",
+                "kind": "soft",
+                "field": "color",
+                "op": "eq",
+                "value": "Gold",
+                "statement": "Actually I now generally prefer Gold jewelry instead of Silver.",
+                "keywords": [
+                  "color",
+                  "colour"
+                ]
+              }
+            }
+          ],
+          "remove_keys": [],
+          "background": null
+        }
+      ],
+      "visits": [
+        {
+          "task_id": "fashion-01",
+          "sequence": 1,
+          "goal": "Add a bangle to a jewelry collection.",
+          "category": "Bangle",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need a Bangle for my jewelry collection. I generally prefer Silver jewelry.",
+          "opening_keys": [
+            "type",
+            "jewelry_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I need a Bangle for my jewelry collection.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 80.0,
+              "statement": "My budget is under 80 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "jewelry_color",
+            "bangle_material"
+          ],
+          "witness_id": "B001ULD8OS",
+          "evidence": {
+            "acceptable_count": 47,
+            "acceptable_ids_sha256": "27c09f1636f97129638c09568041915b3162dc063672566f31431ca8d3693aee",
+            "best_ids_sha256": "a688a19cf8d9e0a8a794965528a9b2e6f6a9bcca755ea558537587662018d7f5",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "jewelry_color": "details.Color",
+              "bangle_material": "details.Material"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "fashion-02",
+          "sequence": 2,
+          "goal": "Find a necklace to coordinate with the collection.",
+          "category": "Pendant Necklaces",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Pendant Necklaces for my jewelry collection.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Pendant Necklaces",
+              "statement": "I need Pendant Necklaces for my jewelry collection.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 80.0,
+              "statement": "My budget is under 80 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "jewelry_color"
+          ],
+          "witness_id": "B01J278RMO",
+          "evidence": {
+            "acceptable_count": 179,
+            "acceptable_ids_sha256": "dd3d358d4f2d5e48add45157fa936c7ffbe5aaaea77f93052c026bf07957c394",
+            "best_ids_sha256": "3d9e23626c3cab0779ed748f0b53f4b91d23d7bb4692c8b964a25c5730443340",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "jewelry_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "fashion-03",
+          "sequence": 3,
+          "goal": "Choose a Gold bangle for a friend.",
+          "category": "Bangle",
+          "recipient": "gift",
+          "evaluation_mode": "preference",
+          "opening": "I need a Bangle for a gift. This is a gift for my friend.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I need a Bangle for a gift.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 80.0,
+              "statement": "My budget is under 80 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [
+            {
+              "key": "recipient_color",
+              "kind": "soft",
+              "field": "color",
+              "op": "eq",
+              "value": "Gold",
+              "statement": "My friend prefers Gold.",
+              "keywords": [
+                "color",
+                "colour"
+              ]
+            }
+          ],
+          "persistent_keys": [],
+          "witness_id": "B00KV7CERY",
+          "evidence": {
+            "acceptable_count": 47,
+            "acceptable_ids_sha256": "27c09f1636f97129638c09568041915b3162dc063672566f31431ca8d3693aee",
+            "best_ids_sha256": "8b81604639d9615202b61fa67918a845659831c46f4fa1a14dc3ce11da04fd62",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "recipient_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "fashion-04",
+          "sequence": 4,
+          "goal": "Change the collection theme to Gold.",
+          "category": "Bangle",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need a Bangle for my jewelry collection. Actually I now generally prefer Gold jewelry instead of Silver.",
+          "opening_keys": [
+            "type",
+            "jewelry_color"
+          ],
+          "disclosure": "announce_change",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I need a Bangle for my jewelry collection.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 80.0,
+              "statement": "My budget is under 80 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "jewelry_color",
+            "bangle_material"
+          ],
+          "witness_id": "B00KV7CERY",
+          "evidence": {
+            "acceptable_count": 47,
+            "acceptable_ids_sha256": "27c09f1636f97129638c09568041915b3162dc063672566f31431ca8d3693aee",
+            "best_ids_sha256": "3e091ea4231084da56439991c85117381402beb928fc0aee92bdd21b004d946a",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "jewelry_color": "details.Color",
+              "bangle_material": "details.Material"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-changing-needs",
+      "personality": "Careful and direct; explicitly explains changed preferences.",
+      "background": "Buys everyday accessories and keeps a spare wallet for work.",
+      "interests": [
+        "everyday accessories"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "wallets",
+          "fact": {
+            "key": "wallet_material",
+            "kind": "soft",
+            "field": "material",
+            "op": "eq",
+            "value": "Leather",
+            "statement": "I generally prefer Leather wallets.",
+            "keywords": [
+              "material"
+            ]
+          }
+        }
+      ],
+      "changes": [
+        {
+          "before_sequence": 3,
+          "updates": [
+            {
+              "category": "preference",
+              "scope": "wallets",
+              "fact": {
+                "key": "wallet_material",
+                "kind": "soft",
+                "field": "material",
+                "op": "eq",
+                "value": "Nylon",
+                "statement": "Actually I now generally prefer Nylon wallets instead of Leather.",
+                "keywords": [
+                  "material"
+                ]
+              }
+            }
+          ],
+          "remove_keys": [],
+          "background": "Now prefers Nylon wallets; other interests remain unchanged."
+        }
+      ],
+      "visits": [
+        {
+          "task_id": "change-01",
+          "sequence": 1,
+          "goal": "Replace a worn everyday wallet.",
+          "category": "Wallets",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Wallets. I generally prefer Leather wallets.",
+          "opening_keys": [
+            "type",
+            "wallet_material"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Wallets",
+              "statement": "I need Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60.0,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "wallet_material"
+          ],
+          "witness_id": "B0954QMP4D",
+          "evidence": {
+            "acceptable_count": 255,
+            "acceptable_ids_sha256": "982cab8abdee4491b9d690dfe30a01272bed1a024106e06342ec0489e7175d20",
+            "best_ids_sha256": "4c1bf08ebe847de46a98979e70f83264f8fdc6ec52b7bb720d74b1e8da5f3e45",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "wallet_material": "details.Material"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "change-02",
+          "sequence": 2,
+          "goal": "Buy a second wallet to keep with work clothes.",
+          "category": "Wallets",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Wallets.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Wallets",
+              "statement": "I need Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60.0,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "wallet_material"
+          ],
+          "witness_id": "B0954QMP4D",
+          "evidence": {
+            "acceptable_count": 255,
+            "acceptable_ids_sha256": "982cab8abdee4491b9d690dfe30a01272bed1a024106e06342ec0489e7175d20",
+            "best_ids_sha256": "4c1bf08ebe847de46a98979e70f83264f8fdc6ec52b7bb720d74b1e8da5f3e45",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "wallet_material": "details.Material"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "change-03",
+          "sequence": 3,
+          "goal": "Switch to a different preferred wallet material.",
+          "category": "Wallets",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Wallets. Actually I now generally prefer Nylon wallets instead of Leather.",
+          "opening_keys": [
+            "type",
+            "wallet_material"
+          ],
+          "disclosure": "announce_change",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Wallets",
+              "statement": "I need Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60.0,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "wallet_material"
+          ],
+          "witness_id": "B001NFNY2M",
+          "evidence": {
+            "acceptable_count": 255,
+            "acceptable_ids_sha256": "982cab8abdee4491b9d690dfe30a01272bed1a024106e06342ec0489e7175d20",
+            "best_ids_sha256": "c62a96edc793ee838541563d0f26071fc69e2ea1fc6e968bf4ff6a0869690d88",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "wallet_material": "details.Material"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "change-04",
+          "sequence": 4,
+          "goal": "Choose a pendant as a gift without wallet preferences.",
+          "category": "Pendants Only",
+          "recipient": "gift",
+          "evaluation_mode": "preference",
+          "opening": "I need Pendants Only. This is a gift for my friend.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Pendants Only",
+              "statement": "I need Pendants Only.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 30.0,
+              "statement": "My budget is under 30 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B081JP6DJH",
+          "evidence": {
+            "acceptable_count": 17,
+            "acceptable_ids_sha256": "64047866efc7485ac9b6892505a98157c68d550502ad2d258f5d30dd373c51aa",
+            "best_ids_sha256": "64047866efc7485ac9b6892505a98157c68d550502ad2d258f5d30dd373c51aa",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-capsule-wardrobe",
+      "personality": "Concise, practical; appreciates wardrobe consistency and does not volunteer unasked details.",
+      "background": "Building a small everyday wardrobe with versatile pieces.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "clothing",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black clothing.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "capsule-wardrobe-01",
+          "sequence": 1,
+          "goal": "Buy an everyday casual top.",
+          "category": "Active Shirts & Tees",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Active Shirts & Tees. I generally prefer Black clothing.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Active Shirts & Tees",
+              "statement": "I am looking for Active Shirts & Tees.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 45,
+              "statement": "My budget is under 45 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B08L5CNVZ6",
+          "evidence": {
+            "acceptable_count": 86,
+            "acceptable_ids_sha256": "a04bdcab35cc1e5a94e819a58722087145d9cb3ecea2112ae6c196104723f8c9",
+            "best_ids_sha256": "617ebdc77f2fdfe823902d2b661b6db17ce154112cca7710a7ceda5f1f23fdd8",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "capsule-wardrobe-02",
+          "sequence": 2,
+          "goal": "Buy a warm casual hoodie.",
+          "category": "Active Hoodies",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Active Hoodies.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Active Hoodies",
+              "statement": "I am looking for Active Hoodies.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 110,
+              "statement": "My budget is under 110 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B09SS262CG",
+          "evidence": {
+            "acceptable_count": 30,
+            "acceptable_ids_sha256": "3d5405a8b4674d8845d92459b710d2cf27a39e42f26df5f7f8c4a9520612d589",
+            "best_ids_sha256": "1df584d72c4023b3ad2d87b9d5e7680b360b77c2f0d165b42d9e28eec8a6ed6b",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "capsule-wardrobe-03",
+          "sequence": 3,
+          "goal": "Buy comfortable casual pants.",
+          "category": "Pants",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Pants.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Pants",
+              "statement": "I need Pants.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B0BWJKZ9GX",
+          "evidence": {
+            "acceptable_count": 159,
+            "acceptable_ids_sha256": "75dd097b9f37154ffc07223cb6e65884e9b1a77ca4372587e3a2907d8904a247",
+            "best_ids_sha256": "bb6240fd6fa8cbc0d9e02b9d047d4e5b59c1a357832f9ff3759e64f52dd8fddc",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-office-basics",
+      "personality": "Professional and direct; asks about suitability when relevant.",
+      "background": "Refreshing an office wardrobe over several purchases.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "shirts",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Cool Grey",
+            "statement": "I generally prefer Cool Grey shirts.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "office-basics-01",
+          "sequence": 1,
+          "goal": "Buy a button-down shirt for a relaxed office day.",
+          "category": "Button-Down Shirts",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Button-Down Shirts. I generally prefer Cool Grey shirts.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Button-Down Shirts",
+              "statement": "I am looking for Button-Down Shirts.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 75,
+              "statement": "My budget is under 75 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00QRVNPJE",
+          "evidence": {
+            "acceptable_count": 190,
+            "acceptable_ids_sha256": "02c22a97336c6a18564324d4cc6e3656c35eb1b76fefbbe05e3a640baa113e57",
+            "best_ids_sha256": "df9d9741b36c0b2c9fed1e1a7b6ba4f19d4df4f9bae6418a9e96bd67db6f015a",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "office-basics-02",
+          "sequence": 2,
+          "goal": "Buy another casual button-down shirt.",
+          "category": "Button-Down Shirts",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Button-Down Shirts.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Button-Down Shirts",
+              "statement": "I am looking for Button-Down Shirts.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 65,
+              "statement": "My budget is under 65 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00QRVNPJE",
+          "evidence": {
+            "acceptable_count": 187,
+            "acceptable_ids_sha256": "ccc7e72045c0900a7dbecdd685ccff2dbfa7c0e5ae1b75444a76c92f16f61a27",
+            "best_ids_sha256": "df9d9741b36c0b2c9fed1e1a7b6ba4f19d4df4f9bae6418a9e96bd67db6f015a",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "office-basics-03",
+          "sequence": 3,
+          "goal": "Buy a belt for work.",
+          "category": "Belts",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Belts.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Belts",
+              "statement": "I need Belts.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 45,
+              "statement": "My budget is under 45 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B07LGRDWPN",
+          "evidence": {
+            "acceptable_count": 78,
+            "acceptable_ids_sha256": "2a0388e82a26f7acbd7c044bf2e4dec14852c11f6107c24a9102c7566e70db5d",
+            "best_ids_sha256": "2a0388e82a26f7acbd7c044bf2e4dec14852c11f6107c24a9102c7566e70db5d",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-activewear",
+      "personality": "Friendly and efficient; cares about practical fitness clothing.",
+      "background": "Shops for affordable clothing for gym sessions several times a month.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "workout clothing",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black workout clothing.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "activewear-01",
+          "sequence": 1,
+          "goal": "Buy a casual tank top to wear to the gym.",
+          "category": "Tanks Tops",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need a tank top from Tanks Tops. I generally prefer Black workout clothing.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Tanks Tops",
+              "statement": "I need a tank top from Tanks Tops.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 50,
+              "statement": "My budget is under 50 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B088LHSNW4",
+          "evidence": {
+            "acceptable_count": 117,
+            "acceptable_ids_sha256": "94203c508c47f29762cf05b75c54b39b38a7d96f8f4855ac87db043f786fe603",
+            "best_ids_sha256": "43bc194ae347fa4f00a633eea6734945d5b911c4c51a49eb7ee1f851dbd41dc5",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "activewear-02",
+          "sequence": 2,
+          "goal": "Buy a workout top.",
+          "category": "Active Shirts & Tees",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Active Shirts & Tees.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Active Shirts & Tees",
+              "statement": "I am looking for Active Shirts & Tees.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 45,
+              "statement": "My budget is under 45 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B08L5CNVZ6",
+          "evidence": {
+            "acceptable_count": 86,
+            "acceptable_ids_sha256": "a04bdcab35cc1e5a94e819a58722087145d9cb3ecea2112ae6c196104723f8c9",
+            "best_ids_sha256": "617ebdc77f2fdfe823902d2b661b6db17ce154112cca7710a7ceda5f1f23fdd8",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "activewear-03",
+          "sequence": 3,
+          "goal": "Buy yoga or training pants.",
+          "category": "Pants",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Pants.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Pants",
+              "statement": "I need Pants.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 65,
+              "statement": "My budget is under 65 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B0BWJKZ9GX",
+          "evidence": {
+            "acceptable_count": 162,
+            "acceptable_ids_sha256": "79f30b105510b7cdf606dedafaaba83278455699ec0a21d5810b404ab6e17da7",
+            "best_ids_sha256": "e12a264ced5604d0286a89c8dfc84d81fa1a95b4f438a601163aded8ac3808ee",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-footwear",
+      "personality": "Casual, decisive; gives specific answers when asked.",
+      "background": "Uses activity-specific shoes and practical outdoor footwear on separate shopping trips.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "shoes",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black shoes.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "footwear-01",
+          "sequence": 1,
+          "goal": "Buy cycling shoes.",
+          "category": "Cycling",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Cycling shoes. I generally prefer Black shoes. These are for athletic use.",
+          "opening_keys": [
+            "type",
+            "preferred_color",
+            "athletic"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Cycling",
+              "statement": "I need Cycling shoes.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 95,
+              "statement": "My budget is under 95 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            },
+            {
+              "key": "athletic",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Athletic",
+              "statement": "athletic",
+              "keywords": [
+                "sport",
+                "athletic"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B08KDD82VV",
+          "evidence": {
+            "acceptable_count": 4,
+            "acceptable_ids_sha256": "8b38499527a934606964270cbbb43bc6ceed1b01204d311145470b86888fd8bb",
+            "best_ids_sha256": "99a21243c79e76c0e5cb7421fd2830348ce415682a4ca81f22ad84e36786d2c1",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "athletic": "categories",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "footwear-02",
+          "sequence": 2,
+          "goal": "Buy boots for horse riding.",
+          "category": "Equestrian Sport Boots",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Equestrian Sport Boots.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Equestrian Sport Boots",
+              "statement": "I need Equestrian Sport Boots.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 230,
+              "statement": "My budget is under 230 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B087R16HCP",
+          "evidence": {
+            "acceptable_count": 2,
+            "acceptable_ids_sha256": "58332a080dab7b775c6577fd8cdc702caeab4dd48d4ea77c2e0d64a5e796a4bd",
+            "best_ids_sha256": "2c301fcf9fae6c537e3ac5d6b7837ef4c93762411e5c7ac853d95838b2823270",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "footwear-03",
+          "sequence": 3,
+          "goal": "Buy boots for outdoor chores.",
+          "category": "Industrial & Construction Boots",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Industrial & Construction Boots.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Industrial & Construction Boots",
+              "statement": "I need Industrial & Construction Boots.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 190,
+              "statement": "My budget is under 190 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B07XQY112X",
+          "evidence": {
+            "acceptable_count": 9,
+            "acceptable_ids_sha256": "faeba3a4473112cf451e3eece87e8701084fed5af76057329ab85e7d2d6e46c2",
+            "best_ids_sha256": "3cd33b7c6402afb476eee8fd6db707ab488f3a023998e8a79efddb1ba4d5173f",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-commuter-bags",
+      "personality": "Practical and brief; often carries work and personal items.",
+      "background": "Uses multiple bags for commuting, errands, and short trips.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "bags",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black bags.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "commuter-bags-01",
+          "sequence": 1,
+          "goal": "Buy a commuting backpack.",
+          "category": "Casual Daypacks",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Casual Daypacks. I generally prefer Black bags.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Casual Daypacks",
+              "statement": "I am looking for Casual Daypacks.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 85,
+              "statement": "My budget is under 85 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B001MUKWQ4",
+          "evidence": {
+            "acceptable_count": 28,
+            "acceptable_ids_sha256": "6bddb4aa5e28299eac8619cf41840613af934075e27fb8fbd6cad6dc8bdbc0a1",
+            "best_ids_sha256": "f616c24b3793ce27ff17e7c251f6050ef6a9b23608cd37d7a3b38637ba34291e",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "commuter-bags-02",
+          "sequence": 2,
+          "goal": "Buy a folio bag for work.",
+          "category": "Briefcases",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Briefcases.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Briefcases",
+              "statement": "I need Briefcases.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 70,
+              "statement": "My budget is under 70 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00JGQXM90",
+          "evidence": {
+            "acceptable_count": 2,
+            "acceptable_ids_sha256": "efb92404ead3f332e6dd8d407b30e4549ff783fcb6ed10e076dca7f013c9008e",
+            "best_ids_sha256": "c8ab1a7806b29998e9643d02f95f3490740662697017a3b69658e07d16dd3f09",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "commuter-bags-03",
+          "sequence": 3,
+          "goal": "Buy a tote bag for weekend errands.",
+          "category": "Totes",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Totes.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Totes",
+              "statement": "I am looking for Totes.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00GDOUL92",
+          "evidence": {
+            "acceptable_count": 43,
+            "acceptable_ids_sha256": "28dc9e9e585bac5ae3944212f848bd664cf89dec2e007a0fda505943edad8e45",
+            "best_ids_sha256": "d3a53e6aecae5375395c1c83637b6c05beb60b8828b20b4eacf67ca1cdb83e22",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-jewelry-simple",
+      "personality": "Warm, direct and consistent; shops for small accessories.",
+      "background": "Gradually building a coordinated jewelry collection.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "jewelry",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Silver",
+            "statement": "I generally prefer Silver jewelry.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "jewelry-simple-01",
+          "sequence": 1,
+          "goal": "Buy an anklet for daily wear.",
+          "category": "Anklets",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Anklets. I generally prefer Silver jewelry.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Anklets",
+              "statement": "I need Anklets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00OV69Q3Q",
+          "evidence": {
+            "acceptable_count": 26,
+            "acceptable_ids_sha256": "6218442bc3a7ccc604d409287ea45a71905a60db2d0b94db3047b6166626bbcf",
+            "best_ids_sha256": "f9f2b2f4c476610c50a25f2d0eea0526b6b6d497aced50376bf7babe966688e8",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "jewelry-simple-02",
+          "sequence": 2,
+          "goal": "Buy a coordinating necklace.",
+          "category": "Necklaces",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Necklaces.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Necklaces",
+              "statement": "I am looking for Necklaces.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 70,
+              "statement": "My budget is under 70 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B07CBQ79F9",
+          "evidence": {
+            "acceptable_count": 394,
+            "acceptable_ids_sha256": "c97dd05f58f2067aa2ffb60ec918e25a81e9f454e5377a1737ade34cccd5c032",
+            "best_ids_sha256": "01b2e72b84c54d790ab49135371414ff4db2d8f5c83e5d9fdafa4acc0237eace",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "jewelry-simple-03",
+          "sequence": 3,
+          "goal": "Buy a coordinating bangle bracelet.",
+          "category": "Bangle",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I would like a Bangle.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I would like a Bangle.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 65,
+              "statement": "My budget is under 65 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B001ULD8OS",
+          "evidence": {
+            "acceptable_count": 46,
+            "acceptable_ids_sha256": "4f087edc7e814646276e01f14a96ea6d3c62253af9064d20d3c2203687ba89df",
+            "best_ids_sha256": "a688a19cf8d9e0a8a794965528a9b2e6f6a9bcca755ea558537587662018d7f5",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-gift-shopper",
+      "personality": "Considerate; identifies recipients and their preferences when asked.",
+      "background": "Occasionally shops for gifts for different people. Has not stated any personal color preference.",
+      "interests": [],
+      "preferences": [],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "gift-shopper-01",
+          "sequence": 1,
+          "goal": "Buy a silver necklace gift for a friend.",
+          "category": "Necklaces",
+          "recipient": "gift",
+          "evaluation_mode": "preference",
+          "opening": "I am buying a gift for a friend. I am looking for Necklaces. My friend prefers Silver jewelry.",
+          "opening_keys": [
+            "type",
+            "recipient_color"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Necklaces",
+              "statement": "I am looking for Necklaces.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [
+            {
+              "key": "recipient_color",
+              "kind": "soft",
+              "field": "color",
+              "op": "eq",
+              "value": "Silver",
+              "statement": "My friend prefers Silver jewelry.",
+              "keywords": [
+                "color",
+                "colour"
+              ]
+            }
+          ],
+          "persistent_keys": [],
+          "witness_id": "B07CBQ79F9",
+          "evidence": {
+            "acceptable_count": 383,
+            "acceptable_ids_sha256": "13ec1acc7c9c63e00437604ca08d8804edfe746ca599842d5988c7e4624e0409",
+            "best_ids_sha256": "01b2e72b84c54d790ab49135371414ff4db2d8f5c83e5d9fdafa4acc0237eace",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "recipient_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "gift-shopper-02",
+          "sequence": 2,
+          "goal": "Buy a gold bangle gift for a family member.",
+          "category": "Bangle",
+          "recipient": "gift",
+          "evaluation_mode": "preference",
+          "opening": "I am buying a gift for a family member. I would like a Bangle. My family member prefers Gold jewelry.",
+          "opening_keys": [
+            "type",
+            "recipient_color"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I would like a Bangle.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 70,
+              "statement": "My budget is under 70 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [
+            {
+              "key": "recipient_color",
+              "kind": "soft",
+              "field": "color",
+              "op": "eq",
+              "value": "Gold",
+              "statement": "My family member prefers Gold jewelry.",
+              "keywords": [
+                "color",
+                "colour"
+              ]
+            }
+          ],
+          "persistent_keys": [],
+          "witness_id": "B00KV7CERY",
+          "evidence": {
+            "acceptable_count": 46,
+            "acceptable_ids_sha256": "4f087edc7e814646276e01f14a96ea6d3c62253af9064d20d3c2203687ba89df",
+            "best_ids_sha256": "8b81604639d9615202b61fa67918a845659831c46f4fa1a14dc3ce11da04fd62",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "recipient_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "gift-shopper-03",
+          "sequence": 3,
+          "goal": "Buy a wallet for myself without a color preference.",
+          "category": "Wallets",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Wallets. This is for myself.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Wallets",
+              "statement": "I need Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 50,
+              "statement": "My budget is under 50 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B016QUDKCW",
+          "evidence": {
+            "acceptable_count": 241,
+            "acceptable_ids_sha256": "c00885ca91771978f1fac0942f214d65b1e0be922701201ac5504fe71524afec",
+            "best_ids_sha256": "c00885ca91771978f1fac0942f214d65b1e0be922701201ac5504fe71524afec",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    },
+    {
+      "user_id": "dev-bag-style-change",
+      "personality": "Clear and cooperative; directly corrects old preferences.",
+      "background": "Uses different bags and clearly updates their preferred bag color.",
+      "interests": [],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "bags",
+          "fact": {
+            "key": "preferred_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black bags.",
+            "keywords": [
+              "color",
+              "colour"
+            ]
+          }
+        }
+      ],
+      "changes": [
+        {
+          "before_sequence": 3,
+          "updates": [
+            {
+              "category": "preference",
+              "scope": "bags",
+              "fact": {
+                "key": "preferred_color",
+                "kind": "soft",
+                "field": "color",
+                "op": "eq",
+                "value": "Cream",
+                "statement": "Actually, I now generally prefer Cream bags.",
+                "keywords": [
+                  "color",
+                  "colour"
+                ]
+              }
+            }
+          ],
+          "remove_keys": [],
+          "background": null
+        }
+      ],
+      "visits": [
+        {
+          "task_id": "bag-style-change-01",
+          "sequence": 1,
+          "goal": "Buy a personal tote bag.",
+          "category": "Totes",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Totes. I generally prefer Black bags.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Totes",
+              "statement": "I am looking for Totes.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 75,
+              "statement": "My budget is under 75 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00GDOUL92",
+          "evidence": {
+            "acceptable_count": 45,
+            "acceptable_ids_sha256": "a2a5d602b7898226d63501714665e34b923daaf85e3cb79509668a25d3a7a37f",
+            "best_ids_sha256": "d3a53e6aecae5375395c1c83637b6c05beb60b8828b20b4eacf67ca1cdb83e22",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "bag-style-change-02",
+          "sequence": 2,
+          "goal": "Buy a personal folio bag while the same preference applies.",
+          "category": "Briefcases",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I need Briefcases.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Briefcases",
+              "statement": "I need Briefcases.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 85,
+              "statement": "My budget is under 85 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B00JGQXM90",
+          "evidence": {
+            "acceptable_count": 3,
+            "acceptable_ids_sha256": "1aafdcf86afd19eef3609f679e153ea6b84bb3a81e630bb66106fc232f3746a3",
+            "best_ids_sha256": "c8ab1a7806b29998e9643d02f95f3490740662697017a3b69658e07d16dd3f09",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        },
+        {
+          "task_id": "bag-style-change-03",
+          "sequence": 3,
+          "goal": "Update bag color preference and buy a small crossbody phone bag.",
+          "category": "Crossbody Bags",
+          "recipient": "self",
+          "evaluation_mode": "preference",
+          "opening": "I am looking for Crossbody Bags. Actually, I now generally prefer Cream bags.",
+          "opening_keys": [
+            "type",
+            "preferred_color"
+          ],
+          "disclosure": "announce_change",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Crossbody Bags",
+              "statement": "I am looking for Crossbody Bags.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 90,
+              "statement": "My budget is under 90 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "preferred_color"
+          ],
+          "witness_id": "B096NDXZ3X",
+          "evidence": {
+            "acceptable_count": 34,
+            "acceptable_ids_sha256": "8ee09ebd41fbbb98f25430f58f6b7cb31ed26046c64fbeefcb8679024daac4a0",
+            "best_ids_sha256": "69992c47b36ee96ba5a34cb3ea2d041e04a3117adf9e1343083084a750f697ea",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "preferred_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6
+        }
+      ]
+    }
+  ]
+}

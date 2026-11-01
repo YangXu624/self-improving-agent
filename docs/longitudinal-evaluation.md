@@ -37,6 +37,12 @@ visits, future change objects, target IDs, witness evidence or condition labels.
 `experiments/longitudinal/customers.dev.json` has three invented development customers and
 four visits each. It is manually directed, not an automatically expanded benchmark.
 
+The separate opt-in `experiments/longitudinal/customers.dev-expanded.json` preserves that
+original prefix and adds eight three-visit customers (11 customers / 36 visits total).
+Its 24 new visits use preference scoring. See the [curation and offline validation report](reviews/expanded-development-customers.md)
+for category substitutions, catalogue evidence, controls and projected evaluation cost.
+The original fixture and default command remain unchanged; neither file is a held-out set.
+
 | Record | Main fields |
 | --- | --- |
 | Dataset | `schema_version`, `dataset_id`, development split, catalogue hash, provenance |
