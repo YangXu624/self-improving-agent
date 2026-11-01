@@ -8,6 +8,7 @@ from .context import builder_for_profile
 from .contracts import Event
 from .retrieval import LexicalSearch, file_hash
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
+from .user_memory import UserMemoryStore
 
 
 class ChatService:
@@ -25,12 +26,19 @@ class ChatService:
         *,
         policy: DecisionPolicy,
         cards_profile: str = "baseline",
+        user_memory_enabled: bool = False,
+        user_memory_root: Path | None = None,
     ):
         self.index = index
         self.catalogue_hash = file_hash(catalogue)
         self.policy = policy
         self.context_builder = builder_for_profile(cards_profile)
         self.store = SessionStore(sessions)
+        self.user_memory = (
+            UserMemoryStore(user_memory_root or sessions.parent / "user-memory")
+            if user_memory_enabled
+            else None
+        )
         tool = self._search()
         tool.close()
 
@@ -103,7 +111,11 @@ class ChatService:
         tool = self._search()
         try:
             return ShoppingAgent(
-                self.store, tool, self.policy, context_builder=self.context_builder
+                self.store,
+                tool,
+                self.policy,
+                context_builder=self.context_builder,
+                user_memory=self.user_memory,
             ).turn(user_id, session_id, message, request_id=request_id)
         finally:
             tool.close()

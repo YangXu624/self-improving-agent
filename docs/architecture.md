@@ -17,7 +17,7 @@ resolution. Missing configuration disables the chat; provider errors stop a turn
 The adapter retains JSON mode, disabled thinking, output/timeout bounds and no hidden retries.
 
 The existing ShoppingAgent owns validation, state commits, trusted search and recommendation
-gates. Its default context is `shopping-baseline-v3-compact`: active requirement IDs and
+gates. Its memory-OFF context is `shopping-baseline-v5-experience`: active requirement IDs and
 predicates, concise dialogue, and all current candidates with facts, provenance and distinct
 supporting text. Generated schema titles, presentation fields and repeated fact values are
 omitted; omitted facts mean unknown. Candidate IDs/order and deterministic gates are retained.
@@ -202,3 +202,8 @@ Historical snapshots missing this evidence are unknown; extraction completeness 
 atomic updates, explicit corrections/withdrawals and bounded relevance selection. See
 [user-memory.md](user-memory.md) for storage authority, validation limits and checkpoint status.
 It reuses existing user/session identities and does not replace session or procedural memory.
+The normal CLI/UI can opt in; the evaluator remains OFF. Enabled context uses
+`shopping-baseline-v6-user-memory` and an enabled-only `MemoryDecision` contract. Memory
+selection, actual prompt inclusion and profile writes/rejections are traced independently.
+Current hard state remains authoritative; recalled profile records are advisory, not filters.
+The external LLM learner and returning-customer evaluator remain future work.

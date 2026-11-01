@@ -203,3 +203,20 @@ retain approval notes. Disclosed compliance uses per-recommendation committed ha
 hidden target requirements and exact target hits keep their existing independent definitions.
 The extractor chooses predefined templates; its causal explanations remain hypotheses. No
 simulator/profile/benchmark tuning or lesson activation is part of this checkpoint.
+
+## Stage 1: separate opt-in user profiles
+
+Reuse session owner IDs, JSONL replay/state validation, BM25 and procedural SQLite memory.
+Add one authoritative per-user Markdown profile with four sections, instead of coordinating
+four independently replaced files. JSON-escaped bullets are readable and reversible; there
+is no companion user database or copied conversation history. Atomic replacement, user locks,
+revision checks and source-event idempotency protect updates across concurrent sessions.
+
+Use an enabled-only policy schema so the OFF path retains baseline prompts/contracts. Current
+user evidence must support model proposals, persistence, personal ownership, polarity and scope.
+General facts also require explicit persistence/frequency cues; broad 'I am' is insufficient.
+The conservative rules intentionally sacrifice paraphrase coverage. Existing requirements
+override advisory memory. Purchase records require explicit confirmation, not recommendations.
+Rejected memory writes are visible without discarding valid shopping actions. Default OFF is
+explicit opt-in and leaves existing evaluation conditions unchanged. Future learner/timeline
+interfaces are documentation only; no new evaluator, paid calls or source-code editing.

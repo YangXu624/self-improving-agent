@@ -243,3 +243,15 @@ disclosed compliance. [Pilot commands and artifact evidence](experience-pilot.md
 activation/live approval after PR review. Lesson 1 stays candidate; Lesson 2 stays rejected.
 No new memory feature, simulator tuning or retrieval optimisation belongs to this checkpoint.
 Older "immediate" checkpoints above are historical and do not supersede this next action.
+
+## Current Stage 1: persistent user memory
+
+The approved architecture-alignment stage adds opt-in per-user Markdown profiles, evidence-backed
+formation, bounded context recall, corrections/withdrawals, audit history and normal UI/CLI
+controls. Session persistence, retrieval, procedural memory and existing evaluator behaviour
+are retained. See [implementation, data flow and limits](user-memory.md).
+
+Stage 1 stops for PR review. Returning-customer timelines, a longitudinal evaluator, a four-arm
+evaluation CLI, external LLM lesson extraction and source-code optimisation are not implemented.
+Existing procedural Lesson 1 activation and live paired trials remain separately approval-gated.
+User-profile persistence tests are integration evidence, not measured shopping improvement.

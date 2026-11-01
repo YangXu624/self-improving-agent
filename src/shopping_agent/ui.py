@@ -252,6 +252,13 @@ def run_app(project_root: Path) -> None:
         st.chat_input("Fix the card profile to start chatting", disabled=True)
         return
     try:
+        with st.sidebar:
+            user_memory_enabled = st.checkbox(
+                "Remember me across chats",
+                value=False,
+                key="user_memory_enabled",
+                help="Opt in to evidence-backed user profiles. Off disables profile reads and writes, without deleting existing records.",
+            )
         service = ChatService(
             Path(
                 os.environ.get(
@@ -270,6 +277,12 @@ def run_app(project_root: Path) -> None:
             ),
             policy=policy,
             cards_profile=cards_profile,
+            user_memory_enabled=user_memory_enabled,
+            user_memory_root=Path(
+                os.environ.get(
+                    "ASTRA_USER_MEMORY_ROOT", project_root / "data/user-memory"
+                )
+            ),
         )
     except SAFE_ERRORS:
         st.title("ASTRA")
@@ -356,6 +369,11 @@ def run_app(project_root: Path) -> None:
                     st.caption("Token usage is incomplete for this turn.")
                 if message.get("error"):
                     st.error("Turn error: " + message["error"])
+                if message.get("user_memory", {}).get("rejected"):
+                    st.warning(
+                        "A proposed profile update was not saved: "
+                        + ", ".join(message["user_memory"]["rejected"])
+                    )
                 render_activity(view["events"], message["request_id"])
     prompt = st.chat_input(
         "Describe an item, or change a requirement…",

@@ -20,7 +20,8 @@ from uuid import uuid4
 
 from pydantic import Field, model_validator
 
-from .contracts import Decision, Strict
+from .contracts import Decision, Event, Strict
+from .sessions import Session
 
 SECTIONS = {
     "fact": "Facts",
@@ -77,11 +78,11 @@ class UserProfile(Strict):
     records: list[MemoryRecord] = Field(default_factory=list, max_length=500)
 
 
-def words(value):
+def words(value: str) -> list[str]:
     return re.findall(r"[^\W_]+", value.casefold(), re.UNICODE)
 
 
-def _contains(value, text):
+def _contains(value: str, text: str) -> bool:
     needle, haystack = words(value), words(text)
     return bool(needle) and any(
         haystack[i : i + len(needle)] == needle
@@ -89,7 +90,7 @@ def _contains(value, text):
     )
 
 
-def validate_proposal(proposal, message):
+def validate_proposal(proposal: MemoryProposal, message: str) -> None:
     """Conservative English evidence gate, not a semantic proof of a user's beliefs.
 
     Values must be literal evidence. Persistence, first-person ownership, uncertainty,
@@ -102,8 +103,22 @@ def validate_proposal(proposal, message):
         raise UserMemoryError("memory_scope_requires_literal_evidence")
     text = message.casefold().replace("’", "'")
     evidence = quote.casefold().replace("’", "'")
-    if not re.search(r"\b(?:i|my|me)\b", evidence):
+    offset = message.index(quote)
+    prefix = message[:offset].rstrip()
+    if prefix and prefix[-1] not in ".!?;\n":
+        raise UserMemoryError("memory_quote_requires_own_statement")
+    owner = re.match(
+        r"^(?:(?:actually|remember(?: that)?|from now on|going forward)[,: ]+)?"
+        r"(?:i\b|i'm\b|my (?:usual |general )?(?:preference|dislike|size)\b|"
+        r"(?:forget|remove|withdraw) my\b)",
+        evidence,
+    )
+    if not owner:
         raise UserMemoryError("memory_requires_first_person_ownership")
+    if proposal.op != "RETRACT" and re.search(
+        r"\b(?:do not|don't|never) (?:remember|save|store)\b", text
+    ):
+        raise UserMemoryError("user_declined_memory_storage")
     # A mixed gift/one-off turn fails closed; the model can ask for a separate statement.
     if re.search(
         r"\b(?:gift|for (?:my |a |the )?(?:dad|mom|mum|mother|father|friend|wife|husband|partner|daughter|son)|"
@@ -118,6 +133,77 @@ def validate_proposal(proposal, message):
         ):
             raise UserMemoryError("memory_withdrawal_requires_explicit_request")
         return
+    negation = r"\b(?:not|never|no|don't|cannot|can't|isn't|aren't)\b"
+    if (
+        proposal.category != "dislike"
+        and re.search(negation, evidence)
+        and not re.search(negation, proposal.value.casefold())
+    ):
+        raise UserMemoryError("memory_value_must_preserve_negation")
+    if proposal.category == "preference" and not re.search(
+        r"\b(?:prefer|like|love|preference)\b", evidence
+    ):
+        raise UserMemoryError("preference_requires_positive_preference_evidence")
+    if proposal.category == "dislike" and not re.search(
+        r"\b(?:dislike|hate|avoid)\b|\b(?:don't|do not) (?:like|prefer)\b", evidence
+    ):
+        raise UserMemoryError("dislike_requires_negative_preference_evidence")
+    if proposal.category == "dislike" and re.search(
+        r"\b(?:don't|do not|not|never) (?:generally |usually |really )?(?:dislike|hate|avoid)\b",
+        evidence,
+    ):
+        raise UserMemoryError("negated_dislike_is_not_a_dislike")
+    if proposal.scope == "general" and proposal.category in {"preference", "dislike"}:
+        # Check the full complement, including an object before the value.
+        quote_words, value_words = words(quote), words(proposal.value)
+        end = next(
+            i + len(value_words)
+            for i in range(len(quote_words))
+            if quote_words[i : i + len(value_words)] == value_words
+        )
+        neutral = {
+            "always",
+            "usually",
+            "generally",
+            "typically",
+            "regularly",
+            "in",
+            "general",
+            "now",
+            "on",
+        }
+        neutral.update(
+            {
+                "i",
+                "my",
+                "think",
+                "prefer",
+                "preference",
+                "like",
+                "love",
+                "dislike",
+                "hate",
+                "avoid",
+                "remember",
+                "that",
+                "from",
+                "going",
+                "forward",
+                "actually",
+                "instead",
+                "of",
+                "rather",
+                "the",
+                "a",
+                "an",
+                "do",
+                "not",
+                "dont",
+            }
+        )
+        start = end - len(value_words)
+        if set(quote_words[:start] + quote_words[end:]) - neutral:
+            raise UserMemoryError("specific_preference_requires_scope")
     if (
         re.search(r"\b(?:maybe|perhaps|might|i think|probably)\b", evidence)
         and proposal.basis == "confirmed"
@@ -130,17 +216,12 @@ def validate_proposal(proposal, message):
             raise UserMemoryError("purchase_requires_explicit_user_confirmation")
     else:
         persistent = re.search(
-            r"\b(?:always|usually|generally|typically|regularly|in general|"
+            r"\b(?:always|usually|generally|typically|regularly|frequent|frequently|in general|"
             r"remember|from now on|going forward|no longer|now prefer|now dislike)\b",
             evidence,
         )
-        stable_fact = proposal.category == "fact" and re.search(
-            r"\bi (?:am|have|live|work|travel)\b|\bi'm\b", evidence
-        )
-        if not persistent and not stable_fact:
+        if not persistent:
             raise UserMemoryError("memory_requires_explicit_persistence")
-        if re.search(r"\b(?:do not|don't|never) (?:remember|save|store)\b", text):
-            raise UserMemoryError("user_declined_memory_storage")
     if proposal.op == "REPLACE" and not re.search(
         r"\b(?:actually|instead|now|no longer|changed|change|correction|rather)\b",
         evidence,
@@ -148,7 +229,7 @@ def validate_proposal(proposal, message):
         raise UserMemoryError("memory_correction_requires_explicit_change")
 
 
-def render_profile(profile):
+def render_profile(profile: UserProfile) -> str:
     """One authoritative Markdown document; JSON-escaped bullets are safely reversible."""
     lines = [
         "# ASTRA user memory",
@@ -168,7 +249,7 @@ def render_profile(profile):
     return "\n".join(lines) + "\n"
 
 
-def parse_profile(text):
+def parse_profile(text: str) -> UserProfile:
     header, records, current = {}, [], None
     for line in text.splitlines():
         if line.startswith("### "):
@@ -194,11 +275,11 @@ class UserMemoryStore:
     _locks: ClassVar[dict[str, threading.RLock]] = {}
     _guard = threading.Lock()
 
-    def __init__(self, root="data/user-memory"):
+    def __init__(self, root: str | Path = "data/user-memory"):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def directory(self, user_id):
+    def directory(self, user_id: str) -> Path:
         if not isinstance(user_id, str) or not user_id.strip() or len(user_id) > 128:
             raise UserMemoryError("invalid_user_id")
         path = self.root / hashlib.sha256(user_id.encode()).hexdigest()
@@ -237,23 +318,32 @@ class UserMemoryStore:
         except (ValueError, KeyError, TypeError) as exc:
             raise UserMemoryError("invalid_user_profile") from exc
 
-    def read(self, user_id):
+    def read(self, user_id: str) -> UserProfile:
         with self._locked(user_id) as path:
             return self._read(path, user_id)
 
-    def context(self, session, message, *, limit=8):
+    def context(self, session: Session, message: str, *, limit: int = 8) -> dict:
         """Relevant advisory records only; no automatic hard-state promotion."""
         profile = self.read(session.user_id)
-        terms = set(words(message))
+
+        def terms_for(text):
+            return {
+                w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
+                for w in words(text)
+            }
+
+        terms = terms_for(message)
         for requirement in session.state.requirements:
             if requirement.status == "active" and requirement.field == "product_type":
-                terms.update(words(str(requirement.value)))
+                terms.update(terms_for(str(requirement.value)))
         active = [r for r in profile.records if r.status == "active"]
         scoped = [
-            r for r in active if r.scope != "general" and set(words(r.scope)) & terms
+            r for r in active if r.scope != "general" and terms_for(r.scope) <= terms
         ]
         general = [r for r in active if r.scope == "general"]
-        selected = (list(reversed(scoped)) + list(reversed(general)))[:limit]
+        relevant = list(reversed(scoped)) + list(reversed(general))
+        relevant.sort(key=lambda r: not _contains(r.value, message))
+        selected = relevant[:limit]
         return {
             "revision": profile.revision,
             "records": [
@@ -265,7 +355,15 @@ class UserMemoryStore:
             ],
         }
 
-    def apply(self, session, event, proposals, *, expected_revision):
+    def apply(
+        self,
+        session: Session,
+        event: Event,
+        proposals: list[MemoryProposal],
+        *,
+        expected_revision: int,
+        visible_ids: set[str] | None = None,
+    ) -> dict:
         """All-or-nothing proposal batch, grounded in this owner's actual user event."""
         if (
             event.type != "user_message"
@@ -278,6 +376,12 @@ class UserMemoryStore:
             raise UserMemoryError("memory_requires_owned_user_event")
         for proposal in proposals:
             validate_proposal(proposal, event.payload["message"])
+            if (
+                proposal.target_id is not None
+                and visible_ids is not None
+                and proposal.target_id not in visible_ids
+            ):
+                raise UserMemoryError("memory_correction_requires_visible_target")
         with self._locked(session.user_id) as path:
             profile = self._read(path, session.user_id)
             # One durable transaction per user event, even across process restarts/retries.
@@ -349,6 +453,20 @@ class UserMemoryStore:
                 changed.append(record.id)
             if not changed:
                 return {"revision": profile.revision, "ids": [], "idempotent": True}
+            positive = {
+                (r.attribute, r.scope, r.value.casefold())
+                for r in profile.records
+                if r.status == "active" and r.category == "preference"
+            }
+            negative = {
+                (r.attribute, r.scope, r.value.casefold())
+                for r in profile.records
+                if r.status == "active" and r.category == "dislike"
+            }
+            if positive & negative:
+                raise UserMemoryError("memory_conflict_requires_explicit_correction")
+            if len(profile.records) > 500:
+                raise UserMemoryError("profile_record_limit")
             profile.revision += 1
             UserProfile.model_validate(profile.model_dump())
             text = render_profile(profile)

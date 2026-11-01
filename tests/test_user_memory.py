@@ -8,8 +8,10 @@ from unittest.mock import patch
 from shopping_agent.sessions import SessionStore
 from shopping_agent.user_memory import (
     MemoryProposal,
+    MemoryRecord,
     UserMemoryError,
     UserMemoryStore,
+    UserProfile,
     parse_profile,
     render_profile,
 )
@@ -122,6 +124,32 @@ class UserMemoryStoreTests(unittest.TestCase):
             )
         self.assertEqual(self.memory.read("alice").revision, 1)
 
+    def test_opposite_preference_and_dislike_cannot_silently_coexist(self):
+        self.save()
+        with self.assertRaisesRegex(UserMemoryError, "conflict_requires"):
+            self.save(
+                MemoryProposal(
+                    category="dislike",
+                    attribute="color",
+                    value="blue",
+                    scope="bags",
+                    quote="I generally dislike blue bags",
+                )
+            )
+        self.assertEqual(len(self.memory.read("alice").records), 1)
+
+    def test_one_off_budget_cannot_be_persisted_as_fact(self):
+        with self.assertRaisesRegex(UserMemoryError, "explicit_persistence"):
+            self.save(
+                MemoryProposal(
+                    category="fact",
+                    attribute="budget",
+                    value="100",
+                    quote="I have a budget of 100",
+                )
+            )
+        self.assertEqual(self.memory.read("alice").records, [])
+
     def test_retraction_keeps_audit_link(self):
         self.save()
         old = self.memory.read("alice").records[0]
@@ -218,3 +246,140 @@ class UserMemoryStoreTests(unittest.TestCase):
         path = self.memory.directory("../../outside")
         self.assertEqual(path.parent, self.memory.root)
         self.assertEqual(len(path.name), 64)
+
+    def test_independent_qa_evidence_counterexamples(self):
+        cases = [
+            (
+                MemoryProposal(
+                    category="fact",
+                    attribute="condition",
+                    value="hungry",
+                    quote="I am hungry",
+                ),
+                None,
+            ),
+            (
+                MemoryProposal(
+                    category="dislike",
+                    attribute="color",
+                    value="blue",
+                    scope="bags",
+                    quote="I generally don't dislike blue bags",
+                ),
+                None,
+            ),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="blue",
+                    quote="I generally prefer bags that are blue",
+                ),
+                None,
+            ),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="blue",
+                    quote="I generally prefer bags in blue",
+                ),
+                None,
+            ),
+            (preference(quote="I don't generally prefer blue bags"), None),
+            (
+                MemoryProposal(
+                    category="fact",
+                    attribute="travel",
+                    value="traveler",
+                    quote="I am not a traveler",
+                ),
+                None,
+            ),
+            (
+                MemoryProposal(
+                    category="fact",
+                    attribute="shopping",
+                    value="blue boots",
+                    quote="I'm looking for blue boots",
+                ),
+                None,
+            ),
+            (
+                MemoryProposal(
+                    category="purchase",
+                    attribute="item",
+                    value="blue boots",
+                    quote="I bought blue boots, do not remember this",
+                ),
+                None,
+            ),
+            (preference(), 'My dad said "I generally prefer blue bags"'),
+            (
+                MemoryProposal(
+                    category="preference",
+                    attribute="color",
+                    value="blue",
+                    quote="I generally prefer blue bags",
+                ),
+                None,
+            ),
+        ]
+        for proposal, message in cases:
+            with self.subTest(quote=proposal.quote), self.assertRaises(UserMemoryError):
+                self.save(proposal, message)
+        self.assertEqual(self.memory.read("alice").records, [])
+
+    def test_profile_history_limit_is_a_safe_domain_error(self):
+        records = [
+            MemoryRecord(
+                **preference().model_dump(),
+                id="um-" + f"{i:032x}",
+                source_session_id=self.sid,
+                source_event_id=f"old-{i}",
+                created_at="fixture",
+                status="superseded",
+            )
+            for i in range(500)
+        ]
+        directory = self.memory.directory("alice")
+        directory.mkdir()
+        path = directory / "profile.md"
+        path.write_text(render_profile(UserProfile(user_id="alice", records=records)))
+        before = path.read_bytes()
+        with self.assertRaisesRegex(UserMemoryError, "profile_record_limit"):
+            self.save()
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_visible_target_gate_and_old_value_prioritisation(self):
+        self.save()
+        old = self.memory.read("alice").records[0]
+        with self.sessions.open("alice", self.sid) as session:
+            proposal = preference(
+                quote="Forget my blue bags preference", op="RETRACT", target_id=old.id
+            )
+            event = session.append("user_message", {"message": proposal.quote})
+            with self.assertRaisesRegex(UserMemoryError, "visible_target"):
+                self.memory.apply(
+                    session, event, [proposal], expected_revision=1, visible_ids=set()
+                )
+            self.assertEqual(
+                self.memory.context(session, "bag")["records"][0]["id"], old.id
+            )
+        # Enough unrelated general facts to push an older fact outside the default view.
+        for i in range(10):
+            self.save(
+                MemoryProposal(
+                    category="fact",
+                    attribute=f"fact_{i}",
+                    value=f"fact{i}",
+                    quote=f"Remember I have fact{i}",
+                )
+            )
+        with self.sessions.open("alice", self.sid) as session:
+            self.assertEqual(
+                self.memory.context(session, "Please correct fact0")["records"][0][
+                    "value"
+                ],
+                "fact0",
+            )

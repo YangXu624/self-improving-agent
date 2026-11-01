@@ -26,6 +26,7 @@ from .experience.cues import catalogue_categories, decision_cues
 from .provider import PolicyReply, ProviderError
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
+from .user_memory import MemoryDecision, UserMemoryError
 
 
 class DecisionPolicy(Protocol):
@@ -88,6 +89,7 @@ class ShoppingAgent:
         max_calls=3,
         max_searches=2,
         experience=None,
+        user_memory=None,
     ):
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
@@ -95,6 +97,7 @@ class ShoppingAgent:
         self.context_builder = context_builder
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
+        self.user_memory = user_memory
         self.category_vocabulary = (
             catalogue_categories(search) if experience is not None else frozenset()
         )
@@ -138,8 +141,15 @@ class ShoppingAgent:
             retrieved_experience: list[str] = []
             injected_experience: list[str] = []
             applied_experience: list[str] = []
+            memory_changes, memory_rejections = [], []
 
             def finish(resp):
+                if self.user_memory is not None:
+                    resp["user_memory"] = {
+                        "enabled": True,
+                        "updates": memory_changes,
+                        "rejected": memory_rejections,
+                    }
                 exp_payload = {
                     "retrieved": retrieved_experience,
                     "injected": injected_experience,
@@ -175,6 +185,24 @@ class ShoppingAgent:
 
             failure = "decision_budget_exhausted"
             while calls < self.max_calls:
+                memory_view = None
+                if self.user_memory is not None:
+                    try:
+                        memory_view = self.user_memory.context(session, message)
+                    except (UserMemoryError, OSError):
+                        failure = "user_memory_unavailable"
+                        session.append(
+                            "user_memory_error", {"code": failure}, request_id
+                        )
+                        break
+                    session.append(
+                        "user_memory_selection",
+                        {
+                            "revision": memory_view["revision"],
+                            "retrieved": [r["id"] for r in memory_view["records"]],
+                        },
+                        request_id,
+                    )
                 result = latest_search(
                     session, self.search.catalogue_version, self.search.strategy_version
                 )
@@ -242,6 +270,9 @@ class ShoppingAgent:
                         request_id,
                     )
                 try:
+                    context_options = {"procedural_guidance": guidance}
+                    if memory_view is not None:
+                        context_options["user_memory"] = memory_view
                     try:
                         built = self.context_builder(
                             session,
@@ -253,7 +284,7 @@ class ShoppingAgent:
                                 "searches": self.max_searches - searches,
                             },
                             edits_allowed,
-                            procedural_guidance=guidance,
+                            **context_options,
                         )
                     except TypeError:
                         built = self.context_builder(
@@ -284,11 +315,33 @@ class ShoppingAgent:
                     failure = "essential_context_limit"
                     break
                 calls += 1
+                memory_injected = False
+                request_prompt_version = PROMPT_VERSION
+                if memory_view is not None:
+                    try:
+                        sent_context = json.loads(messages[-1]["content"])
+                        memory_injected = sent_context.get("user_memory") == memory_view
+                        request_prompt_version = sent_context.get(
+                            "prompt_version", PROMPT_VERSION
+                        )
+                    except (ValueError, KeyError, TypeError, AttributeError):
+                        pass
+                    session.append(
+                        "user_memory_injection",
+                        {
+                            "ordinal": calls,
+                            "revision": memory_view["revision"],
+                            "injected": [r["id"] for r in memory_view["records"]]
+                            if memory_injected
+                            else [],
+                        },
+                        request_id,
+                    )
                 session.append(
                     "model_request",
                     {
                         "ordinal": calls,
-                        "prompt_version": PROMPT_VERSION,
+                        "prompt_version": request_prompt_version,
                         "context_sha256": hashlib.sha256(
                             dumps(messages).encode()
                         ).hexdigest(),
@@ -341,7 +394,10 @@ class ShoppingAgent:
                     request_id,
                 )
                 try:
-                    decision = Decision.model_validate_json(reply.content)
+                    contract = (
+                        MemoryDecision if self.user_memory is not None else Decision
+                    )
+                    decision = contract.model_validate_json(reply.content)
                     if not edits_allowed and decision.updates:
                         raise ActionError("state_updates_already_accepted_this_turn")
                     state = apply_updates(
@@ -360,6 +416,40 @@ class ShoppingAgent:
                             [u.model_dump() for u in decision.updates],
                             request_id,
                         )
+                    proposals = getattr(decision, "user_memory_updates", [])
+                    if proposals:
+                        try:
+                            if not edits_allowed:
+                                raise UserMemoryError(
+                                    "user_memory_updates_already_processed_this_turn"
+                                )
+                            if not memory_injected:
+                                raise UserMemoryError(
+                                    "user_memory_context_not_injected"
+                                )
+                            memory_result = self.user_memory.apply(
+                                session,
+                                user_event,
+                                proposals,
+                                expected_revision=memory_view["revision"],
+                                visible_ids={r["id"] for r in memory_view["records"]},
+                            )
+                            session.append(
+                                "user_memory_updated", memory_result, request_id
+                            )
+                            memory_changes.append(memory_result)
+                        except (UserMemoryError, OSError) as exc:
+                            code = (
+                                str(exc)
+                                if isinstance(exc, UserMemoryError)
+                                else "user_memory_write_failed"
+                            )
+                            session.append(
+                                "user_memory_update_rejected",
+                                {"code": code},
+                                request_id,
+                            )
+                            memory_rejections.append(code)
                     edits_allowed = False
                     action = decision.action
                     currency = attribute_ledger(session)["disclosed_attributes"].get(
