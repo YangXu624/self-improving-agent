@@ -229,3 +229,9 @@ policy/private context/history (`shopper_v3`) and bounded deterministic text evi
 are unchanged. Actual prior dialogue is isolated by customer and condition, with current
 verified needs authoritative. No sentence templates or model disclosure labels are used.
 V2 remains the default. See [design, trace contract and limitations](simulator-v3.md).
+
+Sonnet transport follow-up: `shopper_providers` omits Claude sampling controls and records
+effective thinking/effort configuration. `api_budget` is an evaluation-only shared cost ledger,
+wrapping the existing policy without changing messages and reserving before transport I/O.
+It retains uncertain charges and stops on missing usage. CLI and longitudinal configuration
+validate that both providers share the recorded fresh ledger. Production ASTRA is unchanged.

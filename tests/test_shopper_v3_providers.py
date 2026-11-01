@@ -1,11 +1,13 @@
 """Mocked transport contracts; no model endpoints or real credentials are used."""
 
+import io
 import json
 import tempfile
 import unittest
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from astra_eval.shopper_providers import (
     JsonShopperProvider,
@@ -36,6 +38,9 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(url, "http://127.0.0.1:11434/api/chat")
             self.assertEqual(payload["format"], self.schema)
             self.assertEqual(payload["options"]["seed"], 7)
+            self.assertEqual(payload["options"]["temperature"], 0.0)
+            self.assertEqual(payload["options"]["num_ctx"], 4096)
+            self.assertEqual(payload["options"]["num_predict"], 220)
             return {
                 "message": {"content": '{"message":"hello"}'},
                 "model": "pinned-local",
@@ -62,7 +67,10 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(payload["system"], "private persona")
             self.assertEqual(payload["messages"], self.messages[1:])
             self.assertEqual(payload["output_config"]["format"]["schema"], self.schema)
-            self.assertNotIn("seed", payload)
+            for name in ("seed", "temperature", "top_p", "top_k", "options", "num_ctx"):
+                self.assertNotIn(name, payload)
+            self.assertEqual(headers["anthropic-version"], "2026-10-21")
+            self.assertEqual(payload["output_config"]["format"]["type"], "json_schema")
             return {
                 "content": [{"type": "text", "text": '{"message":"hi"}'}],
                 "model": "claude-fixture",
@@ -205,3 +213,155 @@ class ProviderTests(unittest.TestCase):
                 ).model,
                 "claude-alternate",
             )
+
+    def test_sonnet_thinking_controls_are_recorded_and_unsupported_temperature_rejected(
+        self,
+    ):
+        config = V3Config(provider="claude", model="claude-sonnet-5-5", max_tokens=512)
+        self.assertIsNone(config.temperature)
+        self.assertEqual(config.claude_thinking, "between_tools")
+        self.assertEqual(config.claude_effort, "low")
+        for temperature in (0, 0.1, 1):
+            with self.assertRaisesRegex(ValueError, "does not support temperature"):
+                V3Config(
+                    provider="claude",
+                    model="claude-sonnet-5-5",
+                    temperature=temperature,
+                )
+        with self.assertRaisesRegex(ValueError, "does not support temperature"):
+            V3Config.from_env(
+                {"ASTRA_SIM_TEMPERATURE": "0"},
+                provider="claude",
+                model="claude-sonnet-5-5",
+            )
+        self.assertIsNone(
+            V3Config.from_env(
+                {}, provider="claude", model="claude-sonnet-5-5"
+            ).temperature
+        )
+        self.assertEqual(
+            V3Config.from_env({"ASTRA_SIM_TEMPERATURE": "0.7"}).temperature, 0.7
+        )
+        sent = []
+        provider = JsonShopperProvider(
+            config,
+            self.journal(),
+            api_key="fixture",
+            transport=lambda url, payload, headers, timeout: (
+                sent.append(payload)
+                or {
+                    "stop_reason": "end_turn",
+                    "content": [{"type": "text", "text": "{}"}],
+                }
+            ),
+        )
+        provider.complete(self.messages, self.schema, {})
+        self.assertEqual(sent[0]["thinking"], {"type": "between_tools"})
+        self.assertEqual(sent[0]["output_config"]["effort"], "low")
+        self.assertEqual(sent[0]["max_tokens"], 512)
+
+    def test_incomplete_refused_and_malformed_envelopes_keep_usage_and_raw_evidence(
+        self,
+    ):
+        for i, override in enumerate(
+            [
+                {"stop_reason": "max_tokens"},
+                {"stop_reason": "refusal"},
+                {"content": []},
+                {"content": [None]},
+                {"content": [{"type": "text", "text": 7}]},
+                {
+                    "content": [
+                        {"type": "text", "text": "{}"},
+                        {"type": "text", "text": "{}"},
+                    ]
+                },
+            ]
+        ):
+            with self.subTest(override=override):
+                response = {
+                    "stop_reason": "end_turn",
+                    "content": [{"type": "text", "text": "{}"}],
+                    "usage": {
+                        "input_tokens": 8,
+                        "output_tokens": 4,
+                        "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                    },
+                    **override,
+                }
+                journal = self.journal(f"invalid-{i}.jsonl")
+                provider = JsonShopperProvider(
+                    V3Config(provider="claude", model="claude-fixture"),
+                    journal,
+                    api_key="fixture",
+                    transport=lambda *args: response,
+                )
+                with self.assertRaisesRegex(SimulatorError, "shopper_invalid_envelope"):
+                    provider.complete(self.messages, self.schema, {})
+                self.assertEqual(journal.calls, 1)
+                self.assertEqual(provider.usage["completion_tokens"], 4)
+                rows = list(map(json.loads, journal.path.read_text().splitlines()))
+                self.assertEqual(rows[1]["response"], response)
+                self.assertTrue(rows[2]["usage_complete"])
+
+    def test_http_failure_is_bounded_safe_and_missing_usage_is_explicit(self):
+        def fail(*args):
+            raise HTTPError(
+                "https://api.anthropic.com/v1/messages",
+                400,
+                "fixture-secret",
+                {},
+                io.BytesIO(b"fixture-secret"),
+            )
+
+        journal = self.journal(cap=1)
+        provider = JsonShopperProvider(
+            V3Config(provider="claude", model="claude-fixture"),
+            journal,
+            api_key="fixture-secret",
+            transport=fail,
+        )
+        with self.assertRaisesRegex(SimulatorError, "shopper_provider_failure"):
+            provider.complete(self.messages, self.schema, {})
+        self.assertNotIn("fixture-secret", journal.path.read_text())
+        self.assertNotIn("prompt_tokens", provider.usage)
+        self.assertEqual(journal.calls, 1)
+        self.assertEqual(
+            json.loads(journal.path.read_text().splitlines()[-1])["http_status"], 400
+        )
+        missing = JsonShopperProvider(
+            V3Config(provider="claude", model="claude-fixture"),
+            self.journal("missing.jsonl"),
+            api_key="fixture",
+            transport=lambda *args: {
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": "{}"}],
+                "usage": {"input_tokens": True, "output_tokens": None},
+            },
+        )
+        result = missing.complete(self.messages, self.schema, {})
+        self.assertNotIn("prompt_tokens", result.usage)
+        self.assertNotIn("completion_tokens", result.usage)
+        self.assertFalse(
+            json.loads(missing.journal.path.read_text().splitlines()[-1])[
+                "usage_complete"
+            ]
+        )
+
+    def test_thinking_block_is_not_concatenated_into_structured_text(self):
+        provider = JsonShopperProvider(
+            V3Config(provider="claude", model="claude-fixture"),
+            self.journal(),
+            api_key="fixture",
+            transport=lambda *args: {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "thinking", "thinking": "private"},
+                    {"type": "text", "text": "{}"},
+                ],
+            },
+        )
+        self.assertEqual(
+            provider.complete(self.messages, self.schema, {}).content, "{}"
+        )

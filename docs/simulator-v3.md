@@ -60,8 +60,8 @@ No action is selected by a predetermined disclosure order.
 
 V3 deliberately changes the conversation-generating process. Do not pool it with V2 results.
 Freeze inputs, catalogue, code, provider/model, prompt/auditor versions, budgets and decoding
-settings. Claude does not receive an Ollama seed. Temperature zero is not proof of deterministic
-API output. Exact request/response replay is reproducible; repeated live dialogue is stochastic.
+settings. Claude does not receive an Ollama seed or sampling parameters. Live
+API output is not deterministic. Exact request/response replay is reproducible; repeated live dialogue is stochastic.
 Unverified linguistic evidence must remain visible rather than being converted into a score.
 
 ## Smallest testable slice
@@ -230,3 +230,13 @@ Configuration follow-up verification: 38 focused V3 tests and four configuration
 full regression run: 595 tests, 592 ordinary passes, one missing-tokenizer skip and two existing
 expected watch-retrieval failures. Lint, formatting and diff checks passed. Local key presence
 was checked without displaying it; no provider request was made.
+
+## Sonnet 5.5 compatibility follow-up
+
+The [readiness checkpoint](reviews/claude-sonnet55-readiness.md) supersedes the initial transport
+configuration: Claude omits sampling parameters and records temperature as null; specifying
+a temperature, even zero, fails clearly. Sonnet uses between-tools thinking / low effort.
+The proposed run explicitly uses a 512-token output cap. Two actual Claude responses passed
+the schema and no-error audit, while some correct paraphrases remained unverified. Live Claude
+longitudinal runs now require `--max-cost-usd`; use `--prior-cost-usd` to carry previous known
+costs and unresolved allowances. No full DeepSeek evaluation has started.

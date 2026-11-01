@@ -204,6 +204,8 @@ def parser():
         "--shopper-env-file", help="Shopper settings file (default: --env-file)"
     )
     longitudinal.add_argument("--max-shopper-calls", type=int)
+    longitudinal.add_argument("--max-cost-usd", type=float)
+    longitudinal.add_argument("--prior-cost-usd", type=float, default=0)
     add_sim_args(longitudinal)
     return p
 
@@ -242,6 +244,8 @@ def run_command(args):
             session_max_model_calls=args.session_max_model_calls,
             max_model_calls=args.max_model_calls,
             max_shopper_calls=args.max_shopper_calls,
+            max_cost_usd=args.max_cost_usd,
+            prior_cost_usd=args.prior_cost_usd,
             memory_format=args.memory_format,
             execution_order=args.execution_order,
             stop_on_error=args.stop_on_error,
@@ -255,11 +259,32 @@ def run_command(args):
             raise ValueError("--live requires --max-model-calls")
         if args.shopper_version == "v3" and config.max_shopper_calls is None:
             raise ValueError("Live V3 requires --max-shopper-calls")
+        if args.shopper_provider == "claude" and config.max_cost_usd is None:
+            raise ValueError("Live Claude V3 requires --max-cost-usd")
         from shopping_agent.provider import DeepSeekPolicy
 
         if config.output.exists():
             raise ValueError("Use a new longitudinal output directory")
         policy = DeepSeekPolicy.from_env_file(args.env_file)
+        cost_budget = None
+        if config.max_cost_usd is not None:
+            from .api_budget import ApiCostBudget, BudgetedPolicy
+
+            if (
+                args.shopper_version != "v3"
+                or args.shopper_provider != "claude"
+                or config.simulator.model != "claude-sonnet-5-5"
+                or policy.model != "deepseek-flash"
+            ):
+                raise ValueError(
+                    "Verified combined cost controls require Sonnet 5.5 V3 and DeepSeek Flash"
+                )
+            cost_budget = ApiCostBudget(
+                config.output.with_name(config.output.name + ".api-cost.jsonl"),
+                config.max_cost_usd,
+                config.prior_cost_usd,
+            )
+            policy = BudgetedPolicy(policy, cost_budget)
         if args.shopper_version == "v3":
             import os
 
@@ -280,7 +305,9 @@ def run_command(args):
                 config.max_shopper_calls,
             )
             simulator = AutonomousShopper(
-                JsonShopperProvider(config.simulator, journal, api_key=key)
+                JsonShopperProvider(
+                    config.simulator, journal, api_key=key, cost_budget=cost_budget
+                )
             )
         else:
             simulator = OllamaShopper(config.simulator)

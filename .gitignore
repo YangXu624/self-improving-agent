@@ -77,6 +77,7 @@ secrets/
 # Session files, including explicit CLI roots outside data/
 **/events.jsonl
 *.shopper-v3.jsonl
+*.api-cost.jsonl
 **/state.json
 # Private profiles, including custom roots outside data/.
 **/profile.md

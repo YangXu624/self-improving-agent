@@ -45,11 +45,20 @@ class LongitudinalConfig:
     session_max_model_calls: int = 18
     max_model_calls: int | None = None
     max_shopper_calls: int | None = None
+    max_cost_usd: float | None = None
+    prior_cost_usd: float = 0
     memory_format: str = "legacy"
     execution_order: Literal["counterbalanced", "off_then_on"] = "counterbalanced"
     stop_on_error: bool = False
 
     def __post_init__(self):
+        if self.max_cost_usd is not None:
+            from .api_budget import money
+
+            if money(self.max_cost_usd) <= money(self.prior_cost_usd):
+                raise ValueError("Prior spending allowance must be below the ceiling")
+        elif self.prior_cost_usd:
+            raise ValueError("Prior spending allowance requires max_cost_usd")
         if self.execution_order not in {"counterbalanced", "off_then_on"}:
             raise ValueError("Unknown longitudinal execution order")
         if self.max_shopper_calls is not None:
@@ -154,6 +163,10 @@ def _plan(config, customers, tasks):
             for t in tasks
         ),
         "max_model_calls": config.max_model_calls,
+        "cost_control": {
+            "ceiling_usd": config.max_cost_usd,
+            "prior_allowance_usd": config.prior_cost_usd,
+        },
         "shopper": {
             "settings": asdict(config.simulator),
             "max_calls": config.max_shopper_calls,
@@ -207,6 +220,19 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
             raise ValueError(
                 "Actual V3 shopper cap must match recorded max_shopper_calls"
             )
+    if config.max_cost_usd is not None:
+        budget = (
+            getattr(simulator.provider, "cost_budget", None)
+            if getattr(simulator, "autonomous", False)
+            else None
+        )
+        if (
+            budget is None
+            or getattr(policy, "budget", None) is not budget
+            or float(budget.ceiling) != config.max_cost_usd
+            or float(budget.total) != config.prior_cost_usd
+        ):
+            raise ValueError("Both providers must share the recorded fresh cost budget")
     plan = _plan(config, customers, tasks)
     if getattr(simulator, "autonomous", False):
         plan["shopper"]["journal"] = str(simulator.provider.journal.path)

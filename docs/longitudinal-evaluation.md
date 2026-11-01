@@ -238,3 +238,9 @@ V3 ignores frozen sentence/disclosure schedules while retaining their original p
 The dry plan records provider settings and intended journal path; live execution records its
 actual journal and enforces a matching shopper-call cap in addition to the DeepSeek cap.
 See [V3 operation and audit limits](simulator-v3.md). Scoring and memory conditions are unchanged.
+
+Sonnet 5.5 now omits sampling parameters and uses recorded between-tools/low-effort settings.
+A live Claude run requires `--max-cost-usd`; `--prior-cost-usd` carries prior expense/uncertainty.
+The evaluation-only shared ledger retains failed-request allowances, blocks requests before
+insufficient funds and reconciles reported usage. See the [readiness report](reviews/claude-sonnet55-readiness.md)
+for tested settings, limitations and the exact proposed four-customer command.
