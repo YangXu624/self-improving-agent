@@ -1,5 +1,9 @@
 # Current baseline architecture
 
+Representation simplification: [memory-representations.md](memory-representations.md) describes
+the compact policy/snapshot view and readable user profiles. Internal validation/audit state
+is retained; legacy experiment formats remain available. Semantic retrieval is a separate step.
+
 Status: CLI and Streamlit UI use DeepSeek decisions with session memory and optional user
 profiles. Stage 1 profiles were tested with mocked calls on 1 November 2026. The earlier
 two-turn live baseline smoke does not establish memory quality or broad shopping performance.

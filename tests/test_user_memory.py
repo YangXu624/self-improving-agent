@@ -57,7 +57,8 @@ class UserMemoryStoreTests(unittest.TestCase):
         path = self.memory.directory("alice") / "profile.md"
         text = path.read_text()
         self.assertIn("## Preferences", text)
-        self.assertIn('- value: "blue"', text)
+        self.assertIn("Usually prefers color: blue (for bags).", text)
+        self.assertIn("<summary>Audit metadata (managed by ASTRA)</summary>", text)
         self.assertEqual(render_profile(parse_profile(text)), text)
         self.assertEqual(UserMemoryStore(self.root / "users").read("alice").revision, 1)
 

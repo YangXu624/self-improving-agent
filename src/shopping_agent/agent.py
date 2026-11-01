@@ -23,6 +23,7 @@ from .context import (
 )
 from .contracts import Decision
 from .experience.cues import catalogue_categories, decision_cues
+from .memory_views import FORMATS, compact_user_memory, expand_decision
 from .provider import PolicyReply, ProviderError
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
@@ -90,6 +91,7 @@ class ShoppingAgent:
         max_searches=2,
         experience=None,
         user_memory=None,
+        memory_format="legacy",
     ):
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
@@ -98,6 +100,9 @@ class ShoppingAgent:
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
         self.user_memory = user_memory
+        if memory_format not in FORMATS:
+            raise ValueError("Unknown memory format")
+        self.memory_format = memory_format
         self.category_vocabulary = (
             catalogue_categories(search) if experience is not None else frozenset()
         )
@@ -271,6 +276,8 @@ class ShoppingAgent:
                     )
                 try:
                     context_options = {"procedural_guidance": guidance}
+                    if self.memory_format == "compact":
+                        context_options["memory_format"] = "compact"
                     if memory_view is not None:
                         context_options["user_memory"] = memory_view
                     try:
@@ -317,10 +324,23 @@ class ShoppingAgent:
                 calls += 1
                 memory_injected = False
                 request_prompt_version = PROMPT_VERSION
+                sent_context = {}
+                try:
+                    sent_context = json.loads(messages[-1]["content"])
+                    request_prompt_version = sent_context.get(
+                        "prompt_version", PROMPT_VERSION
+                    )
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    sent_context = {}
+                compact = sent_context.get("memory_format") == "compact"
                 if memory_view is not None:
                     try:
-                        sent_context = json.loads(messages[-1]["content"])
-                        memory_injected = sent_context.get("user_memory") == memory_view
+                        expected_memory = (
+                            compact_user_memory(memory_view) if compact else memory_view
+                        )
+                        memory_injected = (
+                            sent_context.get("user_memory") == expected_memory
+                        )
                         request_prompt_version = sent_context.get(
                             "prompt_version", PROMPT_VERSION
                         )
@@ -346,6 +366,16 @@ class ShoppingAgent:
                             dumps(messages).encode()
                         ).hexdigest(),
                         "messages": messages,
+                        **(
+                            {
+                                "memory_format": "compact",
+                                "user_memory_records": memory_view
+                                if memory_injected
+                                else None,
+                            }
+                            if compact
+                            else {}
+                        ),
                         "cards_profile": built.cards_profile,
                         "visible_search": built.visible_search.trace()
                         if built.visible_search
@@ -374,6 +404,7 @@ class ShoppingAgent:
                     if lesson.lesson_id not in injected_experience:
                         injected_experience.append(lesson.lesson_id)
                 start = time.monotonic()
+                decision_state = session.state.model_copy(deep=True)
                 try:
                     reply = self.policy.complete(messages)
                 except ProviderError as exc:
@@ -397,7 +428,17 @@ class ShoppingAgent:
                     contract = (
                         MemoryDecision if self.user_memory is not None else Decision
                     )
-                    decision = contract.model_validate_json(reply.content)
+                    if compact:
+                        try:
+                            decision = expand_decision(
+                                reply.content, decision_state, memory_view
+                            )
+                        except ValidationError:
+                            raise
+                        except ValueError as exc:
+                            raise ActionError(str(exc)) from None
+                    else:
+                        decision = contract.model_validate_json(reply.content)
                     if not edits_allowed and decision.updates:
                         raise ActionError("state_updates_already_accepted_this_turn")
                     state = apply_updates(
