@@ -31,6 +31,8 @@ making acceptance depend on the model reconstructing cards from its own earlier 
 Prompt-context version is `autonomous-shopper-prompt-2-offer-context`; offer-audit version is
 `session-offers-2`. The roleplay system instructions and independent scoring are unchanged.
 Prices still must be present in authentic cards/profile; invented identifiers remain rejected.
+An explicit claimed offer price must come from an actual card, even when the same amount is
+a valid profile budget; mentioning the budget does not establish an item price.
 Explicit acceptance descriptions without any meaningful overlap with a shown title are rejected;
 generic “the first option” remains possible. This is a bounded lexical reference check, not a
 general proof of free-form identity. Synonyms may still need review.

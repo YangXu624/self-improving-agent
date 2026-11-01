@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
-from .consistency import Violation
+from .consistency import Violation, prices_in
 from .memory import AssistantView, ContextBudgetError, ShopperMemory, estimate_tokens
 from .models import ShopperReply, Strict
 from .shopper_evidence import AUDITOR_VERSION, derive_disclosures
@@ -326,6 +326,22 @@ class AutonomousShopper:
             if not offers:
                 violations.append(Violation("accepted_without_recommendation", "error"))
             else:
+                # Profile budget amounts are valid discourse, but not invented offer prices.
+                price_claims = re.findall(
+                    r"\b(?:at|for|costs?|priced at)\s*(\$\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:usd|dollars|bucks))",
+                    result.reply.message,
+                    re.I,
+                )
+                shown = {
+                    round(p["price"], 2)
+                    for p in offers.values()
+                    if isinstance(p.get("price"), (int, float))
+                }
+                if any(
+                    round(price, 2) not in shown
+                    for price in prices_in(" ".join(price_claims))
+                ):
+                    violations.append(Violation("unpresented_offer_price", "error"))
                 # Explicit item descriptions must have evidence in an actual offer. Generic
                 # deictic acceptance remains allowed; unknown semantic paraphrases are bounded.
                 reference = re.search(

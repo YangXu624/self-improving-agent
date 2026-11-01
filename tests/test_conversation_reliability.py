@@ -103,6 +103,7 @@ class OfferHistoryTests(F.EvalCase):
                 "unpresented_product_reference",
             ),
             ("I'll take the fifth option.", "unpresented_product_reference"),
+            ("I will accept the pants for $60.", "unpresented_offer_price"),
         ]:
             _, flags = shopper.audit_reply(memory, view, self.accepted(text))
             self.assertIn(code, [v.code for v in flags])
