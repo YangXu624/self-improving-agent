@@ -44,5 +44,55 @@ existing watch/wristwatch expected failures. No production/scoring changes.
 
 ## Results
 
-Not yet executed at this protocol checkpoint. Final results will replace this section without
-changing the frozen input, model settings, budgets or scoring rules.
+The run **stopped**, as configured, after 5/12 OFF sessions (4 valid, 1 simulator-invalid).
+ON started 0/12 sessions. No memory-effectiveness comparison exists, and no profiles were
+learned or injected. The failed run remains at the path above. It must not be resumed with
+new simulator behavior or pooled with a fresh version.
+
+| OFF visit | Outcome | First nDCG@5 | Turns | Searches | Clarifications | DeepSeek calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| office-basics-01 | failure | 0 | 6 | 7 | 0 | 14 |
+| office-basics-02 | success | 0 | 6 | 2 | 1 | 8 |
+| office-basics-03 | success | 0.16958 | 6 | 2 | 1 | 8 |
+| commuter-bags-01 | failure | no recommendation | 6 | 12 | 0 | 18 |
+| commuter-bags-02 | simulator-invalid | not scored | 1 | 2 | 0 | 3 |
+
+OFF Success@5: 2/4 valid sessions; 2/5 all started. Mean first nDCG@5 over valid sessions,
+with no recommendation assigned 0 for this diagnostic: 0.042395. These are partial descriptive
+results, not representative pilot estimates. First visits: 0/2 successes; returning visits:
+2/2 valid successes plus 1 invalid. This is within OFF alone, not a memory gain. Success
+requires any hard-compatible item; it does not establish color preference satisfaction.
+All 58 recommendation occurrences checked against disclosed hard-state requirements passed;
+hidden budget/profile mismatch remains a separate issue. No ON preference storage/retrieval/
+application/correction was observed. Gift and preference-change customers never started.
+
+The namespace failure: on commuter-bags-02, valid fact keys were `type`, `budget`, and
+`preferred_color`. Raw Ollama responses 21 and 22 were identical:
+
+> I'm looking for a folio bag for work, not just briefcases.
+
+Both declared `reveals=["type","current_goal"]`. `current_goal` is private roleplay metadata,
+not a requirement key. The second request carried `reveals_unknown_key: current_goal` feedback;
+both attempts failed. The runner terminated `simulator_failure`, then its opt-in global
+`stop_on_error` ended the run. Fourteen `claimed_reveal_missing` warnings had already occurred.
+They were logged without invalidating sessions under the old protocol; no rejected output
+was used for the failed fifth session.
+
+Separate agent limitations observed: singular hard categories `daypack` and `briefcase`
+failed literal category matching; repeated searches found no eligible products. Color-query
+terms can be absent from indexed structured detail fields. The shopper repeatedly asked
+whether items were within budget after stating it; this prolonged sessions. These remain
+separate findings, not memory failures, and neither retrieval nor scoring is changed here.
+
+Actual recorded usage: **51 DeepSeek attempts**, 159,901 input tokens, 4,468 output tokens,
+including 94,464 cache-hit and 65,437 cache-miss input tokens; **22 Ollama attempts**. Token-rated
+cost is approximately **US$0.012780** at the checked off-peak Flash prices (cache-hit .003,
+cache-miss .15, output .60 per million). This is derived from actual usage, not a verified
+invoice: before/after balance snapshots both report the same rounded CNY balance (delta 0.00),
+so settled billing is unconfirmed. No new balance query or paid completion is required.
+Prices: https://api-docs.deepseek.com/quick_start/pricing/ (checked 2026-11-01).
+
+Raw DeepSeek/Ollama request/response journals, transcripts, traces, selected input, protocol,
+model metadata and balances are local audit artifacts. No raw session log or credential is
+committed. The next simulator-fix checkpoint will preserve their hashes and document a fresh
+restart protocol; no additional paid run is authorized by that checkpoint.
