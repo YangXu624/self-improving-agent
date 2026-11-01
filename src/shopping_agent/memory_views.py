@@ -4,6 +4,8 @@ Views are projections, not another authority. Field/index references are valid o
 the exact current decision; canonical state and evidence remain in session events.
 """
 
+import json
+
 from pydantic import Field
 
 from .attributes import attribute_ledger
@@ -124,3 +126,70 @@ def expand_decision(
     value["based_on_state_version"] = state.version
     canonical = MemoryDecision if memory_view is not None else Decision
     return canonical.model_validate(value)
+
+
+def redundant_retractions(
+    content: str, state: ShoppingState, message: str, *, goal_start_version: int = 0
+):
+    """Drop an already-satisfied removal only with evidence and a current-goal tombstone.
+
+    Never resolve an absent index to another live requirement, and never repair REPLACE or
+    a never-existent attribute. The original model reply stays in the authoritative trace.
+    """
+    import re
+
+    from .state import has_evidence, normalized
+
+    raw = json.loads(content)
+    removed = []
+    if not isinstance(raw, dict):
+        return content, removed
+    updates = raw.get("updates", [])
+    if (
+        not isinstance(updates, list)
+        or any(not isinstance(u, dict) for u in updates)
+        or any(u.get("op") == "NEW_GOAL" for u in updates)
+    ):
+        return content, removed
+    kept = []
+    for update in updates:
+        path = update.get("target_id")
+        match = (
+            re.fullmatch(r"(?:hard|preferences)\.([a-z_]+)\.0", path or "")
+            if isinstance(path, str)
+            else None
+        )
+        quote = update.get("quote", "")
+        field = (
+            ("product_type" if match[1] == "category" else match[1]) if match else None
+        )
+        tombstones = [
+            r
+            for r in state.requirements
+            if r.field == field
+            and r.status == "retracted"
+            and r.created_version >= goal_start_version
+        ]
+        if (
+            update.get("op") == "RETRACT"
+            and set(update) <= {"op", "target_id", "quote"}
+            and tombstones
+            and not any(
+                r.field == field and r.status == "active" for r in state.requirements
+            )
+            and isinstance(quote, str)
+            and has_evidence(quote)
+            and normalized(quote) in normalized(message)
+        ):
+            removed.append(
+                {
+                    "path": path,
+                    "field": field,
+                    "quote": quote,
+                    "reason": "already_retracted_in_current_goal",
+                }
+            )
+        else:
+            kept.append(update)
+    raw["updates"] = kept
+    return json.dumps(raw), removed

@@ -368,6 +368,7 @@ class DialogueRunner:
                 break
             wall_ms = (time.perf_counter() - started) * 1000
             with self.store.open(user, sid) as session:
+                goal_epoch = session.state.goal_epoch
                 agent_turn = extract_turn(
                     session.events, response["request_id"], response, turn, wall_ms
                 )
@@ -390,9 +391,16 @@ class DialogueRunner:
                     "action": agent_turn.action,
                     "searches": agent_turn.searches,
                     "recommended": agent_turn.recommended_ids,
+                    "goal_epoch": goal_epoch,
                     "error": agent_turn.error,
                 },
             )
+            if agent_turn.closure == "repeated_empty_search":
+                record.termination, record.error = (
+                    "search_stalled",
+                    "repeated_empty_search",
+                )
+                break
             if target_rule is not None:
                 try:
                     rank = target_rule.check(response, agent_turn.recommended_ids)

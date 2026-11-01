@@ -5,6 +5,7 @@ from decimal import Decimal
 from itertools import product
 from uuid import uuid4
 
+from .category_matching import category_contains
 from .contracts import NUMERIC, Requirement, ShoppingState, StateUpdate
 
 
@@ -22,7 +23,7 @@ def has_evidence(quote):
 
 
 # Department aliases mirror retrieval.facet so conflict checks agree with the eligibility
-# gate. retrieval.py is intentionally untouched (frozen baseline); tests pin both tables.
+# gate. Tests pin both department alias tables.
 DEPARTMENT_ALIASES = {
     "mens": "men",
     "men's": "men",
@@ -40,7 +41,7 @@ def canonical(field, value):
 
 
 def type_conflict(rows):
-    """Prove a product_type contradiction using the gate's token-containment semantics.
+    """Prove a product_type contradiction using the gate's category-number semantics.
 
     The gate treats eq/in/contains as "category text contains every token of one
     alternative" and neq/not_in/not_contains as "contains none of these token sets".
@@ -63,7 +64,11 @@ def type_conflict(rows):
         return False
     # Sufficient and cheap: a positive group whose every alternative is already banned.
     if any(
-        all(any(b <= alt for b in forbidden) for alt in group) for group in positives
+        all(
+            any(category_contains(" ".join(alt), " ".join(b)) for b in forbidden)
+            for alt in group
+        )
+        for group in positives
     ):
         return True
     positives = list({tuple(group) for group in positives})
@@ -73,7 +78,10 @@ def type_conflict(rows):
     if count > MAX_TYPE_COMBINATIONS:
         return False
     return not any(
-        not any(banned <= set().union(*choice) for banned in forbidden)
+        not any(
+            category_contains(" ".join(set().union(*choice)), " ".join(banned))
+            for banned in forbidden
+        )
         for choice in product(*positives)
     )
 
@@ -164,6 +172,31 @@ def apply_updates(state, updates, *, expected_version, user_message, source_even
             or normalized(u.requirement.quote) not in normalized(user_message)
         ):
             raise StateError("requirement_evidence_not_in_current_user_message")
+        if (
+            u.requirement
+            and u.requirement.field == "color"
+            and u.requirement.strength == "hard"
+        ):
+            color_values = (
+                u.requirement.value
+                if isinstance(u.requirement.value, list)
+                else [u.requirement.value]
+            )
+            clauses = re.split(r"[.;!?]", normalized(user_message))
+            quote = " ".join(
+                c for c in clauses if any(normalized(str(v)) in c for v in color_values)
+            ) or normalized(u.requirement.quote)
+            # Explicit hard language wins; otherwise conditional availability is a preference.
+            hard = re.search(
+                r"\b(?:must|required|require|non.?negotiable|only (?!a preference))\b",
+                quote,
+            )
+            conditional = re.search(
+                r"\b(?:if (?:you have|available|possible|in stock)|ideally|prefer|preference|would be nice)\b",
+                quote,
+            )
+            if conditional and not hard:
+                raise StateError("conditional_color_requires_soft_preference")
         if u.op == "NEW_GOAL":
             for r in result.requirements:
                 if r.status == "active":

@@ -244,3 +244,13 @@ A live Claude run requires `--max-cost-usd`; `--prior-cost-usd` carries prior ex
 The evaluation-only shared ledger retains failed-request allowances, blocks requests before
 insufficient funds and reconciles reported usage. See the [readiness report](reviews/claude-sonnet55-readiness.md)
 for tested settings, limitations and the exact proposed four-customer command.
+
+## Reliability stopping policy update
+
+`max_consecutive_simulator_failures` defaults to 3 and is exposed as
+`--max-consecutive-simulator-failures`. Isolated simulator-invalid sessions block only later
+visits in the same customer/condition timeline. Independent timelines remain eligible in the
+existing order. Infrastructure/resource/integrity failures always stop globally; the retained
+`--stop-on-error` flag no longer cancels all customers for one isolated invalid dialogue.
+All labels, incomplete pairs and blocked dependencies remain visible; `failure_scope` and the
+plan policy version record the distinction. See [the reliability contract](reviews/conversation-reliability.md).

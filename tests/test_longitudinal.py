@@ -207,11 +207,11 @@ class LongitudinalTests(unittest.TestCase):
                 raise ProviderError("provider_fixture_failure")
 
         self.run_it(policy=BrokenPolicy())
-        self.assertEqual(self.summary["sessions"], 2)
-        self.assertEqual(len(self.summary["blocked_visits"]), 6)
+        self.assertEqual(self.summary["sessions"], 1)
+        self.assertEqual(len(self.summary["blocked_visits"]), 3)
         self.assertTrue(all(r["termination"] == "provider_error" for r in self.rows))
         report = json.loads((self.configured.output / "report.json").read_text())
-        self.assertEqual(sum(p["complete"] for p in report["pairs"]), 1)
+        self.assertEqual(sum(p["complete"] for p in report["pairs"]), 0)
 
     def test_budget_plan_and_refusal_to_overwrite(self):
         config = self.config(max_model_calls=3)
@@ -284,12 +284,16 @@ class LongitudinalTests(unittest.TestCase):
             def respond(self, memory, view, feedback=()):
                 raise SimulatorError("simulator_fixture_failure")
 
-        config = self.config(execution_order="off_then_on", stop_on_error=True)
+        config = self.config(
+            execution_order="off_then_on",
+            stop_on_error=True,
+            max_consecutive_simulator_failures=1,
+        )
         summary = run_longitudinal(
             config, simulator=BrokenShopper(), policy=MemoryPolicy()
         )
         self.assertEqual(summary["sessions"], 1)
-        self.assertEqual(summary["stopped_early"], "session_error:simulator_failure")
+        self.assertEqual(summary["stopped_early"], "simulator_failure_threshold")
         rows = [
             json.loads(line)
             for line in (config.output / "results.jsonl").read_text().splitlines()

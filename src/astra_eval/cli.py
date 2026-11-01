@@ -192,7 +192,14 @@ def parser():
         choices=("counterbalanced", "off_then_on"),
         default="counterbalanced",
     )
-    longitudinal.add_argument("--stop-on-error", action="store_true")
+    longitudinal.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Compatibility flag; infrastructure errors always stop, isolated invalid timelines are blocked",
+    )
+    longitudinal.add_argument(
+        "--max-consecutive-simulator-failures", type=int, default=3
+    )
     longitudinal.add_argument(
         "--memory-format", choices=("legacy", "compact"), default="legacy"
     )
@@ -249,6 +256,7 @@ def run_command(args):
             memory_format=args.memory_format,
             execution_order=args.execution_order,
             stop_on_error=args.stop_on_error,
+            max_consecutive_simulator_failures=args.max_consecutive_simulator_failures,
         )
         longitudinal_plan = plan_longitudinal(config)
         if not args.live:

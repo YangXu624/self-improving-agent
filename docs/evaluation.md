@@ -208,3 +208,9 @@ two valid failures and one audit-invalid visit. ON never started, so there is no
 comparison. The stop exposed a prior-recommendation context gap in the shopper audit; the live
 traces also show category-token and stale-state-edit failures in ASTRA. Runtime/scoring remained
 unchanged. The pilot's conservative token-cost estimate is US$0.072132224; prior uncertainty is retained.
+
+A [reliability hardening pass](reviews/conversation-reliability.md) preserves all old scores and
+adds 22 offline lifecycle tests. Isolated simulator-invalid sessions block dependent visits but
+allow independent customers/conditions; a declared consecutive-failure threshold stops systemic
+model failure. Provider, integrity and accounting errors stop globally. This changes orchestration
+and application guards, not evaluation scoring. No new paid effectiveness experiment has run.

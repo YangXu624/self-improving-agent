@@ -276,3 +276,14 @@ Use Sonnet between-tools/low-effort settings to bound a text-only shopper and te
 or truncations. A shared evaluation-only Decimal ledger reserves conservative costs before
 either provider call; missing usage retains the reserve and stops. This is client accounting
 with explicit billing-bound limitations, not a provider invoice or guarantee of run completion.
+
+## Reliability through complete lifecycle boundaries
+
+Retain scoped presented offers across text-only follow-ups; prior-session history cannot
+authorize acceptance. Add bounded category-number matching, not semantic retrieval. Empty
+logical searches are deduplicated; changed constraints permit new execution. Reject conditional
+hard-color proposals rather than silently soften requirements. Normalize only evidence-backed
+already-absent retractions and preserve the original proposal/no-op audit. Invalid simulated
+dialogue blocks dependent visits; independent timelines continue until a declared systemic
+threshold. Provider/accounting/integrity faults always stop globally. Scoring and frozen ground
+truth remain unchanged. [Failure taxonomy and tests](reviews/conversation-reliability.md).

@@ -2,19 +2,21 @@
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
-from .consistency import Violation
+from .consistency import Violation, prices_in
 from .memory import AssistantView, ContextBudgetError, ShopperMemory, estimate_tokens
 from .models import ShopperReply, Strict
 from .shopper_evidence import AUDITOR_VERSION, derive_disclosures
 from .shopper_providers import ShopperProvider
 from .simulators import SimulatorError, SimulatorResult
 
-PROMPT_V3 = "autonomous-shopper-prompt-1"
+PROMPT_V3 = "autonomous-shopper-prompt-2-offer-context"
+OFFER_AUDIT_VERSION = "session-offers-2"
 SYSTEM = """You are an autonomous customer talking to a shopping assistant. Act according to
 your private persona and current shopping situation. Decide what to say, ask, clarify,
 accept or decline in your own words. Your current verified needs are authoritative;
@@ -76,6 +78,29 @@ def need_view(fact) -> dict:
     }
 
 
+def session_offers(memory: ShopperMemory, view: AssistantView) -> tuple[int, dict]:
+    """Actual presented cards in the current session/goal; never cross-visit history."""
+    # Only accepted, actually presented recommendations in this session/current goal.
+    assistants = [e for e in memory.transcript.entries if e["role"] == "assistant"]
+    epoch = assistants[-1].get("goal_epoch", 0) if assistants else 0
+    offers = {}
+    for entry in assistants:
+        if (
+            entry.get("goal_epoch", 0) == epoch
+            and entry.get("action") == "RECOMMEND"
+            and entry.get("status", "ok") == "ok"
+        ):
+            offers.update(
+                {
+                    p["id"]: p
+                    for p in entry.get("products", [])
+                    if isinstance(p.get("id"), str)
+                }
+            )
+    offers.update({p.get("id", f"current-{i}"): p for i, p in enumerate(view.products)})
+    return epoch, offers
+
+
 @dataclass(frozen=True)
 class SessionIdentity:
     owner: str
@@ -90,15 +115,18 @@ class AutonomousShopper:
         self.provider, self.config = provider, provider.config
         self.history: dict[tuple[str, str], list[dict]] = {}
         self.identity: SessionIdentity | None = None
+        self._session_memory: ShopperMemory | None = None
 
     def start_session(self, owner: str, condition: str, session: str) -> None:
         if self.identity is not None:
             raise ValueError("Shopper already bound to a session")
         self.identity = SessionIdentity(owner, condition, session)
+        self._session_memory = None
 
     def finish_session(self, memory: ShopperMemory, termination: str) -> None:
         if self.identity is None:
             raise ValueError("Shopper session not bound")
+        self._bind_memory(memory)
         # No scorer outcome enters shopper history; failures are not invented purchases.
         entries = [
             {
@@ -141,12 +169,19 @@ class AutonomousShopper:
             accepted_conversation=entries,
         )
         self.identity = None
+        self._session_memory = None
+
+    def _bind_memory(self, memory: ShopperMemory) -> None:
+        if self.identity is None:
+            raise SimulatorError("shopper_session_not_bound")
+        if self._session_memory is not None and memory is not self._session_memory:
+            raise SimulatorError("shopper_session_memory_mismatch")
+        self._session_memory = memory
 
     def build_messages(
         self, memory: ShopperMemory, view: AssistantView, feedback=()
     ) -> tuple[list[dict], dict]:
-        if self.identity is None:
-            raise SimulatorError("shopper_session_not_bound")
+        self._bind_memory(memory)
         private = memory.private_context or {}
         situation = {
             k: private[k]
@@ -188,6 +223,12 @@ class AutonomousShopper:
             if not (e["role"] == "assistant" and e["turn"] == view.turn)
         ]
         products = [public_option(p) for p in view.products[:5]]
+        _epoch, previous = session_offers(memory, view)
+        prior_options = (
+            []
+            if view.products
+            else [public_option(p) for p in list(previous.values())[-5:]]
+        )
         user = {
             "persona": memory.profile.persona,
             "situation": situation,
@@ -196,7 +237,11 @@ class AutonomousShopper:
             "already_communicated": known,
             "prior_visits": prior,
             "current_dialogue": dialogue,
-            "assistant": {"message": view.text, "presented_options": products},
+            "assistant": {
+                "message": view.text,
+                "presented_options": products,
+                "previously_presented_options": prior_options,
+            },
             "opening_request": view.turn == 0,
             "turns_remaining": view.turns_left,
         }
@@ -220,6 +265,7 @@ class AutonomousShopper:
         ], {
             "prompt_version": PROMPT_V3,
             "auditor_version": AUDITOR_VERSION,
+            "offer_audit_version": OFFER_AUDIT_VERSION,
             "dialogue_entries_dropped_for_budget": dropped,
             "prior_visits_sent": len(prior),
         }
@@ -260,25 +306,119 @@ class AutonomousShopper:
         result: SimulatorResult,
         forbidden=(),
     ):
+        self._bind_memory(memory)
+        epoch, offers = session_offers(memory, view)
+        assistants = [e for e in memory.transcript.entries if e["role"] == "assistant"]
         audit = derive_disclosures(
             result.reply.message,
             memory.profile,
             assistant_text=view.text,
-            shown_titles=" ".join(p.get("title", "") for p in view.products),
+            shown_titles=" ".join(p.get("title", "") for p in offers.values()),
             shown_prices=[
                 p["price"]
-                for p in view.products
+                for p in offers.values()
                 if isinstance(p.get("price"), (float, int))
             ],
             forbidden=forbidden,
         )
         violations = list(audit.violations)
-        if result.reply.action == "accept" and not view.products:
-            violations.append(Violation("accepted_without_recommendation", "error"))
+        if result.reply.action == "accept":
+            if not offers:
+                violations.append(Violation("accepted_without_recommendation", "error"))
+            else:
+                # Profile budget amounts are valid discourse, but not invented offer prices.
+                price_claims = re.findall(
+                    r"\b(?:at|for|costs?|priced at)\s*(\$\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:usd|dollars|bucks))",
+                    result.reply.message,
+                    re.I,
+                )
+                shown = {
+                    round(p["price"], 2)
+                    for p in offers.values()
+                    if isinstance(p.get("price"), (int, float))
+                }
+                if any(
+                    round(price, 2) not in shown
+                    for price in prices_in(" ".join(price_claims))
+                ):
+                    violations.append(Violation("unpresented_offer_price", "error"))
+                # Explicit item descriptions must have evidence in an actual offer. Generic
+                # deictic acceptance remains allowed; unknown semantic paraphrases are bounded.
+                reference = re.search(
+                    r"\b(?:accept|take|choose|buy|order|go with|pick)\s+(.+)",
+                    result.reply.message,
+                    re.I,
+                )
+                if reference:
+                    phrase = re.split(
+                        r"\b(?:at|for)\s*\$|\band\b|[.!?](?:\s|$)",
+                        reference[1],
+                        maxsplit=1,
+                        flags=re.I,
+                    )[0]
+                    stop = set(
+                        "i ll the a an it them that those these this first second third fourth fifth one two three four five number ones option options item items product products please thanks casual comfortable cheaper pair budget under dollar dollars usd".split()
+                    )
+                    words = set(re.findall(r"[a-z]+", phrase.casefold())) - stop
+                    evidence_words = (
+                        set(
+                            re.findall(
+                                r"[a-z]+",
+                                " ".join(
+                                    str(p.get("title", ""))
+                                    + " "
+                                    + " ".join(
+                                        str(v)
+                                        for v in p.get("facts", {}).values()
+                                        if v is not None
+                                    )
+                                    for p in offers.values()
+                                ).casefold(),
+                            )
+                        )
+                        - stop
+                    )
+                    ordinal = re.search(
+                        r"\b(first|second|third|fourth|fifth|sixth)\b", phrase, re.I
+                    )
+                    shown_count = max(
+                        [
+                            len(view.products),
+                            *[
+                                len(e.get("products", []))
+                                for e in assistants
+                                if e.get("goal_epoch", 0) == epoch
+                                and e.get("action") == "RECOMMEND"
+                            ],
+                        ]
+                    )
+                    out_of_range = bool(
+                        ordinal
+                        and (
+                            "first",
+                            "second",
+                            "third",
+                            "fourth",
+                            "fifth",
+                            "sixth",
+                        ).index(ordinal[1].casefold())
+                        + 1
+                        > shown_count
+                    )
+                    if (words and not words & evidence_words) or out_of_range:
+                        violations.append(
+                            Violation("unpresented_product_reference", "error")
+                        )
         self.provider.journal.append(
             "dialogue_evidence",
             session=self.identity.session,
             auditor=AUDITOR_VERSION,
+            offer_scope={
+                "version": OFFER_AUDIT_VERSION,
+                "session": self.identity.session,
+                "goal_epoch": epoch,
+                "presented_ids": list(offers),
+            },
             response_sha256=result.raw_sha256,
             observations=audit.observations,
             violations=[
