@@ -95,5 +95,7 @@ Provider documentation consulted: [Claude structured outputs](https://platform.c
 
 ## Implementation and verification
 
-Pending at this design checkpoint; subsequent commits will record what actually works and
-what remains unverified. No model quality, token savings or memory benefit is claimed.
+Provider checkpoint: thin Ollama/Claude transports, separate Claude key loading, exact local
+request/response journaling and an explicit failed-attempt-inclusive shopper-call cap are
+implemented. Six mocked-provider tests passed; no live model was contacted. Autonomous
+policy, evidence derivation and loop integration are next. No quality or memory benefit is claimed.
