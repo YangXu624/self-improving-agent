@@ -25,11 +25,18 @@ def memory_audit(events, customer, task, oracle) -> dict:
             rejected.append(payload)
         elif event.type == "model_request":
             try:
-                records = (
-                    json.loads(payload["messages"][-1]["content"])
-                    .get("user_memory", {})
-                    .get("records", [])
-                )
+                from shopping_agent.memory_views import compact_user_memory
+
+                sent = json.loads(payload["messages"][-1]["content"])
+                records = sent.get("user_memory", {}).get("records", [])
+                if sent.get("memory_format") == "compact":
+                    canonical = payload.get("user_memory_records")
+                    records = (
+                        canonical["records"]
+                        if canonical is not None
+                        and compact_user_memory(canonical) == sent.get("user_memory")
+                        else []
+                    )
             except (ValueError, KeyError, TypeError):
                 records = []
             visible = {}

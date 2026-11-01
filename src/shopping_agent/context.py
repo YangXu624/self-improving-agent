@@ -15,6 +15,7 @@ from .memory_views import (
     CompactMemoryDecision,
     compact_state,
     compact_user_memory,
+    state_slots,
 )
 from .sessions import dumps
 from .user_memory import MemoryDecision
@@ -44,6 +45,7 @@ SEARCH uses short literal words, all/any matching and a limit; never SQL or sear
 Every current hard condition is enforced. Missing required facts, including exclusions, fail
 verification. Category matching is literal: avoid inferred or overly specific categories.
 Soft preferences do not change BM25 order; use supported product facts to rank eligible items.
+matched_preferences names verified soft matches using current state paths, not audit IDs.
 Searches need a search slot AND a later model call to inspect the result. Finish when those
 are unavailable. A narrow empty query does not prove the catalogue has no suitable products.
 
@@ -166,7 +168,7 @@ class BuiltContext:
     cards_profile: str
 
 
-def bind_context(messages, raw_result, cards_profile="custom"):
+def bind_context(messages, raw_result, cards_profile="custom", *, state=None):
     """Bind execution to the precise serialized model-visible set, not the raw pool."""
     try:
         value = json.loads(messages[-1]["content"])
@@ -200,15 +202,18 @@ def bind_context(messages, raw_result, cards_profile="custom"):
                         raw_result,
                         cards_profile,
                         memory_format="compact" if compact else "legacy",
+                        state=state,
                     ),
                     compact=True,
                 ):
                     raise ValueError("Context differs from its profile projection")
             evidence = semantic_cards(view)
-            expected = [product_context(raw_cards[ident]) for ident in ids]
-            if compact:
-                for card in expected:
-                    card.pop("matched_soft_ids", None)
+            expected = [
+                _compact_product(raw_cards[ident], state)
+                if compact
+                else product_context(raw_cards[ident])
+                for ident in ids
+            ]
             if dumps(evidence, compact=True) != dumps(expected, compact=True):
                 raise ValueError("Context changed authoritative candidate evidence")
             receipt = VisibilityReceipt(
@@ -275,7 +280,24 @@ def product_context(product):
     return value
 
 
-def search_context(result, cards_profile="baseline", *, memory_format="legacy"):
+def _compact_product(product, state):
+    card = product_context(product)
+    matched = card.pop("matched_soft_ids", [])
+    if matched:
+        if state is None:
+            raise ValueError("Compact soft matches require current state")
+        references = {
+            r.id: reference for reference, _group, _field, r in state_slots(state)
+        }
+        if any(ident not in references for ident in matched):
+            raise ValueError("Unknown soft-match reference")
+        card["matched_preferences"] = [references[ident] for ident in matched]
+    return card
+
+
+def search_context(
+    result, cards_profile="baseline", *, memory_format="legacy", state=None
+):
     """Baseline preserves all IDs; explicit profiles select a prefix before packing."""
     if result is None:
         return None
@@ -285,7 +307,12 @@ def search_context(result, cards_profile="baseline", *, memory_format="legacy"):
         if profile.limit is None
         else result["candidates"][: profile.limit]
     )
-    cards = [product_context(product) for product in candidates]
+    cards = [
+        _compact_product(product, state)
+        if memory_format == "compact"
+        else product_context(product)
+        for product in candidates
+    ]
     view = {
         **{
             key: result[key]
@@ -297,8 +324,6 @@ def search_context(result, cards_profile="baseline", *, memory_format="legacy"):
     if memory_format == "compact":
         view.pop("state_version")
         view.pop("applied_hard_filters")
-        for card in cards:
-            card.pop("matched_soft_ids", None)
     if profile.shared and cards:
         view.update(share_metadata(cards))
     return view
@@ -386,7 +411,10 @@ def build_context(
         "current_user_message": user_message,
         "edits_allowed": edits_allowed,
         "latest_search": search_context(
-            search_result, cards_profile, memory_format=memory_format
+            search_result,
+            cards_profile,
+            memory_format=memory_format,
+            state=session.state,
         ),
         "validation_feedback": feedback,
         "remaining_budget": budget,
@@ -477,9 +505,13 @@ def build_decision_context(
         cards_profile=cards_profile,
         **kwargs,
     )
-    return bind_context(messages, search_result, cards_profile)
+    return bind_context(messages, search_result, cards_profile, state=session.state)
 
 
-def builder_for_profile(name):
+def builder_for_profile(name, *, memory_format="legacy"):
     profile_for(name)
-    return partial(build_decision_context, cards_profile=name)
+    if memory_format not in FORMATS:
+        raise ValueError("Unknown memory format")
+    return partial(
+        build_decision_context, cards_profile=name, memory_format=memory_format
+    )

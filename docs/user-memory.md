@@ -4,8 +4,10 @@ Session history remains authoritative in `events.jsonl`; `state.json` remains it
 User memory is a separate, opt-in profile, not a second transcript or procedural lesson store.
 
 `UserMemoryStore` stores `data/user-memory/<SHA256(user_id)>/profile.md`. A single readable
-Markdown file has Facts, Preferences, Dislikes and Purchases sections. JSON-escaped bullets
-preserve exact values and provenance without additional dependencies or a companion database.
+Markdown file has Facts, Preferences, Dislikes and Purchases sections with active memories
+as readable sentences. A collapsed audit section retains compact JSON provenance/history in
+the same file; no companion database is used. Historical bullet profiles remain readable
+without rewriting them on inspection. See [current representations](memory-representations.md).
 One file permits an atomic replacement for a complete update batch; four independent files
 would need a multi-file transaction. Files are read/updated through the store, not arbitrary
 model file operations. Manual edits outside the canonical format fail closed.
@@ -51,10 +53,10 @@ inspectable even when not all records are in context. Confirmed/inferred basis s
 Remembered preferences are advisory for questions, queries and ranking: they never silently
 become hard requirements. Current session requirements and gift recipients take precedence.
 
-Enabled calls use prompt `shopping-baseline-v6-user-memory` and `MemoryDecision`, which adds
-optional `user_memory_updates` to the existing decision. One DeepSeek response proposes both
-session edits and profile updates; there is no extra extraction call. Disabled calls preserve
-the original `Decision` schema and `shopping-baseline-v5-experience` prompt.
+Normal chat uses `shopping-baseline-v7-compact-memory` with attribute-based state and selected
+ref/text memories. Structured memory proposals remain evidence-validated. Legacy evaluation
+uses v6/MemoryDecision when user memory is enabled and v5/Decision when disabled. Both formats
+use one response for state edits, memory proposals and an action; there is no extraction call.
 
 Python independently validates each profile-update batch against the actual owned current
 user event, the profile revision, and (for corrections) IDs visible in that decision. A batch
@@ -95,46 +97,30 @@ flowchart LR
 Before Session 1 there is no profile file. An empty read has revision 0.
 
 Session 1, Alice: **I generally prefer blue bags.** The model proposes preference/color/blue,
-scope=bags, with that exact quote. After validation the file contains a record like:
+scope=bags, with that exact quote. After validation the readable part of the file contains:
 
 ```markdown
 # ASTRA user memory
-- user_id: "alice"
-- revision: 1
+
+User: alice
 
 ## Preferences
-### um-<record-1>
-- status: "active"
-- attribute: "color"
-- value: "blue"
-- scope: "bags"
-- basis: "confirmed"
-- quote: "I generally prefer blue bags."
+- Usually prefers color: blue (for bags).
 ```
 
-Session 2 uses the same user ID and a new session ID. **I need a bag** receives the blue/bags
-record without repeating it. **Actually I now generally prefer black bags instead of blue**
-can then propose REPLACE using the visible old record ID. The resulting revision 2 contains:
+Session 2 uses the same user ID and a new session ID. **I need a bag** receives this preference
+without repeating it. **Actually I now generally prefer black bags instead of blue** can then
+propose REPLACE using the current short memory reference (legacy mode uses the record ID).
+The readable section becomes:
 
 ```markdown
 ## Preferences
-### um-<record-1>
-- status: "superseded"
-- value: "blue"
-- quote: "I generally prefer blue bags."
-- closed_by_event_id: "<session-2-user-event>"
-
-### um-<record-2>
-- status: "active"
-- value: "black"
-- scope: "bags"
-- quote: "Actually I now generally prefer black bags instead of blue"
-- target_id: "um-<record-1>"
-- source_event_id: "<session-2-user-event>"
+- Usually prefers color: black (for bags).
 ```
 
-These excerpts omit other required fields for clarity; real files also contain category,
-operation, source-session IDs and UTC timestamps. They are not replacement profile files.
+The old blue record is superseded, and links to the new record/source event remain in the
+collapsed audit metadata. These excerpts omit that required metadata and the empty sections;
+they are not replacement profile files. New inference records are visibly labelled unconfirmed.
 There is still no purchase record unless Alice explicitly confirms buying something.
 
 ## Existing evaluator and future seams

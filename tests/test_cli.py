@@ -52,6 +52,8 @@ class CliTests(unittest.TestCase):
     def chat_args(self):
         return [
             "chat",
+            "--memory-format",
+            "legacy",
             "--user",
             "alice",
             "--catalogue",

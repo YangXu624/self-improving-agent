@@ -56,6 +56,7 @@ class StreamlitTests(unittest.TestCase):
                 "DEEPSEEK_API_KEY": TEST_KEY,
                 "DEEPSEEK_MODEL": "deepseek-flash",
                 "ASTRA_ENV_FILE": str(self.root / "absent.env"),
+                "ASTRA_MEMORY_FORMAT": "legacy",
             },
         )
         self.environment.start()

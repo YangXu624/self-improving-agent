@@ -20,6 +20,7 @@ def service(catalogue: Path, index: Path, sessions: Path) -> ChatService:
         index,
         sessions,
         policy=DeepSeekPolicy(api_key=TEST_KEY, model="deepseek-flash"),
+        memory_format="legacy",
     )
 
 

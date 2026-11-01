@@ -1,5 +1,11 @@
 # Current evaluation status
 
+Memory representation is now explicitly controlled: normal chat defaults to compact v7,
+while existing evaluation modes default to legacy. Longitudinal `--memory-format compact`
+records the format and prompt versions for both arms; keep the same format across comparisons.
+Character-size checks in [memory-representations.md](memory-representations.md) do not establish
+live recommendation quality, token savings or memory benefit. Frozen artifacts are unchanged.
+
 Stage 1 profiles are opt-in in the application. Existing single-session evaluators remain
 user-memory OFF and their scenarios/scoring are unchanged. Stage 2 adds a separate thin
 [returning-customer orchestration](longitudinal-evaluation.md) with development-only customers,

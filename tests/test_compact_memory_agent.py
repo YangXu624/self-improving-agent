@@ -206,3 +206,19 @@ class CompactMemoryAgentTests(unittest.TestCase):
             "user_memory_context_not_injected", result["user_memory"]["rejected"]
         )
         self.assertEqual(self.memory.read("alice").records, [])
+
+    def test_verified_soft_match_is_preserved_as_a_current_field_path(self):
+        self.agent(
+            lambda c: decision(
+                {"type": "SEARCH", "query": "boots"},
+                [
+                    add().model_dump(),
+                    add("material", "eq", "Cotton", "Cotton", "soft").model_dump(),
+                ],
+            ),
+            recommend,
+        ).turn("alice", self.sid, "under 100 prefer Cotton")
+        products = self.policy.contexts[-1]["latest_search"]["candidates"]
+        cheap = next(p for p in products if p["id"] == "cheap")
+        self.assertEqual(cheap["matched_preferences"], ["preferences.material.0"])
+        self.assertTrue(all("matched_soft_ids" not in p for p in products))

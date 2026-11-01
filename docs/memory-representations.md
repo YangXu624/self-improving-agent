@@ -53,7 +53,8 @@ are current paths such as `hard.price.1`. Python resolves these to internal IDs 
 the revision captured before the model request. The compact model contract does not contain
 `based_on_state_version`. Invalid references fail closed. Search receipts keep state/catalogue
 versions internally; actual product/search IDs and authoritative product facts remain visible.
-Removing soft-match ID annotations does not change BM25 or the hard filter.
+Soft-match audit IDs become current preference paths (for example
+`preferences.material.0`), preserving match information. BM25 and hard filtering are unchanged.
 
 Schema-2 compact `state.json` wraps this state with user/session ownership, last-event position
 and `_audit` containing revision/goal counters. Full canonical state is reconstructed from
@@ -103,8 +104,15 @@ injection data remains in model-request audit metadata, outside `messages` sent 
 
 `memory_format=legacy` preserves existing policy/state projection and schemas; `compact`
 selects prompt `shopping-baseline-v7-compact-memory`. Library/evaluation defaults remain
-legacy so old experiment conditions are not silently changed. Application composition and
-explicit experiment selection are separate checkpoints of this change.
+legacy so old experiment conditions are not silently changed. Streamlit and shopping CLI
+default to compact; `ASTRA_MEMORY_FORMAT=legacy` (process setting) or chat `--memory-format
+legacy` selects the old policy format. Normal snapshots follow the selected format. The
+inspection CLI intentionally retains its exhaustive audit output.
+
+Longitudinal evaluation can opt in with `--memory-format compact`. The format and actual
+prompt versions are recorded in shared configuration; both user-memory conditions use the
+same format. Default longitudinal/single-session experiments remain legacy. Compact memory
+auditing resolves canonical metadata only when it matches the actual sent text view.
 
 No old log, frozen benchmark, dataset, procedural lesson or existing profile is bulk-migrated.
 There is no embedding index, semantic-retrieval experiment, LLM summarizer or new learning
@@ -118,11 +126,11 @@ the exhaustive stored record. These are character counts, not DeepSeek token mea
 
 | Fixture/component | Legacy characters | Compact characters |
 | --- | ---: | ---: |
-| Empty whole prompt | 7,910 | 6,625 |
-| Range/preferences + one memory, whole prompt | 11,204 | 9,405 |
+| Empty whole prompt | 7,910 | 6,715 |
+| Range/preferences + one memory, whole prompt | 11,204 | 9,495 |
 | That fixture's state | 650 | 246 |
 | That fixture's user-memory block | 165 | 81 |
 
-The measured whole-prompt reductions are about 16% in these two cases. Live recommendation
+The measured whole-prompt reductions are about 15% in these two cases. Live recommendation
 quality, billed-token savings and cost effects remain unverified. Larger product/history
 payloads can change the proportion. Product candidate count/order and retrieval are unchanged.

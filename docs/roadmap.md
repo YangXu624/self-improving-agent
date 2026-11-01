@@ -263,3 +263,11 @@ evaluation, three four-visit development customers, isolated user-memory OFF/ON 
 catalogue validation and per-session/customer metrics. See [Stage 2](longitudinal-evaluation.md).
 No live DeepSeek/Ollama evaluation, new held-out benchmark or procedural activation has run.
 Stop for implementation and customer-data review before expanding fixtures or experiments.
+
+## Current representation simplification
+
+Normal chat uses compact current-state and selected text-memory views, readable Markdown
+profiles and schema-2 current snapshots. Canonical events/validation and all frozen inputs
+are retained. Evaluations remain legacy by default; longitudinal compact mode is explicit
+and recorded. See [memory representations](memory-representations.md). Semantic/embedding
+retrieval will be evaluated separately; no new retrieval or live experiment belongs here.

@@ -6,6 +6,7 @@ from typing import Any
 from .agent import DecisionPolicy, ShoppingAgent
 from .context import builder_for_profile
 from .contracts import Event
+from .memory_views import compact_state
 from .retrieval import LexicalSearch, file_hash
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
 from .user_memory import UserMemoryStore
@@ -28,12 +29,16 @@ class ChatService:
         cards_profile: str = "baseline",
         user_memory_enabled: bool = False,
         user_memory_root: Path | None = None,
+        memory_format: str = "compact",
     ):
         self.index = index
         self.catalogue_hash = file_hash(catalogue)
         self.policy = policy
-        self.context_builder = builder_for_profile(cards_profile)
-        self.store = SessionStore(sessions)
+        self.memory_format = memory_format
+        self.context_builder = builder_for_profile(
+            cards_profile, memory_format=memory_format
+        )
+        self.store = SessionStore(sessions, snapshot_format=memory_format)
         self.user_memory = (
             UserMemoryStore(user_memory_root or sessions.parent / "user-memory")
             if user_memory_enabled
@@ -101,6 +106,7 @@ class ChatService:
             return {
                 "session_id": session.id,
                 "state": session.state.model_dump(),
+                "shopping_state": compact_state(session),
                 "messages": messages,
                 "events": [e.model_dump() for e in session.events],
             }
@@ -116,6 +122,7 @@ class ChatService:
                 self.policy,
                 context_builder=self.context_builder,
                 user_memory=self.user_memory,
+                memory_format=self.memory_format,
             ).turn(user_id, session_id, message, request_id=request_id)
         finally:
             tool.close()

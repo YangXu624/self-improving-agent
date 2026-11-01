@@ -63,6 +63,42 @@ def profile_fixture():
 
 
 class MemoryViewTests(unittest.TestCase):
+    def test_actual_serialized_prompt_is_smaller_on_fixed_fixture(self):
+        from shopping_agent.context import build_context
+
+        profile = profile_fixture()
+        view = {
+            "revision": 1,
+            "records": [
+                {
+                    key: getattr(r, key)
+                    for key in (
+                        "id",
+                        "category",
+                        "attribute",
+                        "value",
+                        "scope",
+                        "basis",
+                    )
+                }
+                for r in profile.records
+            ],
+        }
+        counts = {}
+        for format_name in ("legacy", "compact"):
+            messages = build_context(
+                SimpleNamespace(state=state_fixture(), events=[]),
+                "I need bags",
+                None,
+                [],
+                {"model_calls": 3, "searches": 2},
+                True,
+                user_memory=view,
+                memory_format=format_name,
+            )
+            counts[format_name] = sum(len(m["content"]) for m in messages)
+        self.assertLess(counts["compact"], counts["legacy"])
+
     def test_compact_state_keeps_ranges_exclusions_alternatives_without_audit(self):
         state = state_fixture()
         view = compact_state(SimpleNamespace(state=state, events=[]))

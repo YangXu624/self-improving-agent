@@ -9,6 +9,7 @@ from uuid import uuid4
 import streamlit as st
 
 from .cards import PROFILES
+from .memory_views import FORMATS
 from .provider import DeepSeekPolicy, ProviderError
 from .sessions import SessionError
 from .ui_service import ChatService
@@ -245,6 +246,10 @@ def run_app(project_root: Path) -> None:
         st.chat_input("Configure DeepSeek to start chatting", disabled=True)
         return
     cards_profile = os.environ.get("ASTRA_CARDS_PROFILE", "baseline")
+    memory_format = os.environ.get("ASTRA_MEMORY_FORMAT", "compact")
+    if memory_format not in FORMATS:
+        st.error("ASTRA_MEMORY_FORMAT must be compact or legacy.")
+        return
     if cards_profile not in PROFILES:
         st.title("ASTRA")
         st.error("ASTRA_CARDS_PROFILE is not a known card profile.")
@@ -277,6 +282,7 @@ def run_app(project_root: Path) -> None:
             ),
             policy=policy,
             cards_profile=cards_profile,
+            memory_format=memory_format,
             user_memory_enabled=user_memory_enabled,
             user_memory_root=Path(
                 os.environ.get(
@@ -318,8 +324,9 @@ def run_app(project_root: Path) -> None:
                 st.caption(label)
                 for row in rows:
                     st.text(requirement_label(row))
-        st.caption(f"State version {view['state']['version']}")
-        with st.expander("State & correction history"):
+        with st.expander("Shopping details"):
+            st.json(view["shopping_state"])
+        with st.expander("Audit history"):
             st.json(view["state"])
     starter = None
     if not view["messages"]:

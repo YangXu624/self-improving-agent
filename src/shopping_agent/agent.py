@@ -306,10 +306,13 @@ class ShoppingAgent:
                             edits_allowed,
                         )
                     if not isinstance(built, BuiltContext):
-                        built = bind_context(built, result)
+                        built = bind_context(built, result, state=session.state)
                     else:
                         checked = bind_context(
-                            built.messages, result, built.cards_profile
+                            built.messages,
+                            result,
+                            built.cards_profile,
+                            state=session.state,
                         )
                         if checked.visible_search != built.visible_search:
                             raise ContextIntegrityError("context_receipt_mismatch")
