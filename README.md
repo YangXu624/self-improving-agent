@@ -7,13 +7,13 @@ Memory is not assumed to improve performance; negative transfer is an outcome to
 
 ## Current status: shopping baseline and experimental experience memory
 
-Implemented: session-only memory, lexical product retrieval, a bounded DeepSeek decision
+Implemented: session memory, opt-in persistent user profiles, lexical product retrieval, a bounded DeepSeek decision
 loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI now uses
 DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
 been removed; mocked responses remain confined to automated tests. Target/preference evaluation
 and an explicitly reviewed procedural-memory MVP are implemented. Two learning sessions produced
-candidates; no real memory-ON transfer benefit is established. Persistent user memory and code
-self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
+candidates; no real memory-ON transfer benefit is established. Longitudinal evaluation,
+external LLM lesson extraction and code self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
 pilot commands](docs/experience-pilot.md).
 
 This is a new implementation inspired by

@@ -1,7 +1,8 @@
 # Current baseline architecture
 
-Status: session-only CLI and Streamlit UI use live DeepSeek decisions, reviewed 31 October
-2026. A bounded two-turn integration smoke passed; broad quality remains unmeasured.
+Status: CLI and Streamlit UI use DeepSeek decisions with session memory and optional user
+profiles. Stage 1 profiles were tested with mocked calls on 1 November 2026. The earlier
+two-turn live baseline smoke does not establish memory quality or broad shopping performance.
 
 ## Live UI boundary
 
@@ -78,7 +79,7 @@ CLI or Streamlit UI message + user/session/request IDs
 
 Policy, context construction, retrieval and storage are separate. Future guidance can enter
 through context construction; future search implementations must keep tool contracts and
-hard gates. Procedural experience now uses these seams; persistent user memory remains deferred.
+hard gates. Procedural experience and opt-in persistent user profiles use these seams.
 
 ## Card profiles and visibility receipts (Experiment A)
 
@@ -104,7 +105,8 @@ imported by the application.
 - UI session data: ignored `data/ui-sessions/deepseek/<UUID>/`; old mock histories are separate.
   Owner association does not automatically transfer facts into another session.
 - Credentials: ignored local environment; never in prompts or authorization-header traces.
-- Persistent user profiles remain deferred. Procedural lessons use a separate local SQLite
+- User profiles: ignored `data/user-memory/<SHA256(user_id)>/profile.md`, opt-in only.
+  Procedural lessons use a separate local SQLite
   experience store and content-hashed snapshot files. The simulated-shopper evaluation lives
   in a separate package, `astra_eval` (see [its documentation](simulated-shopper-evaluation.md));
   the application never imports it and it never feeds the agent anything but the shopper's messages.
@@ -155,7 +157,8 @@ rebuild it on reopen. Existing state schema 1 and storage codec versions remain 
 Question-only changes do not increment requirement versions or invalidate search results.
 NEW_GOAL scopes both ledgers to the current goal, including its initiating user message.
 Compact working context references active requirements instead of repeating their values.
-The prompt is `shopping-baseline-v4-attributes`; old prompts/events are retained unchanged.
+Current prompts are `shopping-baseline-v5-experience` (user memory OFF) and
+`shopping-baseline-v6-user-memory` (ON); old prompts/events are retained unchanged.
 
 CLARIFY uses separate `size`, `width`, `price`, `currency`, `product_type` and
 `product_subtype` attributes. Resolved exact attributes are rejected after current edits;
