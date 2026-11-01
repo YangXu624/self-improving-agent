@@ -1,5 +1,10 @@
 # Current evaluation status
 
+Stage 1 user profiles are opt-in in the application; this evaluator remains user-memory OFF
+and its scenarios/scoring are unchanged. A future returning-customer evaluator and separate
+user/procedural-memory factors are specified as proposed interfaces in
+[user-memory.md](user-memory.md), not implemented evaluation capabilities.
+
 Preference and target-item evaluation are implemented. Two real memory-OFF learning sessions
 produced candidate procedural templates; a real memory-ON/OFF transfer result is not yet
 established. See [the focused integrity checkpoint and exact proposed pilot](experience-pilot.md).

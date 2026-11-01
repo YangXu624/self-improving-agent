@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "baseline-shopping-agent"
 version = "0.1.0"
-description = "A bounded conversational shopping baseline with session-only memory"
+description = "Bounded conversational shopping with optional user and procedural memory"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
 

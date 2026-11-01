@@ -12,11 +12,12 @@ from .context import builder_for_profile
 from .provider import DeepSeekPolicy, ProviderError
 from .retrieval import LexicalSearch, build_index, file_hash
 from .sessions import SessionError, SessionStore
+from .user_memory import UserMemoryStore
 
 
 def parser():
     p = argparse.ArgumentParser(
-        description="Session-only conversational shopping baseline"
+        description="Conversational shopping with optional persistent user memory"
     )
     commands = p.add_subparsers(dest="command", required=True)
     index = commands.add_parser("index", help="Build the local catalogue's FTS5 index")
@@ -36,6 +37,12 @@ def parser():
     chat.add_argument("--catalogue", default="data/catalogue/catalog.jsonl")
     chat.add_argument("--env-file", default=".env")
     chat.add_argument("--cards-profile", choices=tuple(PROFILES), default="baseline")
+    chat.add_argument(
+        "--user-memory",
+        action="store_true",
+        help="Read/update this user's persistent Markdown profile (default OFF)",
+    )
+    chat.add_argument("--user-memory-root", default="data/user-memory")
     chat.add_argument("--message", help="One turn instead of interactive chat")
     chat.add_argument("--request-id", help="Idempotency key; only with --message")
     chat.add_argument(
@@ -122,6 +129,9 @@ def main(argv=None):
                 search,
                 policy,
                 context_builder=builder_for_profile(args.cards_profile),
+                user_memory=UserMemoryStore(args.user_memory_root)
+                if args.user_memory
+                else None,
             )
             if args.message is not None:
                 response = agent.turn(

@@ -7,13 +7,13 @@ Memory is not assumed to improve performance; negative transfer is an outcome to
 
 ## Current status: shopping baseline and experimental experience memory
 
-Implemented: session-only memory, lexical product retrieval, a bounded DeepSeek decision
+Implemented: session memory, opt-in persistent user profiles, lexical product retrieval, a bounded DeepSeek decision
 loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI now uses
 DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
 been removed; mocked responses remain confined to automated tests. Target/preference evaluation
 and an explicitly reviewed procedural-memory MVP are implemented. Two learning sessions produced
-candidates; no real memory-ON transfer benefit is established. Persistent user memory and code
-self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
+candidates; no real memory-ON transfer benefit is established. Longitudinal evaluation,
+external LLM lesson extraction and code self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
 pilot commands](docs/experience-pilot.md).
 
 This is a new implementation inspired by
@@ -34,6 +34,17 @@ See [current architecture](docs/architecture.md), [proposed evaluation](docs/eva
 and [decision record](docs/decisions.md).
 
 ## Setup
+
+### Stage 1: optional persistent user profiles
+
+The chat UI now has **Remember me across chats** (default OFF). Keep the same shopper label
+across new chats. The CLI enables the same layer with `chat --user alice --user-memory`.
+Profiles live in ignored `data/user-memory/<SHA256(user_id)>/profile.md`, with readable Facts,
+Preferences, Dislikes and Purchases sections. Controlled, evidence-backed updates preserve
+correction history; recommendations do not imply purchases. OFF disables profile reads/writes.
+Session logs and procedural SQLite lessons remain separate. The existing evaluator stays
+user-memory OFF. See [the data flow, example and limits](docs/user-memory.md). Live memory
+quality and personalisation benefit remain unmeasured; no model calls were made for this work.
 
 Use macOS/Linux and Python 3.11+ with SQLite FTS5. Tested locally on Python 3.14.3 /
 SQLite 3.51.2; other Python versions and Windows are unverified.
