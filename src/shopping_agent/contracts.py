@@ -121,8 +121,27 @@ class Search(Strict):
 
 class Recommend(Strict):
     type: Literal["RECOMMEND"]
-    search_id: str
     product_ids: list[str] = Field(min_length=1, max_length=5)
+    message: str = Field(min_length=1, max_length=1500)
+    follow_up_question: str = Field(min_length=1, max_length=1000)
+    search_id: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_defaults(cls, data):
+        if isinstance(data, dict):
+            if "message" not in data or data.get("message") is None:
+                data["message"] = (
+                    "Here are verified recommendations based on your preferences."
+                )
+            if (
+                "follow_up_question" not in data
+                or data.get("follow_up_question") is None
+            ):
+                data["follow_up_question"] = (
+                    "Do you have any specific preferences for style, fit, or price?"
+                )
+        return data
 
     @model_validator(mode="after")
     def unique(self):
@@ -131,12 +150,28 @@ class Recommend(Strict):
         return self
 
 
+class NoMatch(Strict):
+    type: Literal["NO_MATCH"]
+    message: str = Field(
+        default="I could not find verified products matching all your requirements in the catalogue.",
+        min_length=1,
+        max_length=1500,
+    )
+    follow_up_question: str = Field(
+        default="Which requirement would you like to relax (e.g. price, color, or style)?",
+        min_length=1,
+        max_length=1000,
+    )
+
+
 class Respond(Strict):
     type: Literal["RESPOND"]
     message: str = Field(min_length=1, max_length=1500)
 
 
-Action = Annotated[Clarify | Search | Recommend | Respond, Field(discriminator="type")]
+Action = Annotated[
+    Clarify | Search | Recommend | NoMatch | Respond, Field(discriminator="type")
+]
 
 
 class Decision(Strict):

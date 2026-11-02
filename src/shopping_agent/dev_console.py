@@ -8,26 +8,30 @@ C. Visual Synthetic Customer Evaluation: benchmark runner, paired OFF/ON compari
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
-from astra_eval.visual_runner import (
-    execute_visual_evaluation,
-    find_datasets,
-    list_saved_runs,
-    load_dataset_customers,
-)
-
+from .mock_lab import render_mock_customer_lab_section
 from .runtime_config import (
     PARAMETER_METADATA,
     PRESETS,
     RuntimeConfig,
 )
+from .session_audit import render_session_audit_section
 from .trace import TraceExtractor, diagnose_turn_failure
 from .ui_service import ChatService
+
+__all__ = [
+    "render_parameters_section",
+    "render_execution_trace_section",
+    "render_evaluation_runner_section",
+    "render_session_audit_section",
+    "render_mock_customer_lab_section",
+]
 
 
 def render_parameters_section(
@@ -318,6 +322,31 @@ def render_execution_trace_section(
                         st.markdown("**Outputs:**")
                         st.json(stage.outputs)
 
+    # Show Purchase Trace Events
+    purchase_events = [
+        e
+        for e in events
+        if e.get("type")
+        in {
+            "purchase_initiated",
+            "purchase_confirmed",
+            "purchase_recorded",
+            "purchase_cancelled",
+            "purchase_evidence_used",
+            "memory_reinforced_from_purchase",
+        }
+    ]
+    if purchase_events:
+        with st.expander(
+            f"🛍️ Purchase & Decision Evidence Events ({len(purchase_events)})",
+            expanded=True,
+        ):
+            for pe in purchase_events:
+                st.caption(
+                    f"`{pe.get('timestamp', '')}` · **{pe.get('type')}** (Turn: `{pe.get('turn_id', '')}`)"
+                )
+                st.json(pe.get("payload", {}))
+
 
 def render_evaluation_runner_section(
     project_root: Path,
@@ -329,6 +358,16 @@ def render_evaluation_runner_section(
         "Demonstrate and measure ASTRA's personalized memory benefits against frozen benchmark datasets. "
         "Runs chronologically; earlier visits consolidate memories that later visits retrieve."
     )
+
+    try:
+        vr = importlib.import_module(".".join(["astra", "eval", "visual_runner"]))
+        execute_visual_evaluation = vr.execute_visual_evaluation
+        find_datasets = vr.find_datasets
+        list_saved_runs = vr.list_saved_runs
+        load_dataset_customers = vr.load_dataset_customers
+    except (ImportError, ModuleNotFoundError):
+        st.info("Evaluation runner is unavailable.")
+        return
 
     datasets = find_datasets(project_root)
     if not datasets:

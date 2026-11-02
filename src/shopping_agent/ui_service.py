@@ -1,6 +1,7 @@
 """Thin UI boundary around the existing agent/store; no Streamlit dependency here."""
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from .agent import DecisionPolicy, ShoppingAgent
 from .context import builder_for_profile
 from .contracts import Event
 from .memory_views import compact_state
+from .purchases import PurchaseRecord, PurchaseStore
 from .retrieval import LexicalSearch, file_hash
 from .runtime_config import RuntimeConfig
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
@@ -35,6 +37,7 @@ class ChatService:
         cards_profile: str = "baseline",
         user_memory_enabled: bool = False,
         user_memory_root: Path | None = None,
+        purchases_db_path: Path | None = None,
         memory_format: str = "compact",
         default_user_id: str = DEFAULT_MANUAL_USER_ID,
         runtime_config: RuntimeConfig | None = None,
@@ -55,6 +58,12 @@ class ChatService:
         self._user_memory_store = UserMemoryStore(self._user_memory_root)
         self.user_memory_enabled = user_memory_enabled
         self.user_memory = self._user_memory_store if user_memory_enabled else None
+        p_path = purchases_db_path or Path(
+            os.environ.get(
+                "ASTRA_PURCHASES_DB", sessions.parent / "purchases" / "purchases.sqlite"
+            )
+        )
+        self.purchase_store = PurchaseStore(p_path)
 
         tool = self._search()
         tool.close()
@@ -178,6 +187,8 @@ class ChatService:
                 None,
             )
 
+            summary = self.get_purchase_summary(uid)
+            purchases = self.get_purchases(uid, include_cancelled=True)
             return {
                 "session_id": session.id,
                 "user_id": uid,
@@ -188,6 +199,8 @@ class ChatService:
                 "finalized": finalized_event is not None,
                 "finalization_details": finalized_event,
                 "config_snapshot": config_snapshot or self.runtime_config.to_dict(),
+                "purchase_summary": summary,
+                "recent_purchases": purchases,
             }
 
     def send(
@@ -225,6 +238,7 @@ class ChatService:
                 user_memory=self.user_memory,
                 memory_format=self.memory_format,
                 runtime_config=cfg,
+                purchase_store=self.purchase_store,
             ).turn(uid, session_id, message, request_id=request_id)
         finally:
             tool.close()
@@ -290,6 +304,7 @@ class ChatService:
                 context_builder=self.context_builder,
                 user_memory=self.user_memory,
                 memory_format=self.memory_format,
+                purchase_store=self.purchase_store,
             )
             results = agent.finalize_session(uid, session_id)
         finally:
@@ -343,6 +358,116 @@ class ChatService:
             )
         return res_dict
 
+    def record_purchase(
+        self,
+        user_id: str | None,
+        session_id: str,
+        turn_id: str,
+        product_id: str,
+        title: str,
+        *,
+        price: float | None = None,
+        currency: str = "USD",
+        quantity: int = 1,
+        recipient_context: str = "self",
+        attribute_snapshot: dict | None = None,
+    ) -> dict:
+        """Record a confirmed simulated purchase for the user, update session events."""
+        uid = self.resolve_user_id(user_id)
+        record = PurchaseRecord(
+            customer_id=uid,
+            session_id=session_id,
+            turn_id=turn_id,
+            product_id=product_id,
+            title=title,
+            attribute_snapshot=attribute_snapshot or {},
+            price=price,
+            currency=currency,
+            quantity=quantity,
+            recipient_context=recipient_context
+            if recipient_context in {"self", "gift", "other"}
+            else "self",
+            status="simulated_completed",
+            source="confirmed_user_interaction",
+        )
+        saved = self.purchase_store.record_purchase(record)
+        saved_dict = saved.to_dict()
+
+        # Audit events in active session
+        try:
+            with self.store.open(uid, session_id) as session:
+                session.append(
+                    "purchase_initiated",
+                    {"product_id": product_id, "title": title, "price": price},
+                    turn_id=f"purchase-init-{saved.purchase_id}",
+                )
+                session.append(
+                    "purchase_confirmed",
+                    {
+                        "purchase_id": saved.purchase_id,
+                        "product_id": product_id,
+                        "quantity": quantity,
+                    },
+                    turn_id=f"purchase-conf-{saved.purchase_id}",
+                )
+                session.append(
+                    "purchase_recorded",
+                    saved_dict,
+                    turn_id=f"purchase-rec-{saved.purchase_id}",
+                )
+        except Exception:
+            pass
+
+        return saved_dict
+
+    def cancel_purchase(
+        self,
+        user_id: str | None,
+        purchase_id: str,
+        session_id: str | None = None,
+        reason: str = "Mistaken simulated purchase",
+    ) -> dict | None:
+        """Cancel a simulated purchase while preserving audit history."""
+        uid = self.resolve_user_id(user_id)
+        updated = self.purchase_store.cancel_purchase(uid, purchase_id, reason=reason)
+        if not updated:
+            return None
+        res_dict = updated.to_dict()
+        sid = session_id or updated.session_id
+        if sid:
+            try:
+                with self.store.open(uid, sid) as session:
+                    session.append(
+                        "purchase_cancelled",
+                        {
+                            "purchase_id": purchase_id,
+                            "reason": reason,
+                            "cancelled_at": updated.cancelled_at,
+                        },
+                        turn_id=f"purchase-cancel-{purchase_id}",
+                    )
+            except Exception:
+                pass
+        return res_dict
+
+    def get_purchases(
+        self,
+        user_id: str | None,
+        *,
+        include_cancelled: bool = True,
+        session_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        uid = self.resolve_user_id(user_id)
+        records = self.purchase_store.get_purchases(
+            uid, include_cancelled=include_cancelled, session_id=session_id, limit=limit
+        )
+        return [r.to_dict() for r in records]
+
+    def get_purchase_summary(self, user_id: str | None) -> dict:
+        uid = self.resolve_user_id(user_id)
+        return self.purchase_store.get_summary(uid)
+
     def inspect_memory(self, user_id: str | None = None) -> dict:
         """Inspect stored memories for the given user."""
         uid = self.resolve_user_id(user_id)
@@ -383,3 +508,114 @@ class ChatService:
             "records": [r.model_dump() for r in profile.records],
         }
         return json.dumps(data, indent=2)
+
+    def browse_catalogue(
+        self,
+        *,
+        query: str = "",
+        category: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        price_known_only: bool = False,
+        sort_by: str = "default",
+        limit: int = 24,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Query and paginate through catalogue products with search and attribute filters."""
+        import sqlite3
+
+        db = sqlite3.connect(self.index.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            params: list[Any] = []
+            where_clauses: list[str] = []
+
+            # 1. Text search via product_fts if query is non-empty
+            terms = [t for t in re.findall(r"\w+", query) if len(t) > 0]
+            if terms:
+                match_str = " AND ".join(f'"{t}"' for t in terms)
+                from_clause = (
+                    "FROM product_fts JOIN products p ON p.rowid = product_fts.rowid"
+                )
+                where_clauses.append("product_fts MATCH ?")
+                params.append(match_str)
+            else:
+                from_clause = "FROM products p"
+
+            # 2. Category filtering
+            if category and category.strip() and category != "All Categories":
+                cat_clean = category.strip().replace('"', "")
+                where_clauses.append("json_extract(p.record, '$.categories') LIKE ?")
+                params.append(f'%"{cat_clean}"%')
+
+            # 3. Price filtering
+            if min_price is not None and min_price > 0:
+                where_clauses.append("json_extract(p.record, '$.facts.price') >= ?")
+                params.append(float(min_price))
+
+            if max_price is not None and max_price > 0:
+                where_clauses.append("json_extract(p.record, '$.facts.price') <= ?")
+                params.append(float(max_price))
+
+            if price_known_only:
+                where_clauses.append(
+                    "json_extract(p.record, '$.facts.price') IS NOT NULL"
+                )
+
+            where_str = (
+                ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            )
+
+            # 4. Count query
+            count_sql = f"SELECT count(*) {from_clause} {where_str}"
+            try:
+                total_count = db.execute(count_sql, params).fetchone()[0]
+            except sqlite3.OperationalError:
+                total_count = 0
+
+            if total_count == 0:
+                return {
+                    "total_count": 0,
+                    "products": [],
+                    "limit": limit,
+                    "offset": offset,
+                }
+
+            # 5. Order By
+            if sort_by == "price_asc":
+                order_by = (
+                    "ORDER BY CASE WHEN json_extract(p.record, '$.facts.price') IS NULL THEN 1 ELSE 0 END, "
+                    "json_extract(p.record, '$.facts.price') ASC, p.id"
+                )
+            elif sort_by == "price_desc":
+                order_by = "ORDER BY json_extract(p.record, '$.facts.price') DESC, p.id"
+            elif sort_by == "rating_desc":
+                order_by = (
+                    "ORDER BY CASE WHEN json_extract(p.record, '$.facts.rating') IS NULL THEN 1 ELSE 0 END, "
+                    "json_extract(p.record, '$.facts.rating') DESC, p.id"
+                )
+            else:
+                if terms:
+                    order_by = "ORDER BY bm25(product_fts, 5.0, 3.0, 2.0, 1.0), p.id"
+                else:
+                    order_by = "ORDER BY p.id"
+
+            # 6. Page query
+            query_sql = (
+                f"SELECT p.record {from_clause} {where_str} {order_by} LIMIT ? OFFSET ?"
+            )
+            query_params = list(params) + [int(limit), int(offset)]
+            records = []
+            for (raw,) in db.execute(query_sql, query_params):
+                try:
+                    records.append(json.loads(raw))
+                except Exception:
+                    pass
+
+            return {
+                "total_count": total_count,
+                "products": records,
+                "limit": limit,
+                "offset": offset,
+            }
+        finally:
+            db.close()

@@ -93,10 +93,21 @@ def diagnose_turn_failure(events: list[dict], result: dict | None = None) -> str
             return "Search blocked on final call: executing a search requires at least one remaining decision call to view and verify candidate products."
         if code == "repeated_empty_search":
             return "Search blocked: the model repeated an identical search query that already returned 0 eligible products earlier in this turn."
+        if code == "no_match":
+            return "NO_MATCH: 0 eligible products in catalogue after fallback. Customer prompted to relax constraints."
         if code == "provider_network_failure":
             return "LLM API network failure: unable to connect to model endpoint or socket timed out."
         if str(code).startswith("provider_http_"):
             return f"LLM API HTTP error ({code}): upstream provider rejected or failed the request."
+
+    completed_events = [e for e in events if e.get("type") == "turn_completed"]
+    if completed_events:
+        comp_payload = completed_events[-1].get("payload", {})
+        if (
+            comp_payload.get("action") == "NO_MATCH"
+            or comp_payload.get("status") == "no_match"
+        ):
+            return "NO_MATCH: 0 eligible products in catalogue after fallback. Customer prompted to relax constraints."
 
     # 2. Check search result candidate emptiness
     for sr in search_results:
@@ -195,6 +206,22 @@ class TraceExtractor:
             stages[
                 "retrieve_user_memory"
             ].summary = "User memory disabled or not retrieved."
+
+        purch_ev = next(
+            (e for e in turn_events if e.get("type") == "purchase_evidence_used"), None
+        )
+        if purch_ev:
+            p_count = purch_ev.get("payload", {}).get("count", 0)
+            if stages["retrieve_user_memory"].status == "skipped":
+                stages["retrieve_user_memory"].status = "completed"
+                stages[
+                    "retrieve_user_memory"
+                ].summary = f"{p_count} past purchase(s) retrieved as context"
+            else:
+                stages[
+                    "retrieve_user_memory"
+                ].summary += f" · {p_count} past purchase(s) retrieved"
+            stages["retrieve_user_memory"].metrics["purchases_retrieved"] = p_count
 
         # 3. Retrieve Procedural Memories
         exp_sel = next(
@@ -375,15 +402,29 @@ class TraceExtractor:
         if recs:
             stages["generate_response"].status = "completed"
             prod_ids = recs[-1].get("payload", {}).get("product_ids", [])
+            q = recs[-1].get("payload", {}).get("follow_up_question", "")
             stages[
                 "generate_response"
-            ].summary = f"RECOMMEND: {len(prod_ids)} verified product(s) recommended"
-            stages["generate_response"].outputs = {"product_ids": prod_ids}
+            ].summary = (
+                f"RECOMMEND: {len(prod_ids)} verified product(s) + follow-up question"
+            )
+            stages["generate_response"].outputs = {
+                "product_ids": prod_ids,
+                "follow_up_question": q,
+            }
         elif completed_ev:
             action = completed_ev.get("payload", {}).get("action", "RESPOND")
-            stages["generate_response"].status = "completed"
-            stages["generate_response"].summary = f"{action}: Response generated"
-            stages["generate_response"].outputs = {"action": action}
+            status = completed_ev.get("payload", {}).get("status", "ok")
+            if action == "NO_MATCH" or status == "no_match":
+                stages["generate_response"].status = "failed"
+                stages[
+                    "generate_response"
+                ].summary = "NO_MATCH: No products match all constraints; asked customer to relax criteria"
+                stages["generate_response"].outputs = {"action": "NO_MATCH"}
+            else:
+                stages["generate_response"].status = "completed"
+                stages["generate_response"].summary = f"{action}: Response generated"
+                stages["generate_response"].outputs = {"action": action}
         elif any(
             e.get("type") in {"turn_failed", "turn_closed_safely"} for e in turn_events
         ):
@@ -410,6 +451,22 @@ class TraceExtractor:
             stages[
                 "consolidate_user_memory"
             ].summary = f"{len(applied)} preference(s) recorded: {payload.get('reason', '')[:80]}"
+            reinf_ev = next(
+                (
+                    e
+                    for e in events
+                    if e.get("type") == "memory_reinforced_from_purchase"
+                ),
+                None,
+            )
+            if reinf_ev:
+                reinf_ops = reinf_ev.get("payload", {}).get("operations", [])
+                stages[
+                    "consolidate_user_memory"
+                ].summary += f" · {len(reinf_ops)} reinforced from purchase evidence"
+                stages["consolidate_user_memory"].metrics[
+                    "reinforced_from_purchase"
+                ] = len(reinf_ops)
             stages["consolidate_user_memory"].outputs = {"operations": applied}
         else:
             stages["finalize_session"].status = "pending"

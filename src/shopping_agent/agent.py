@@ -64,7 +64,7 @@ def verified_products(action, result, state, search, receipt):
         raise ActionError("resolve_state_conflicts_before_search_or_recommendation")
     if (
         not result
-        or action.search_id != result["search_id"]
+        or (action.search_id is not None and action.search_id != result["search_id"])
         or result["state_version"] != state.version
         or result["catalogue_version"] != search.catalogue_version
     ):
@@ -102,6 +102,7 @@ class ShoppingAgent:
         memory_format="legacy",
         auto_finalize: bool = False,
         runtime_config: RuntimeConfig | None = None,
+        purchase_store=None,
     ):
         self.runtime_config = runtime_config
         if runtime_config is not None:
@@ -116,6 +117,7 @@ class ShoppingAgent:
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
         self.user_memory = user_memory
+        self.purchase_store = purchase_store
         self.auto_finalize = auto_finalize
         if memory_format not in FORMATS:
             raise ValueError("Unknown memory format")
@@ -401,6 +403,29 @@ class ShoppingAgent:
                         context_options["memory_format"] = "compact"
                     if memory_view is not None:
                         context_options["user_memory"] = memory_view
+                    if self.purchase_store is not None:
+                        try:
+                            rel_purchases = self.purchase_store.find_relevant_purchases(
+                                user_id, message, limit=3
+                            )
+                            if rel_purchases:
+                                context_options["purchases"] = rel_purchases
+                                if calls == 0:
+                                    session.append(
+                                        "purchase_evidence_used",
+                                        {
+                                            "count": len(rel_purchases),
+                                            "purchases": [
+                                                p.to_dict()
+                                                if hasattr(p, "to_dict")
+                                                else p
+                                                for p in rel_purchases
+                                            ],
+                                        },
+                                        request_id,
+                                    )
+                        except Exception:
+                            pass
                     remaining_calls = self.max_calls - calls
                     remaining_searches = max(
                         0, min(self.max_searches - searches, remaining_calls - 1)
@@ -775,6 +800,16 @@ class ShoppingAgent:
                     if action.type == "RECOMMEND":
                         # Must be a result actually provided to THIS decision, still current
                         # after any state edit, and from this session/catalogue only.
+                        if not action.product_ids:
+                            raise ActionError(
+                                "recommendation_requires_at_least_one_product"
+                            )
+                        q = getattr(action, "follow_up_question", None)
+                        if not q or not str(q).strip():
+                            raise ActionError(
+                                "recommendation_requires_follow_up_question"
+                            )
+
                         products = verified_products(
                             action,
                             result,
@@ -782,11 +817,16 @@ class ShoppingAgent:
                             self.search,
                             built.visible_search,
                         )
+                        msg = (
+                            getattr(action, "message", None)
+                            or "Here are verified recommendations based on your preferences."
+                        )
                         response = {
                             "status": "ok",
                             "action": "RECOMMEND",
-                            "message": "Catalogue matches (historical facts; variant availability unverified).",
+                            "message": msg,
                             "products": products,
+                            "follow_up_question": str(q).strip(),
                             "search_id": result["search_id"],
                         }
                         session.append(
@@ -794,6 +834,7 @@ class ShoppingAgent:
                             {
                                 "search_id": result["search_id"],
                                 "product_ids": action.product_ids,
+                                "follow_up_question": str(q).strip(),
                                 "state_version": session.state.version,
                                 "goal_epoch": session.state.goal_epoch,
                                 "requirements": [
@@ -813,6 +854,23 @@ class ShoppingAgent:
                             },
                             request_id,
                         )
+                    elif action.type == "NO_MATCH":
+                        response = {
+                            "status": "no_match",
+                            "action": "NO_MATCH",
+                            "message": getattr(
+                                action,
+                                "message",
+                                "I could not find verified products matching all your requirements in the catalogue.",
+                            ),
+                            "follow_up_question": getattr(
+                                action,
+                                "follow_up_question",
+                                "Which requirement would you like to relax (e.g. price, color, or style)?",
+                            ),
+                            "products": [],
+                            "closure": "no_match",
+                        }
                     elif action.type == "CLARIFY":
                         if redundant_clarification(session, action.attribute):
                             raise ActionError("redundant_clarification")
@@ -822,6 +880,7 @@ class ShoppingAgent:
                             "message": action.question,
                             "attribute": action.attribute,
                             "products": [],
+                            "follow_up_question": action.question,
                         }
                     else:
                         response = {
@@ -871,15 +930,7 @@ class ShoppingAgent:
                         "message": (
                             "This search already returned no verified matches. Please change the query or requirements before trying again; no products are recommended."
                             if closure == "repeated_empty_search"
-                            else (
-                                "I couldn't find verified matches for that specific search within this turn's budget. Could you specify what kind of items you are looking for (such as tops, shorts, or pants)?"
-                                if any(
-                                    r.status == "active"
-                                    and r.field in {"product_type", "category"}
-                                    for r in session.state.requirements
-                                )
-                                else CLOSURE_MESSAGE
-                            )
+                            else CLOSURE_MESSAGE
                         ),
                         "products": [],
                         "closure": closure,
@@ -949,7 +1000,11 @@ class ShoppingAgent:
 
                 try:
                     res = consolidate_session(
-                        session, user_id, self.user_memory, self.policy
+                        session,
+                        user_id,
+                        self.user_memory,
+                        self.policy,
+                        purchase_store=self.purchase_store,
                     )
                     results["user_memory"] = {
                         "idempotent": res.idempotent,

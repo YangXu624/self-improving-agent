@@ -62,6 +62,8 @@ def fixture_decision(context):
                 "type": "RECOMMEND",
                 "search_id": result["search_id"],
                 "product_ids": [p["id"] for p in result["candidates"][:3]],
+                "message": "Here are recommendations based on your preferences.",
+                "follow_up_question": "Do you have a specific style or color preference in mind?",
             }, []
         return {
             "type": "RESPOND",
