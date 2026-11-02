@@ -630,3 +630,49 @@ class UserMemoryStoreTests(unittest.TestCase):
             with self.subTest(quote=proposal.quote, expected_err=expected_err):
                 with self.assertRaisesRegex(UserMemoryError, expected_err):
                     self.save(proposal, message)
+
+    def test_bypass_semantic_validation_allows_natural_proposals_without_regex_gates(self):
+        # With default store (bypass_semantic_validation=False), compound sentence fails
+        msg = "Something affordable, ideally under $50, and I usually go for black if you have any."
+        proposal = MemoryProposal(
+            category="preference",
+            attribute="color",
+            value="black",
+            scope="general",
+            quote="I usually go for black",
+            basis="confirmed",
+        )
+        with self.assertRaisesRegex(UserMemoryError, "memory_quote_requires_own_statement"):
+            self.save(proposal, msg)
+
+        # With experimental bypass_semantic_validation=True, it succeeds
+        bypass_store = UserMemoryStore(self.root / "bypass-users", bypass_semantic_validation=True)
+        with self.sessions.open("alice", self.sid) as session:
+            event = session.append("user_message", {"message": msg})
+            result = bypass_store.apply(
+                session,
+                event,
+                [proposal],
+                expected_revision=0,
+            )
+            self.assertEqual(result["revision"], 1)
+            self.assertEqual(len(result["ids"]), 1)
+
+        profile = bypass_store.read("alice")
+        self.assertEqual(profile.revision, 1)
+        self.assertEqual(profile.records[0].value, "black")
+        self.assertEqual(profile.records[0].quote, "I usually go for black")
+
+        # But missing quote still fails engineering check
+        fake_proposal = MemoryProposal(
+            category="preference",
+            attribute="color",
+            value="pink",
+            scope="general",
+            quote="I love pink",
+            basis="confirmed",
+        )
+        with self.sessions.open("alice", self.sid) as session:
+            event2 = session.append("user_message", {"message": msg})
+            with self.assertRaisesRegex(UserMemoryError, "memory_requires_current_literal_evidence"):
+                bypass_store.apply(session, event2, [fake_proposal], expected_revision=1)

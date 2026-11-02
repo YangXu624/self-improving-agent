@@ -268,3 +268,44 @@ class CanaryTests(unittest.TestCase):
         self.assertEqual(first.simulator, second.simulator)
         self.assertEqual(first.simulator.claude_thinking, "between_tools")
         self.assertIsNone(first.simulator.temperature)
+
+    def test_paired_prepare_and_dry_plan(self):
+        paired_output = self.root / "paired_canary"
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            C.main(
+                [
+                    "prepare-paired",
+                    "--root",
+                    str(paired_output),
+                    "--source",
+                    str(self.source),
+                    "--catalogue",
+                    str(self.catalogue),
+                    "--index",
+                    str(self.index),
+                    "--prior-ledger",
+                    str(self.prior),
+                    "--customer-id",
+                    "alice",
+                ]
+            )
+        manifest = json.loads(captured.getvalue())
+        self.assertEqual(manifest["action"], "paired")
+        self.assertEqual(manifest["planned_sessions"], 4)
+        self.assertEqual(
+            Decimal(manifest["absolute_cap_usd"]),
+            Decimal(str(C.BASELINE)) + Decimal("0.50"),
+        )
+
+        captured_plan = io.StringIO()
+        with contextlib.redirect_stdout(captured_plan):
+            C.main(["paired", "--root", str(paired_output)])
+        plan_output = json.loads(captured_plan.getvalue())
+        self.assertFalse(plan_output["live"])
+        self.assertEqual(plan_output["plan"]["sessions"], 4)
+        self.assertEqual(plan_output["plan"]["worst_case_agent_model_calls"], 72)
+        self.assertEqual(
+            plan_output["plan"]["condition_order"],
+            {"alice": ["user_memory_off", "user_memory_on"]},
+        )

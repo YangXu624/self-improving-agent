@@ -145,6 +145,71 @@ def prepare(
     return manifest
 
 
+PAIRED_DEFAULT_PRIOR_LEDGER = Path(
+    "data/eval/canaries/v3-staged-20261101/stage2.api-cost.jsonl"
+)
+PAIRED_INCREMENT = Decimal("0.50")
+
+
+def prepare_paired(
+    root: Path,
+    source: Path,
+    catalogue: Path,
+    index: Path,
+    *,
+    prior_ledger: Path = PAIRED_DEFAULT_PRIOR_LEDGER,
+    incremental_cap: Decimal = PAIRED_INCREMENT,
+    customer_id: str = "dev-activewear",
+    visits: int = 2,
+) -> dict:
+    root, source, catalogue, index, prior_ledger = map(
+        Path, (root, source, catalogue, index, prior_ledger)
+    )
+    data = json.loads(source.read_text())
+    validate_dataset(load_customers(source), catalogue)
+    tool = LexicalSearch(index, expected_catalogue_hash=data["catalogue_sha256"])
+    tool.close()
+    lines = [
+        line.strip() for line in prior_ledger.read_text().splitlines() if line.strip()
+    ]
+    if not lines:
+        raise ValueError("Prior ledger is empty")
+    last_entry = json.loads(lines[-1])
+    prior_accounted = Decimal(str(last_entry["accounted_usd"]))
+    root.mkdir(parents=True, exist_ok=False)
+    customer_subset = subset(data, (customer_id,), visits)
+    write(root / "paired.customers.json", customer_subset)
+    validate_dataset(load_customers(root / "paired.customers.json"), catalogue)
+    absolute_cap = min(GLOBAL_CEILING, prior_accounted + incremental_cap)
+    manifest = {
+        "status": "prepared_not_authorized",
+        "action": "paired",
+        "prior_ledger": str(prior_ledger),
+        "prior_ledger_sha256": file_hash(prior_ledger),
+        "source": str(source),
+        "catalogue": str(catalogue),
+        "index": str(index),
+        "source_sha256": file_hash(source),
+        "catalogue_sha256": file_hash(catalogue),
+        "index_sha256": file_hash(index),
+        "subsets": {"paired": file_hash(root / "paired.customers.json")},
+        "runtime_sha256": fingerprint(),
+        "models": MODELS,
+        "prior_accounted_usd": str(prior_accounted),
+        "incremental_cap_usd": str(incremental_cap),
+        "absolute_cap_usd": str(absolute_cap),
+        "planned_sessions": visits * 2,
+        "limits": {
+            "paired_agent_calls": 72,
+            "paired_shopper_attempts": 48,
+            "turns": 6,
+            "session_agent_calls": 18,
+        },
+    }
+    write(root / "manifest.json", manifest)
+    return manifest
+
+
 def validated(root: Path) -> dict:
     root = Path(root)
     m = json.loads((root / "manifest.json").read_text())
@@ -155,8 +220,8 @@ def validated(root: Path) -> dict:
     for field in ("source", "catalogue", "index"):
         if file_hash(Path(m[field])) != m[field + "_sha256"]:
             raise ValueError("Frozen input changed")
-    for stage in ("stage1", "stage2"):
-        if file_hash(root / f"{stage}.customers.json") != m["subsets"][stage]:
+    for stage, expected_hash in m["subsets"].items():
+        if file_hash(root / f"{stage}.customers.json") != expected_hash:
             raise ValueError("Frozen subset changed")
     return m
 
@@ -207,7 +272,12 @@ def stage1_end(root: Path, review_path: Path) -> Decimal:
 
 
 def config(
-    root: Path, stage: str, prior: Decimal, manifest: dict
+    root: Path,
+    stage: str,
+    prior: Decimal,
+    manifest: dict,
+    *,
+    bypass_semantic_validation: bool = False,
 ) -> LongitudinalConfig:
     return LongitudinalConfig(
         customers=Path(root) / f"{stage}.customers.json",
@@ -234,6 +304,7 @@ def config(
         execution_order="off_then_on",
         stop_on_error=True,
         max_consecutive_simulator_failures=3,
+        bypass_semantic_validation=bypass_semantic_validation,
     )
 
 
@@ -373,7 +444,9 @@ def reliability(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "stage1", "stage2"])
+    parser.add_argument(
+        "action", choices=["prepare", "stage1", "stage2", "prepare-paired", "paired"]
+    )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument(
         "--source",
@@ -385,6 +458,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--index", type=Path, default=Path("data/index/catalogue.sqlite")
+    )
+    parser.add_argument(
+        "--prior-ledger",
+        type=Path,
+        default=PAIRED_DEFAULT_PRIOR_LEDGER,
+    )
+    parser.add_argument(
+        "--incremental-cap",
+        type=Decimal,
+        default=PAIRED_INCREMENT,
+    )
+    parser.add_argument(
+        "--customer-id",
+        default="dev-activewear",
+    )
+    parser.add_argument(
+        "--bypass-semantic-validation",
+        action="store_true",
+        default=False,
     )
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--review", type=Path)
@@ -399,16 +491,39 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if args.action == "prepare-paired":
+        if args.live:
+            raise ValueError("Prepare is offline only")
+        print(
+            json.dumps(
+                prepare_paired(
+                    args.root,
+                    args.source,
+                    args.catalogue,
+                    args.index,
+                    prior_ledger=args.prior_ledger,
+                    incremental_cap=args.incremental_cap,
+                    customer_id=args.customer_id,
+                ),
+                indent=2,
+            )
+        )
+        return 0
     m = validated(args.root)
     provisional = args.action == "stage2" and args.review is None
     if provisional and args.live:
         raise ValueError("Live Stage 2 requires a passing Stage 1 review")
-    prior = (
-        Decimal(m["prior_accounted_usd"])
-        if args.action == "stage1" or provisional
-        else stage1_end(args.root, args.review)
+    if args.action in ("stage1", "paired") or provisional:
+        prior = Decimal(m["prior_accounted_usd"])
+    else:
+        prior = stage1_end(args.root, args.review)
+    cfg = config(
+        args.root,
+        args.action,
+        prior,
+        m,
+        bypass_semantic_validation=args.bypass_semantic_validation,
     )
-    cfg = config(args.root, args.action, prior, m)
     if not args.live:
         plan = plan_longitudinal(cfg)
         if args.action == "stage1":

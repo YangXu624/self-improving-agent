@@ -152,14 +152,25 @@ def _check_first_person_ownership(evidence: str, proposal: MemoryProposal) -> bo
     return False
 
 
-def validate_proposal(proposal: MemoryProposal, message: str) -> None:
+def validate_proposal(
+    proposal: MemoryProposal,
+    message: str,
+    *,
+    bypass_semantic: bool = False,
+) -> None:
     """Conservative English evidence gate, not a semantic proof of a user's beliefs.
 
     Values must be literal evidence. Persistence, first-person ownership, uncertainty,
     task/gift scope and explicit purchase/withdrawal are checked independently.
+    When bypass_semantic is True, natural-language linguistic checks are bypassed,
+    retaining only essential source-event and schema grounding.
     """
     quote = proposal.quote
-    if quote not in message or not _contains(proposal.value, quote):
+    if quote not in message and quote.strip() not in message:
+        raise UserMemoryError("memory_requires_current_literal_evidence")
+    if bypass_semantic:
+        return
+    if not _contains(proposal.value, quote):
         raise UserMemoryError("memory_requires_current_literal_evidence")
     if proposal.scope != "general" and not _contains(proposal.scope, quote):
         raise UserMemoryError("memory_scope_requires_literal_evidence")
@@ -431,9 +442,15 @@ class UserMemoryStore:
     _locks: ClassVar[dict[str, threading.RLock]] = {}
     _guard = threading.Lock()
 
-    def __init__(self, root: str | Path = "data/user-memory"):
+    def __init__(
+        self,
+        root: str | Path = "data/user-memory",
+        *,
+        bypass_semantic_validation: bool = False,
+    ):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self.bypass_semantic_validation = bypass_semantic_validation
 
     def directory(self, user_id: str) -> Path:
         if not isinstance(user_id, str) or not user_id.strip() or len(user_id) > 128:
@@ -531,7 +548,11 @@ class UserMemoryStore:
         ):
             raise UserMemoryError("memory_requires_owned_user_event")
         for proposal in proposals:
-            validate_proposal(proposal, event.payload["message"])
+            validate_proposal(
+                proposal,
+                event.payload["message"],
+                bypass_semantic=self.bypass_semantic_validation,
+            )
             if (
                 proposal.target_id is not None
                 and visible_ids is not None

@@ -51,6 +51,7 @@ class LongitudinalConfig:
     execution_order: Literal["counterbalanced", "off_then_on"] = "counterbalanced"
     stop_on_error: bool = False
     max_consecutive_simulator_failures: int = 3
+    bypass_semantic_validation: bool = False
 
     def __post_init__(self):
         if not 1 <= self.max_consecutive_simulator_failures <= 20:
@@ -338,7 +339,14 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
             stores[name] = SessionStore(
                 root / "sessions", snapshot_format=config.memory_format
             )
-            memories[name] = UserMemoryStore(root / "user-memory") if enabled else None
+            memories[name] = (
+                UserMemoryStore(
+                    root / "user-memory",
+                    bypass_semantic_validation=config.bypass_semantic_validation,
+                )
+                if enabled
+                else None
+            )
             agents[name] = ShoppingAgent(
                 stores[name],
                 search,
