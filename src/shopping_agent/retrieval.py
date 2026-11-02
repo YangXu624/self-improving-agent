@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from .category_matching import category_contains
+from .category_matching import category_contains, forms
 from .contracts import Search, ShoppingState
 from .sessions import dumps
 from .state import normalized
@@ -244,6 +244,27 @@ def assess(record, state):
             )
         elif r.field == "keyword":
             value, op = normalized(record["text"]), r.op
+        elif r.field == "brand":
+            value, op = record["facts"].get("brand"), r.op
+            if value is None and record.get("title"):
+                tb = str(r.value).strip().lower()
+                tw = set(re.findall(r"\w+", (record.get("title") or "").lower()))
+                st_name = (record.get("store") or "").lower()
+                if tb and (tb in tw or tb in st_name):
+                    value = r.value
+            if isinstance(value, str):
+                value = facet(r.field, value)
+        elif r.field == "department":
+            value, op = record["facts"].get("department"), r.op
+            if value is None and record.get("categories"):
+                tb = str(r.value).strip().lower()
+                cw = set(re.findall(r"\w+", " ".join(record["categories"]).lower()))
+                tw = set(re.findall(r"\w+", (record.get("title") or "").lower()))
+                df = forms(tb)
+                if any(d in cw or d in tw for d in df):
+                    value = r.value
+            if isinstance(value, str):
+                value = facet(r.field, value)
         else:
             value, op = record["facts"].get(r.field), r.op
             if isinstance(value, str):
@@ -279,23 +300,35 @@ def assess(record, state):
     }
 
 
-def score_preferences(record, verdict, user_memory=None, state=None):
+def score_preferences(
+    record,
+    verdict,
+    user_memory=None,
+    state=None,
+    *,
+    personalization_strength=0.5,
+    max_bonus=2.0,
+):
     base_score = float(len(verdict.get("matched_soft_ids", [])))
     matched_memory_ids = []
+    audit_entries = []
 
-    if not user_memory or not isinstance(user_memory, dict):
-        return base_score, matched_memory_ids
+    if (
+        not user_memory
+        or not isinstance(user_memory, dict)
+        or personalization_strength <= 0.0
+    ):
+        return base_score, matched_memory_ids, audit_entries
 
     memory_records = user_memory.get("records", [])
     if not isinstance(memory_records, list):
-        return base_score, matched_memory_ids
+        return base_score, matched_memory_ids, audit_entries
 
-    memory_score = 0.0
+    total_preference_bonus = 0.0
     record_text = normalized(record.get("text", ""))
     record_title = normalized(record.get("title", ""))
     record_facts = record.get("facts", {})
 
-    # Detect active state requirements by field: current explicit preferences override contradictory memories
     state_reqs_by_field = {}
     if state and hasattr(state, "requirements"):
         for r in state.requirements:
@@ -348,8 +381,22 @@ def score_preferences(record, verdict, user_memory=None, state=None):
                 if not scope_matched:
                     continue
 
-        matched = False
-        # 1. Attribute fact match
+        # Memory importance calculation:
+        # Hard = 1.0, Soft = 0.6, Inferred = 0.3, scaled by confidence
+        strength = mem.get("strength", "soft")
+        importance = (
+            1.0
+            if strength == "hard"
+            else (
+                0.3 if strength == "inferred" or mem.get("basis") == "inferred" else 0.6
+            )
+        )
+        confidence = float(mem.get("confidence", 1.0))
+        weight = importance * confidence
+
+        # Verified product attribute matching vs unknown
+        match_score = 0.0
+        match_type = "unknown"
         if attr in record_facts and record_facts[attr] is not None:
             fact_val = facet(attr, record_facts[attr])
             target_val = facet(attr, val)
@@ -358,27 +405,45 @@ def score_preferences(record, verdict, user_memory=None, state=None):
                 or target_val in fact_val
                 or fact_val in target_val
             ):
-                matched = True
-
-        # 2. Text / title word-boundary match
-        if not matched:
+                match_score = 1.0 if is_pref else -1.0
+                match_type = "verified_fact_match"
+            else:
+                match_score = -0.5 if is_pref else 0.5
+                match_type = "verified_fact_mismatch"
+        else:
+            # Fact is unknown in structured details; check text
             val_words = [w for w in re.findall(r"\w+", val) if len(w) > 2]
             if val_words:
                 all_in_title = all(w in record_title for w in val_words)
                 all_in_text = all(w in record_text for w in val_words)
-                if all_in_title or all_in_text:
-                    matched = True
+                if all_in_title:
+                    match_score = 0.5 if is_pref else -0.5
+                    match_type = "verified_title_match"
+                elif all_in_text:
+                    match_score = 0.25 if is_pref else -0.25
+                    match_type = "verified_text_match"
 
-        if matched:
+        if match_score != 0.0:
+            delta = weight * match_score
+            total_preference_bonus += delta
             mem_id = mem.get("id")
             if mem_id:
                 matched_memory_ids.append(mem_id)
-            if is_pref:
-                memory_score += 1.0
-            elif is_dislike:
-                memory_score -= 1.0
+                audit_entries.append(
+                    {
+                        "memory_id": mem_id,
+                        "application": "soft_reranking",
+                        "attribute": attr,
+                        "value": val,
+                        "match_type": match_type,
+                        "delta": round(delta, 3),
+                        "reason": f"{match_type.replace('_', ' ').title()}: matches relevant preference",
+                    }
+                )
 
-    return base_score + memory_score, matched_memory_ids
+    bounded_bonus = max(-max_bonus, min(max_bonus, total_preference_bonus))
+    scaled_bonus = personalization_strength * bounded_bonus
+    return base_score + scaled_bonus, matched_memory_ids, audit_entries
 
 
 class ProductSearch(Protocol):
@@ -392,6 +457,8 @@ class ProductSearch(Protocol):
         *,
         user_memory: dict | None = None,
         fallback: bool | None = None,
+        personalization_strength: float = 0.5,
+        personalization_max_bonus: float = 2.0,
     ) -> dict: ...
 
     def eligible(self, product_id: str, state: ShoppingState) -> bool: ...
@@ -419,7 +486,16 @@ class LexicalSearch:
     def close(self):
         self.db.close()
 
-    def search(self, action, state, *, user_memory=None, fallback=None):
+    def search(
+        self,
+        action,
+        state,
+        *,
+        user_memory=None,
+        fallback=None,
+        personalization_strength=0.5,
+        personalization_max_bonus=2.0,
+    ):
         action = Search.model_validate(action.model_dump())
         state = ShoppingState.model_validate(state.model_dump())
         if state.conflicts:
@@ -438,9 +514,16 @@ class LexicalSearch:
         use_fallback = self.fallback if fallback is None else fallback
 
         def _execute_query(query_terms, mode):
-            q = (" AND " if mode == "all" else " OR ").join(
-                '"' + t + '"' for t in query_terms
-            )
+            expanded_clauses = []
+            for t in query_terms:
+                t_forms = sorted(forms(t))
+                if len(t_forms) > 1:
+                    expanded_clauses.append(
+                        "(" + " OR ".join('"' + f + '"' for f in t_forms) + ")"
+                    )
+                else:
+                    expanded_clauses.append('"' + t + '"')
+            q = (" AND " if mode == "all" else " OR ").join(expanded_clauses)
             if query_terms:
                 cur = self.db.execute(
                     """SELECT p.record,bm25(product_fts,5.0,3.0,2.0,1.0)
@@ -454,6 +537,7 @@ class LexicalSearch:
 
         cursor = _execute_query(terms, action.mode)
         eligible_pool, matched, eligible, unknown, excluded = [], 0, 0, 0, 0
+        seen_ids = set()
         for raw, score in cursor:
             matched += 1
             record = json.loads(raw)
@@ -463,18 +547,93 @@ class LexicalSearch:
             if not verdict["eligible"]:
                 continue
             eligible += 1
-            pref_score, matched_mem_ids = score_preferences(
-                record, verdict, user_memory, state
+            seen_ids.add(record["id"])
+            pref_score, matched_mem_ids, audit_entries = score_preferences(
+                record,
+                verdict,
+                user_memory,
+                state,
+                personalization_strength=personalization_strength,
+                max_bonus=personalization_max_bonus,
             )
+            raw_bonus = sum(a.get("delta", 0.0) for a in audit_entries)
+            bounded_bonus = max(
+                -personalization_max_bonus,
+                min(personalization_max_bonus, raw_bonus),
+            )
+            baseline_relevance = -score
             eligible_pool.append(
                 {
                     "record": record,
                     "score": score,
+                    "baseline_relevance": baseline_relevance,
+                    "bounded_bonus": bounded_bonus,
                     "verdict": verdict,
                     "pref_score": pref_score,
                     "matched_mem_ids": matched_mem_ids,
+                    "audit_entries": audit_entries,
                 }
             )
+
+        # Branch 2: Optional memory-assisted candidate retrieval
+        # If user memory has active preferences, run memory-assisted queries to expand discovery
+        if personalization_strength > 0.0 and user_memory and terms:
+            records = (
+                user_memory.get("records", []) if isinstance(user_memory, dict) else []
+            )
+            for mem in records:
+                if not isinstance(mem, dict) or mem.get("status", "active") != "active":
+                    continue
+                if mem.get("category") not in {"preference", "fact"}:
+                    continue
+                val = str(mem.get("value") or "").strip()
+                val_terms = [w for w in re.findall(r"\w+", val) if len(w) > 2]
+                if not val_terms:
+                    continue
+                assisted_terms = terms + val_terms[:2]
+                if assisted_terms == terms:
+                    continue
+                try:
+                    cursor_mem = _execute_query(assisted_terms, action.mode)
+                    for raw, score in cursor_mem:
+                        record = json.loads(raw)
+                        pid = record["id"]
+                        if pid in seen_ids:
+                            continue
+                        verdict = assess(record, state)
+                        if not verdict["eligible"]:
+                            continue
+                        seen_ids.add(pid)
+                        matched += 1
+                        eligible += 1
+                        pref_score, matched_mem_ids, audit_entries = score_preferences(
+                            record,
+                            verdict,
+                            user_memory,
+                            state,
+                            personalization_strength=personalization_strength,
+                            max_bonus=personalization_max_bonus,
+                        )
+                        raw_bonus = sum(a.get("delta", 0.0) for a in audit_entries)
+                        bounded_bonus = max(
+                            -personalization_max_bonus,
+                            min(personalization_max_bonus, raw_bonus),
+                        )
+                        baseline_relevance = -score
+                        eligible_pool.append(
+                            {
+                                "record": record,
+                                "score": score,
+                                "baseline_relevance": baseline_relevance,
+                                "bounded_bonus": bounded_bonus,
+                                "verdict": verdict,
+                                "pref_score": pref_score,
+                                "matched_mem_ids": matched_mem_ids,
+                                "audit_entries": audit_entries,
+                            }
+                        )
+                except Exception:
+                    pass
 
         fallback_triggered = False
         effective_mode = action.mode
@@ -517,16 +676,30 @@ class LexicalSearch:
                         if not verdict["eligible"]:
                             continue
                         fb_eligible += 1
-                        pref_score, matched_mem_ids = score_preferences(
-                            record, verdict, user_memory, state
+                        pref_score, matched_mem_ids, audit_entries = score_preferences(
+                            record,
+                            verdict,
+                            user_memory,
+                            state,
+                            personalization_strength=personalization_strength,
+                            max_bonus=personalization_max_bonus,
                         )
+                        raw_bonus = sum(a.get("delta", 0.0) for a in audit_entries)
+                        bounded_bonus = max(
+                            -personalization_max_bonus,
+                            min(personalization_max_bonus, raw_bonus),
+                        )
+                        baseline_relevance = -score
                         eligible_pool.append(
                             {
                                 "record": record,
                                 "score": score,
+                                "baseline_relevance": baseline_relevance,
+                                "bounded_bonus": bounded_bonus,
                                 "verdict": verdict,
                                 "pref_score": pref_score,
                                 "matched_mem_ids": matched_mem_ids,
+                                "audit_entries": audit_entries,
                             }
                         )
                     if fb_eligible > 0:
@@ -553,16 +726,30 @@ class LexicalSearch:
                     if not verdict["eligible"]:
                         continue
                     fb_eligible += 1
-                    pref_score, matched_mem_ids = score_preferences(
-                        record, verdict, user_memory, state
+                    pref_score, matched_mem_ids, audit_entries = score_preferences(
+                        record,
+                        verdict,
+                        user_memory,
+                        state,
+                        personalization_strength=personalization_strength,
+                        max_bonus=personalization_max_bonus,
                     )
+                    raw_bonus = sum(a.get("delta", 0.0) for a in audit_entries)
+                    bounded_bonus = max(
+                        -personalization_max_bonus,
+                        min(personalization_max_bonus, raw_bonus),
+                    )
+                    baseline_relevance = -score
                     eligible_pool.append(
                         {
                             "record": record,
                             "score": score,
+                            "baseline_relevance": baseline_relevance,
+                            "bounded_bonus": bounded_bonus,
                             "verdict": verdict,
                             "pref_score": pref_score,
                             "matched_mem_ids": matched_mem_ids,
+                            "audit_entries": audit_entries,
                         }
                     )
                 matched, eligible, unknown, excluded = (
@@ -572,14 +759,65 @@ class LexicalSearch:
                     fb_excluded,
                 )
 
-        # Stage 2: Soft preference-based ranking among verified eligible candidates
-        eligible_pool.sort(
+        # Baseline rankings (pure BM25 relevance before personalization)
+        baseline_sorted = sorted(
+            eligible_pool,
             key=lambda item: (
-                -item["pref_score"],
                 item["score"],
                 item["record"]["id"],
-            )
+            ),
         )
+        baseline_rankings = [
+            it["record"]["id"] for it in baseline_sorted[: action.limit]
+        ]
+
+        # Stage 2: Memory-aware candidate reranking among verified eligible candidates
+        if personalization_strength > 0.0 and user_memory and eligible_pool:
+            max_base = max(
+                (it["baseline_relevance"] for it in eligible_pool), default=1.0
+            )
+            if max_base <= 0.0:
+                max_base = 1.0
+
+            for it in eligible_pool:
+                norm_rel = it["baseline_relevance"] / max_base
+                it["normalized_relevance"] = norm_rel
+                it["personalized_score"] = norm_rel + personalization_strength * it.get(
+                    "bounded_bonus", 0.0
+                )
+
+            eligible_pool.sort(
+                key=lambda item: (
+                    -item["personalized_score"],
+                    item["score"],
+                    item["record"]["id"],
+                )
+            )
+        else:
+            eligible_pool = baseline_sorted
+
+        personalized_rankings = [
+            it["record"]["id"] for it in eligible_pool[: action.limit]
+        ]
+
+        decision_audit = []
+        seen_audits = set()
+        for item in eligible_pool[: action.limit]:
+            for entry in item.get("audit_entries", []):
+                audit_key = (entry["memory_id"], item["record"]["id"])
+                if audit_key not in seen_audits:
+                    seen_audits.add(audit_key)
+                    decision_audit.append(
+                        {
+                            "memory_id": entry["memory_id"],
+                            "application": entry["application"],
+                            "attribute": entry["attribute"],
+                            "value": entry["value"],
+                            "affected_products": [item["record"]["id"]],
+                            "match_type": entry["match_type"],
+                            "reason": entry["reason"],
+                        }
+                    )
 
         candidates = []
         for item in eligible_pool[: action.limit]:
@@ -594,7 +832,14 @@ class LexicalSearch:
                     "snippet": record["text"][:400],
                     "image_url": record["image_url"],
                     "bm25": item["score"],
+                    "baseline_relevance": item.get(
+                        "baseline_relevance", -item["score"]
+                    ),
                     "preference_score": item["pref_score"],
+                    "personalized_score": item.get(
+                        "personalized_score",
+                        -item["score"] + item["pref_score"],
+                    ),
                     "matched_memory_ids": item["matched_mem_ids"],
                     **item["verdict"],
                 }
@@ -618,6 +863,11 @@ class LexicalSearch:
                 "products_failing_known_constraints": excluded,
             },
             "candidates": candidates,
+            "initial_candidate_pool": [it["record"]["id"] for it in eligible_pool],
+            "baseline_rankings": baseline_rankings,
+            "personalized_rankings": personalized_rankings,
+            "personalization_strength": personalization_strength,
+            "memory_decision_audit": decision_audit,
         }
 
     def eligible(self, product_id, state):

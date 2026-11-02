@@ -116,12 +116,12 @@ class Search(Strict):
     type: Literal["SEARCH"]
     query: str = Field(max_length=500)
     mode: Literal["all", "any"] = "all"
-    limit: int = Field(default=10, ge=1, le=20)
+    limit: int = Field(default=30, ge=1, le=50)
 
 
 class Recommend(Strict):
     type: Literal["RECOMMEND"]
-    product_ids: list[str] = Field(min_length=1, max_length=5)
+    product_ids: list[str] = Field(min_length=1, max_length=10)
     message: str = Field(min_length=1, max_length=1500)
     follow_up_question: str = Field(min_length=1, max_length=1000)
     search_id: str | None = None

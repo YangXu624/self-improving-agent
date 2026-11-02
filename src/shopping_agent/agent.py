@@ -295,15 +295,30 @@ class ShoppingAgent:
                         min_sim = (
                             self.runtime_config.user_memory_similarity_threshold
                             if self.runtime_config
-                            else 0.45
+                            else 0.35
                         )
                         top_k = (
                             self.runtime_config.user_memory_top_k
                             if self.runtime_config
                             else 5
                         )
+                        cand_limit = (
+                            self.runtime_config.user_memory_candidate_pool_size
+                            if self.runtime_config
+                            else 15
+                        )
+                        small_prof = (
+                            self.runtime_config.user_memory_small_profile_threshold
+                            if self.runtime_config
+                            else 10
+                        )
                         memory_view = self.user_memory.context(
-                            session, message, min_similarity=min_sim, limit=top_k
+                            session,
+                            message,
+                            min_similarity=min_sim,
+                            limit=top_k,
+                            candidate_limit=cand_limit,
+                            small_profile_threshold=small_prof,
                         )
                     except (UserMemoryError, OSError):
                         failure = "user_memory_unavailable"
@@ -312,15 +327,49 @@ class ShoppingAgent:
                         )
                         break
                     session.append(
+                        "user_memory_retrieved",
+                        {
+                            "revision": memory_view["revision"],
+                            "count": len(memory_view.get("candidates", [])),
+                            "candidates": [
+                                r["id"] for r in memory_view.get("candidates", [])
+                            ],
+                            "embedding_provider": memory_view.get("embedding_provider"),
+                        },
+                        request_id,
+                    )
+                    session.append(
+                        "user_memory_applicable",
+                        {
+                            "revision": memory_view["revision"],
+                            "applicable": [
+                                r["id"] for r in memory_view.get("records", [])
+                            ],
+                            "ignored": [
+                                r["id"] for r in memory_view.get("ignored", [])
+                            ],
+                            "assessments": memory_view.get("assessments", []),
+                        },
+                        request_id,
+                    )
+                    session.append(
                         "user_memory_selection",
                         {
                             "revision": memory_view["revision"],
-                            "retrieved": [r["id"] for r in memory_view["records"]],
+                            "retrieved": [
+                                r["id"] for r in memory_view.get("records", [])
+                            ],
+                            "candidates": [
+                                r["id"] for r in memory_view.get("candidates", [])
+                            ],
                         },
                         request_id,
                     )
                     retrieved_user_memories = [
-                        dict(r) for r in memory_view.get("records", [])
+                        dict(r)
+                        for r in memory_view.get(
+                            "candidates", memory_view.get("records", [])
+                        )
                     ]
                 result = latest_search(
                     session, self.search.catalogue_version, self.search.strategy_version
@@ -743,10 +792,12 @@ class ShoppingAgent:
                                 "search_requires_a_remaining_decision_call"
                             )
                         if self.runtime_config:
-                            action.limit = min(
-                                action.limit,
-                                self.runtime_config.candidate_retrieval_limit,
+                            candidate_cap = max(
+                                30, self.runtime_config.candidate_retrieval_limit
                             )
+                            action.limit = min(max(action.limit, 30), candidate_cap)
+                        else:
+                            action.limit = max(action.limit, 30)
                         searches += 1
                         session.append(
                             "tool_call",
@@ -764,24 +815,67 @@ class ShoppingAgent:
                             if self.runtime_config
                             else True
                         )
+                        p_strength = (
+                            self.runtime_config.personalization_strength
+                            if self.runtime_config
+                            else 0.5
+                        )
+                        p_max_bonus = (
+                            self.runtime_config.personalization_max_bonus
+                            if self.runtime_config
+                            else 2.0
+                        )
                         try:
                             found = self.search.search(
                                 action,
                                 session.state,
                                 user_memory=memory_view,
                                 fallback=fallback_opt,
+                                personalization_strength=p_strength,
+                                personalization_max_bonus=p_max_bonus,
                             )
                         except TypeError:
                             try:
                                 found = self.search.search(
-                                    action, session.state, user_memory=memory_view
+                                    action,
+                                    session.state,
+                                    user_memory=memory_view,
+                                    fallback=fallback_opt,
                                 )
                             except TypeError:
-                                found = self.search.search(action, session.state)
+                                try:
+                                    found = self.search.search(
+                                        action, session.state, user_memory=memory_view
+                                    )
+                                except TypeError:
+                                    found = self.search.search(action, session.state)
                         except ValueError:
                             raise ActionError("invalid_search_query_or_state") from None
                         found["request_fingerprint"] = fingerprint
                         session.append("search_result", found, request_id)
+                        if found.get("memory_decision_audit") or found.get(
+                            "baseline_rankings"
+                        ):
+                            session.append(
+                                "product_reranking_audit",
+                                {
+                                    "search_id": found.get("search_id"),
+                                    "initial_candidate_pool": found.get(
+                                        "initial_candidate_pool", []
+                                    ),
+                                    "baseline_rankings": found.get(
+                                        "baseline_rankings", []
+                                    ),
+                                    "personalized_rankings": found.get(
+                                        "personalized_rankings", []
+                                    ),
+                                    "personalization_strength": found.get(
+                                        "personalization_strength", 0.0
+                                    ),
+                                    "audit": found.get("memory_decision_audit", []),
+                                },
+                                request_id,
+                            )
                         session.append(
                             "tool_completed",
                             {
@@ -818,6 +912,12 @@ class ShoppingAgent:
                             raise ActionError(
                                 "recommendation_requires_follow_up_question"
                             )
+
+                        # Recommendations must be distinct eligible products (up to 10)
+                        # Never fabricate or pad recommendations beyond what was selected
+                        action.product_ids = list(dict.fromkeys(action.product_ids))[
+                            :10
+                        ]
 
                         products = verified_products(
                             action,

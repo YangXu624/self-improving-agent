@@ -10,13 +10,13 @@ from .scoring import Judge, ScoreConfig, resources
 @dataclass(frozen=True)
 class TargetRule:
     target_id: str | None = None
-    k: int = 5
+    k: int = 10
     acceptable_target_ids: tuple[str, ...] | None = None
 
     def __post_init__(self):
-        if not 1 <= self.k <= 5:
+        if not 1 <= self.k <= 10:
             raise ValueError(
-                "Target K must be within current recommendation limit 1..5"
+                "Target K must be within current recommendation limit 1..10"
             )
 
     def check(self, response, event_ids):
@@ -28,7 +28,7 @@ class TargetRule:
         cards = response.get("products", [])
         ids = [p.get("id") for p in cards]
         if (
-            not 1 <= len(ids) <= 5
+            not 1 <= len(ids) <= 10
             or any(not isinstance(i, str) or not i for i in ids)
             or len(set(ids)) != len(ids)
             or ids != event_ids
@@ -43,7 +43,9 @@ class TargetRule:
         return None
 
 
-def target_score(record, truth, oracle, config=ScoreConfig(headline_k=5), *, max_turns):
+def target_score(
+    record, truth, oracle, config=ScoreConfig(headline_k=10), *, max_turns
+):
     """Recompute hit proof from the runner's presented lists; failures never improve MRR."""
     k = config.headline_k
     acceptable = getattr(truth, "acceptable_target_ids", None)
