@@ -33,7 +33,7 @@ class RuntimeConfig:
 
     # 2. Shopping & Search Settings
     agent_max_searches: int = 2
-    candidate_retrieval_limit: int = 5
+    candidate_retrieval_limit: int = 50
     bm25_matching_mode: Literal["all", "any"] = "all"
     search_fallback: bool = True
     max_conversation_turns: int = 6
@@ -45,8 +45,12 @@ class RuntimeConfig:
     user_memory_enabled: bool = True
     user_memory_similarity_threshold: float = 0.45
     user_memory_top_k: int = 5
+    user_memory_candidate_pool_size: int = 50
+    user_memory_small_profile_threshold: int = 10
     user_memory_context_budget: int = 1500
     user_memory_recency_weighting: float = 0.95
+    personalization_strength: float = 0.5
+    personalization_max_bonus: float = 2.0
 
     # 4. Procedural Memory Settings
     procedural_memory_enabled: bool = False
@@ -82,9 +86,9 @@ class RuntimeConfig:
         # Shopping & search bounds
         if not 1 <= self.agent_max_searches <= 3:
             raise ConfigurationError("agent_max_searches must be between 1 and 3")
-        if not 1 <= self.candidate_retrieval_limit <= 10:
+        if not 1 <= self.candidate_retrieval_limit <= 50:
             raise ConfigurationError(
-                "candidate_retrieval_limit must be between 1 and 10"
+                "candidate_retrieval_limit must be between 1 and 50"
             )
         if self.bm25_matching_mode not in {"all", "any"}:
             raise ConfigurationError("bm25_matching_mode must be 'all' or 'any'")
@@ -102,9 +106,25 @@ class RuntimeConfig:
             )
         if not 1 <= self.user_memory_top_k <= 10:
             raise ConfigurationError("user_memory_top_k must be between 1 and 10")
+        if not 1 <= self.user_memory_candidate_pool_size <= 100:
+            raise ConfigurationError(
+                "user_memory_candidate_pool_size must be between 1 and 100"
+            )
+        if not 0 <= self.user_memory_small_profile_threshold <= 50:
+            raise ConfigurationError(
+                "user_memory_small_profile_threshold must be between 0 and 50"
+            )
         if not 0.0 <= self.user_memory_recency_weighting <= 1.0:
             raise ConfigurationError(
                 "user_memory_recency_weighting must be between 0.0 and 1.0"
+            )
+        if not 0.0 <= self.personalization_strength <= 2.0:
+            raise ConfigurationError(
+                "personalization_strength must be between 0.0 and 2.0"
+            )
+        if not 0.1 <= self.personalization_max_bonus <= 10.0:
+            raise ConfigurationError(
+                "personalization_max_bonus must be between 0.1 and 10.0"
             )
 
         # Procedural memory bounds
@@ -171,7 +191,7 @@ DEMO_PRESET = RuntimeConfig(
     agent_max_searches=3,
     timeout=35.0,
     max_conversation_turns=10,
-    candidate_retrieval_limit=6,
+    candidate_retrieval_limit=30,
     search_fallback=True,
     user_memory_enabled=True,
     user_memory_similarity_threshold=0.40,
@@ -185,7 +205,7 @@ EVALUATION_PRESET = RuntimeConfig(
     agent_max_searches=2,
     timeout=25.0,
     max_conversation_turns=6,
-    candidate_retrieval_limit=5,
+    candidate_retrieval_limit=30,
     search_fallback=True,
     user_memory_enabled=True,
     user_memory_similarity_threshold=0.45,
@@ -245,7 +265,7 @@ PARAMETER_METADATA: dict[str, dict[str, Any]] = {
         "label": "Candidate Retrieval Limit",
         "category": "Shopping & Search",
         "description": "Maximum candidate product records returned by search tool.",
-        "bounds": (1, 10),
+        "bounds": (1, 50),
         "type": "int",
         "default": DEFAULT_CONFIG.candidate_retrieval_limit,
     },

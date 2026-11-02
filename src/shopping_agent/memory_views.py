@@ -72,20 +72,30 @@ def compact_state(session) -> dict:
 
 def memory_text(record: dict) -> str:
     """Deterministic prose, not an LLM summary; the current value cannot be omitted."""
-    attribute = record["attribute"].replace("_", " ")
-    value = record["value"]
-    category = record["category"]
+    attribute = record.get("attribute", "").replace("_", " ")
+    value = record.get("value", "")
+    category = record.get("category", "preference")
+    strength = record.get("strength", "soft")
+    scope = record.get("scope", "general")
+    scope_str = f" (for {scope})" if scope and scope != "general" else ""
+
     if category == "preference":
-        text = f"Usually prefers {attribute}: {value}"
+        prefix = (
+            "Always prefers"
+            if strength == "hard"
+            else ("Tends to prefer" if strength == "inferred" else "Usually prefers")
+        )
+        text = f"{prefix} {attribute}: {value}{scope_str}"
     elif category == "dislike":
-        text = f"Avoids {attribute}: {value}"
+        text = f"Avoids {attribute}: {value}{scope_str}"
+    elif category == "contextual":
+        text = f"Context: {value}{scope_str}"
     elif category == "purchase":
-        text = f"Confirmed purchase: {value}"
+        text = f"Confirmed purchase: {value}{scope_str}"
     else:
-        text = f"User fact — {attribute}: {value}"
-    if record["scope"] != "general":
-        text += f" (for {record['scope']})"
-    if record["basis"] == "inferred":
+        text = f"User fact — {attribute}: {value}{scope_str}"
+
+    if record.get("basis") == "inferred" or record.get("evidence_type") == "inferred":
         text += " [unconfirmed inference]"
     return text + "."
 

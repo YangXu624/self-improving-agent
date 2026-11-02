@@ -179,53 +179,53 @@ def render_products(
     session_id: str = "",
     request_id: str = "",
 ) -> None:
-    """Render only persisted tool-backed cards, even when remote images are unavailable."""
-    if not products:
-        return
-    for column, product in zip(st.columns(len(products)), products, strict=True):
-        with column, st.container(border=True):
-            url = product_image_url(product.get("image_url"))
-            if show_images:
-                if url:
-                    st.image(
-                        url,
-                        width="stretch",
-                        alt="Product image unavailable; details remain below",
-                    )
-                else:
-                    st.caption("◇ Image unavailable")
-            title = product["title"]
-            st.text(title[:115] + ("…" if len(title) > 115 else ""))
-            facts = product["facts"]
-            price = facts.get("price")
-            st.markdown(
-                f"**USD {price:.2f}**" if price is not None else "**Price unknown**"
-            )
-            attributes = [
-                f"{key.capitalize()}: {facts[key]}"
-                for key in ["color", "material"]
-                if facts.get(key)
-            ]
-            if attributes:
-                st.caption(" · ".join(attributes))
-            st.caption("Catalogue price · availability unverified")
-            with st.expander("Product details"):
-                st.text(title)
-                st.text("Product ID: " + product["id"])
-                st.json(
-                    {
-                        "facts": facts,
-                        "evidence": product["evidence"],
-                        "matched_hard_ids": product["matched_hard_ids"],
-                        "matched_soft_ids": product["matched_soft_ids"],
-                    }
+    chunk_size = 5
+    for i in range(0, len(products), chunk_size):
+        chunk = products[i : i + chunk_size]
+        for column, product in zip(st.columns(len(chunk)), chunk, strict=True):
+            with column, st.container(border=True):
+                url = product_image_url(product.get("image_url"))
+                if show_images:
+                    if url:
+                        st.image(
+                            url,
+                            width="stretch",
+                            alt="Product image unavailable; details remain below",
+                        )
+                    else:
+                        st.caption("◇ Image unavailable")
+                title = product["title"]
+                st.text(title[:115] + ("…" if len(title) > 115 else ""))
+                facts = product["facts"]
+                price = facts.get("price")
+                st.markdown(
+                    f"**USD {price:.2f}**" if price is not None else "**Price unknown**"
                 )
-            if service and session_id and product.get("id"):
-                btn_key = f"buy_btn_{session_id}_{request_id}_{product['id']}"
-                if st.button("🛍️ Buy (Demo)", key=btn_key, use_container_width=True):
-                    confirm_purchase_dialog(
-                        product, service, owner, session_id, request_id
+                attributes = [
+                    f"{key.capitalize()}: {facts[key]}"
+                    for key in ["color", "material"]
+                    if facts.get(key)
+                ]
+                if attributes:
+                    st.caption(" · ".join(attributes))
+                st.caption("Catalogue price · availability unverified")
+                with st.expander("Product details"):
+                    st.text(title)
+                    st.text("Product ID: " + product["id"])
+                    st.json(
+                        {
+                            "facts": facts,
+                            "evidence": product["evidence"],
+                            "matched_hard_ids": product["matched_hard_ids"],
+                            "matched_soft_ids": product["matched_soft_ids"],
+                        }
                     )
+                if service and session_id and product.get("id"):
+                    btn_key = f"buy_btn_{session_id}_{request_id}_{product['id']}"
+                    if st.button("🛍️ Buy (Demo)", key=btn_key, use_container_width=True):
+                        confirm_purchase_dialog(
+                            product, service, owner, session_id, request_id
+                        )
 
 
 def render_purchase_history(service: ChatService, owner: str, sid: str) -> None:

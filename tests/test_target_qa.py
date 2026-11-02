@@ -258,7 +258,7 @@ class TargetQATests(unittest.TestCase):
                         [],
                     )
                 )
-        for k in (0, 6, -1):
+        for k in (0, 11, -1):
             with self.subTest(k=k), self.assertRaises(ValueError):
                 TargetRule("target", k)
 

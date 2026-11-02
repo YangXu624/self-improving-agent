@@ -13,6 +13,10 @@ from collections.abc import Sequence
 class EmbeddingProvider(ABC):
     """Abstract interface for text embedding providers."""
 
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
+
     @abstractmethod
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         """Embed a batch of texts into float vectors."""
@@ -25,6 +29,10 @@ class EmbeddingProvider(ABC):
 
 class FastEmbedProvider(EmbeddingProvider):
     """In-process ONNX-based embedding provider using fastembed with caching."""
+
+    @property
+    def name(self) -> str:
+        return f"fastembed ({self.model_name})"
 
     def __init__(
         self, model_name: str = "BAAI/bge-small-en-v1.5", cache_size: int = 2048
@@ -77,6 +85,10 @@ class DeterministicEmbeddingProvider(EmbeddingProvider):
     Produces semantically sensitive n-gram vector representations with zero external
     dependencies or network downloads.
     """
+
+    @property
+    def name(self) -> str:
+        return "deterministic-local"
 
     def __init__(self, dim: int = 128):
         self.dim = dim

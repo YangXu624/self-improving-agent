@@ -1,8 +1,8 @@
 # ASTRA: Self-Improving Conversational Shopping Agent
 
-ASTRA is a research-grade conversational shopping agent designed to investigate whether confirmed multi-session experience and memory can reliably improve an agent's future decision-making without negative transfer.
+ASTRA is a research-grade conversational shopping agent designed to investigate whether persistent multi-session memory and experiential learning can reliably improve an agent's future decision-making without negative transfer, hallucination, or cross-recipient contamination.
 
-Operating over a frozen 50,000-product e-commerce catalogue, ASTRA enforces strict deterministic safety gates outside the foundation model, bounded turn execution loops, an event-sourced audit trail, and a three-tier memory architecture.
+Operating over a frozen 50,000-product e-commerce catalogue, ASTRA combines foundation-model reasoning with deterministic Python safety gates outside the LLM, bounded turn execution loops, an event-sourced audit trail, and a three-tier memory architecture.
 
 ---
 
@@ -10,396 +10,250 @@ Operating over a frozen 50,000-product e-commerce catalogue, ASTRA enforces stri
 
 | Document | Purpose |
 | --- | --- |
-| [**`README.md`**](file:///Users/yangxu/code/self-improving-agent/README.md) | Project overview, key features, quickstart, and limitations |
+| [**`README.md`**](file:///Users/yangxu/code/self-improving-agent/README.md) | Project overview, architecture, memory lifecycle, quickstart, and empirical results |
+| [**`docs/reports/returning_customer_evaluation.md`**](file:///Users/yangxu/code/self-improving-agent/docs/reports/returning_customer_evaluation.md) | **Final Returning-Customer Evaluation Report** (22 paired visits, +9.1 pp Hit@10, case studies) |
 | [**`docs/architecture.md`**](file:///Users/yangxu/code/self-improving-agent/docs/architecture.md) | Core system architecture, turn execution loop, contracts, and module boundaries |
-| [**`docs/memory.md`**](file:///Users/yangxu/code/self-improving-agent/docs/memory.md) | Three-tier memory lifecycle: session state, persistent user semantic profiles, and procedural experience |
-| [**`docs/evaluation.md`**](file:///Users/yangxu/code/self-improving-agent/docs/evaluation.md) | Benchmarks (Experiment A, Longitudinal, Memory-Sensitive), scoring, and empirical findings |
-| [**`docs/development.md`**](file:///Users/yangxu/code/self-improving-agent/docs/development.md) | Environment setup, 700+ offline tests, Streamlit Developer Console, and maintenance CLI tools |
+| [**`docs/memory.md`**](file:///Users/yangxu/code/self-improving-agent/docs/memory.md) | Three-tier memory lifecycle: session state, persistent user semantic profiles, and procedural lessons |
+| [**`docs/evaluation.md`**](file:///Users/yangxu/code/self-improving-agent/docs/evaluation.md) | Longitudinal evaluation benchmarks, scoring methodology, and ablation protocols |
+| [**`docs/development.md`**](file:///Users/yangxu/code/self-improving-agent/docs/development.md) | Environment setup, 740+ offline tests, Streamlit Developer Console, and maintenance CLI tools |
 | [**`docs/decisions/`**](file:///Users/yangxu/code/self-improving-agent/docs/decisions/README.md) | Architectural Decision Records (ADRs) and indexed historical review reports |
 
 ---
 
-## Key Features
+## Headline Returning-Customer Evaluation Findings
 
-1. **Deterministic Bounded Shopping Agent:**
-   - Model proposals (`SEARCH`, `CLARIFY`, `RECOMMEND`, `RESPOND`) are validated through Pydantic contracts and Python safety gates outside the LLM.
-   - Verbatim quote evidence is strictly required for all requirement edits.
-   - **Mandatory Recommend + Question Contract:** Recommendation turns reliably present catalogue-verified product cards accompanied by an engaging conversational follow-up question.
-2. **Three-Tier Memory Architecture:**
-   - **Tier 1 (In-Session Working State):** Active constraints, asked/disclosed attributes, conflict detection, and event-sourced JSONL persistence.
-   - **Tier 2 (Persistent User Semantic Memory):** Transactional SQLite profiles (`profile.db`) with vector embeddings, time-decay ranking, and end-of-session LLM consolidation.
-   - **Tier 3 (Procedural Experience Memory):** Centralized SQLite lessons store (`lessons.db`) capturing cross-customer behavioral heuristics with review/verification gates.
-3. **Simulated Purchase Tracking & Immediate Feedback:**
-   - Product recommendation cards feature a **Buy (Demo)** button.
-   - Purchases immediately update the customer profile and reinforce future recommendations without requiring external payment integrations.
-4. **Developer Observability & Simulation Console:**
-   - Integrated Streamlit developer drawer with **Parameters**, **Execution Trace**, **Session Audit Explorer**, and **Mock Customer Lab** for stepping through multi-visit simulations.
-5. **Scientific Evaluation & Honest Empirical Reporting:**
-   - Evaluates memory under controlled conditions.
-   - Confirms that memory provides no benefit on fully-specified tasks ($\Delta = 0.0$ in Hit@10), while providing dramatic gains on underspecified recurring tasks (+100% Target Hit@5).
+A controlled live longitudinal evaluation was conducted on November 2, 2026, comparing **Memory OFF vs. Memory ON across 22 matched pairs of returning visits** (`sequence >= 2`) spanning 10 diverse customer personas (44 sessions total) against the frozen 50,000-product catalogue.
 
-## Setup
+| Metric | Memory OFF | Memory ON | Absolute Change | Relative Impact | Better Condition |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Target Hit@10 (Post-Hoc)** | 50.0% (11/22) | **59.1% (13/22)** | **+9.1 percentage points** | **+18.2%** | **Memory ON** |
+| **Target Hit@1 (First Recommendation)** | 45.5% (10/22) | **59.1% (13/22)** | **+13.6 percentage points** | **+29.9%** | **Memory ON** |
+| **Mean Reciprocal Rank (MRR)** | 0.4697 | **0.5909** | **+0.1212** | **+25.8%** | **Memory ON** |
+| **Suitability NDCG@5** | 0.4861 | **0.5563** | **+0.0702** | **+14.4%** | **Memory ON** |
+| **Penalized MTTC (Failures = 7)** | 4.00 turns | **3.50 turns** | **-0.50 turns** | **-12.5%** | **Memory ON** |
+| **Estimated API Cost per Visit** | **$0.0146** | $0.0153 | +$0.0007 | +4.8% | **Memory OFF** |
 
-### Compact memory representations
+> **Key Finding**: In Memory ON, **13 of 13 successful visits surfaced the target item at Rank #1** (59.1% of visits), with 12 of the 13 successes achieving this on the very first turn. In Memory OFF, the agent required exploratory turns or ranked targets lower down the list (MRR = 0.4697).
 
-Normal chat now sends attribute-based current state and selected user memories as short
-ref/text entries, with audit IDs and revisions kept in the executor. User profile Markdown
-shows active sentences and a collapsed audit section. Legacy logs/profiles remain readable.
-See [formats, examples and measured size checks](docs/memory-representations.md).
-Chat `--memory-format legacy` or UI process setting `ASTRA_MEMORY_FORMAT=legacy` retains the
-historical policy format. Evaluators default to legacy; longitudinal runs can explicitly
-select `--memory-format compact`. No semantic/embedding retrieval change is included.
+### Paired Visit Outcome Distribution
+- **3 Net Gains (13.6%)**: Sessions that failed under Memory OFF but succeeded under Memory ON due to active preference reuse (`dev-bag-style-change/02`, `dev-capsule-wardrobe/02`, `dev-jewelry-simple/02`).
+- **1 Target Rank Promotion**: Succeeded in both, but promoted the target from Rank #3 to Rank #1 under Memory ON (`dev-jewelry-simple/03`).
+- **1 Regression (4.5%)**: Distraction from 4 injected historical memories induced agent hesitation, leading to dialogue stall (`dev-fashion/04`).
+- **18 Unchanged (81.8%)**: 10 maintained successes and 8 catalogue-miss failures where the target product was not retrieved into the BM25 candidate pool.
 
-### Stage 2: returning-customer evaluation
+All charts are available in PNG and SVG in [`docs/reports/charts/`](docs/reports/charts/):
+- [**Hit@K Comparison Chart**](docs/reports/charts/hit_at_k_comparison.png) ([SVG](docs/reports/charts/hit_at_k_comparison.svg))
+- [**Ranking Quality & NDCG Chart**](docs/reports/charts/ranking_quality_comparison.png) ([SVG](docs/reports/charts/ranking_quality_comparison.svg))
+- [**Task Efficiency Comparison Chart**](docs/reports/charts/task_efficiency_comparison.png) ([SVG](docs/reports/charts/task_efficiency_comparison.svg))
+- [**Paired Transition Breakdown Chart**](docs/reports/charts/paired_transition_breakdown.png) ([SVG](docs/reports/charts/paired_transition_breakdown.svg))
 
-The first live pilot stopped during OFF; no paired memory result exists. The evaluation-only
-[shopper integrity fix and fresh restart plan](docs/reviews/shopper-disclosure-integrity.md)
-retain the failed run and require separate approval before another paid evaluation.
+See the full [**Returning-Customer Evaluation Report**](docs/reports/returning_customer_evaluation.md) for detailed case studies, trace analysis, and statistical significance testing.
 
-An optional [expanded development fixture](experiments/longitudinal/customers.dev-expanded.json)
-adds eight catalogue-grounded customers while preserving the original three. See its
-[offline verification and limitations](docs/reviews/expanded-development-customers.md).
+---
 
-Three development customers have four catalogue-validated visits each. The thin timeline
-runner reuses the existing shopper, dialogue loop and scorers with stable users, fresh session
-UUIDs and isolated OFF/ON profile roots. Procedural memory is OFF in both arms. Free plan:
+## What Problem ASTRA Solves
 
-```bash
-.venv/bin/python -m astra_eval longitudinal \
-  --output data/eval/longitudinal/dev-review --limit-customers 1
+Conversational shopping agents face a fundamental dilemma across returning visits:
+1. **The Amnesia Problem**: Without persistent memory, returning customers must repeatedly explain their sizes, budgets, brand preferences, and materials on every visit.
+2. **The Hallucination & Contamination Danger**: Uncontrolled LLM memory frequently hallucinates constraints, leaks recipient details (e.g. applying a husband's gift sizing to the shopper herself), or rigidly over-filters searches when the shopper's intent changes.
+
+**ASTRA solves this** by decoupling soft preference recall from hard deterministic filtering:
+- Memory guides query generation and personalized candidate ranking, but **never hard-excludes catalogue items** unless explicitly confirmed in the current dialogue.
+- Recipient-scoped memory namespaces prevent cross-recipient contamination.
+- Verbatim quote evidence is mandatory for all requirement edits.
+
+---
+
+## System Architecture
+
+```text
+User Turn
+  │
+  ▼
+[Python Orchestrator] ◄─── Read Active State (JSONL Replay)
+  │                   ◄─── Retrieve Scoped Memories (SQLite profile.db + Embeddings)
+  ▼
+[DeepSeek Policy Agent] ─── Emits Structured JSON Proposal (SEARCH, CLARIFY, RECOMMEND, RESPOND)
+  │
+  ▼
+[Deterministic Safety Gates]
+  ├── Verbatim Quote Validation (prevents hallucinated requirements)
+  ├── Hard Constraint Ledger Recheck (price ceilings, category exclusions)
+  ├── Candidate Pool Verification (validates 10 distinct, verified catalogue IDs)
+  └── Mandatory Follow-Up Question Contract (recommends products + conversational question)
+  │
+  ▼
+[Multi-Stage Catalogue Retrieval]
+  ├── Stage 1: BM25 Broad Candidate Generation over 50,000 Products (SQLite FTS5)
+  ├── Stage 2: Deterministic Hard Filter Gate (drops ineligible items)
+  ├── Stage 3: Personalized Memory-Aware Reranker (promotes preference-aligned candidates)
+  └── Stage 4: Cap at exactly 10 eligible products (never pad, never hallucinate)
+  │
+  ▼
+[Memory Consolidation & Persistence]
+  ├── In-Session State: Append-only events.jsonl
+  ├── User Profile: SQLite profile.db + human-readable profile.md
+  └── End-of-Session: Centralized consolidation & procedural distillation
 ```
 
-Without `--live`, the command only reads inputs/catalogue/index for validation: no model
-requests, credential reads, profile access or output creation. See [Stage 2 architecture,
-metrics, commands and limits](docs/longitudinal-evaluation.md). Fixtures await manual review;
-mocked integration tests do not establish live memory benefit.
+### Three-Tier Memory Architecture
 
-### Stage 1: optional persistent user profiles
+1. **Tier 1 — In-Session Working Memory**:
+   - Maintains active requirements, asked/disclosed attribute ledgers, and conflict detection.
+   - Stored in append-only `events.jsonl` with lossless reference compaction and state snapshots.
+2. **Tier 2 — Persistent User Semantic Memory**:
+   - Stored in transactional SQLite (`profile.db`) and human-readable Markdown (`profile.md`).
+   - Encodes customer preferences, sizes, brand affinities, budgets, and past purchases.
+   - Employs cosine embedding similarity with temporal recency decay and lexical overlap bonus.
+3. **Tier 3 — Procedural Experience Memory**:
+   - Centralized lessons store (`lessons.db`) capturing cross-customer behavioral heuristics.
+   - Enforces explicit verification gates before candidate lessons become active.
 
-The chat UI now has **Remember me across chats** (default OFF). Keep the same shopper label
-across new chats. The CLI enables the same layer with `chat --user alice --user-memory`.
-Profiles live in ignored `data/user-memory/<SHA256(user_id)>/profile.md`, with readable Facts,
-Preferences, Dislikes and Purchases sections. Controlled, evidence-backed updates preserve
-correction history; recommendations do not imply purchases. OFF disables profile reads/writes.
-Session logs and procedural SQLite lessons remain separate. The existing evaluator stays
-user-memory OFF. See [the data flow, example and limits](docs/user-memory.md). Live memory
-quality and personalisation benefit remain unmeasured; no model calls were made for this work.
+---
 
-Use macOS/Linux and Python 3.11+ with SQLite FTS5. Tested locally on Python 3.14.3 /
-SQLite 3.51.2; other Python versions and Windows are unverified.
+## Memory Lifecycle: Write, Consolidate, Retrieve, Apply
+
+```text
+       ┌────────────────────────────────────────────────────────┐
+       │                   SESSION DIALOGUE                     │
+       └───────────────────────────┬────────────────────────────┘
+                                   │
+                     1. EXTRACT & CONSOLIDATE
+                                   │
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   Consolidation Engine (src/shopping_agent/user_memory.py) │
+       │   - Extracts confirmed facts, preferences, and budgets │
+       │   - Attaches verbatim quote evidence and confidence    │
+       │   - Enforces first-person ownership & recipient tags   │
+       │   - Resolves conflicts & supersedes outdated records   │
+       └───────────────────────────┬────────────────────────────┘
+                                   │
+                                2. WRITE
+                                   │
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   Persistent User Store (data/user-memory/<SHA256>/)   │
+       │   - profile.db (SQLite with vector embeddings)         │
+       │   - profile.md (Human-auditable Markdown summary)      │
+       └───────────────────────────┬────────────────────────────┘
+                                   │
+                     3. RETRIEVE (Next Visit)
+                                   │
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   Contextual Retrieval & Selection                     │
+       │   - Computes query-profile embedding similarity        │
+       │   - Applies temporal decay & lexical overlap bonus     │
+       │   - Filters by recipient scope (self vs. gift)         │
+       │   - Formats compact memory cards into prompt context   │
+       └───────────────────────────┬────────────────────────────┘
+                                   │
+                                4. APPLY
+                                   │
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   Execution & Reranking                                │
+       │   - Informs DeepSeek query formulation                 │
+       │   - Personalized candidate reranker boosts matches     │
+       │   - Preserves deterministic hard gates without bias    │
+       └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quickstart & Interactive Demo
+
+### 1. Prerequisites and Installation
+Requires macOS or Linux with Python 3.11+. Tested on macOS / Python 3.14 / SQLite 3.51.
 
 ```bash
-cd /Users/yangxu/code/self-improving-agent
+# Clone the repository
+git clone https://github.com/YangXu624/self-improving-agent.git
+cd self-improving-agent
+
+# Create virtual environment and install locked dependencies
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-lock.txt
+.venv/bin/python -m pip install -r requirements-ui-lock.txt
 .venv/bin/python -m pip install --no-deps -e .
 ```
 
-Pydantic is the only direct core runtime dependency; Ruff is a development tool. The lock file
-records exact tested versions; the editable build also uses isolated setuptools. No agent
-framework, model SDK or embedding service is needed. Streamlit is an optional UI dependency.
-
-The ignored `data/catalogue/` directory must already contain the imported `catalog.jsonl`
-and `product_images.json`; a GitHub clone alone does not contain these assets. The catalogue
-has 50,000 unique parent products. The URL map covers 49,944 products; 56 have no image entry.
-No image binaries were imported into the dataset. Browser checks loaded some images;
-bulk remote URL reachability remains unverified.
-`manifest.json` records local import provenance and checksums.
-
-Build the index (no API key needed):
+### 2. Build Catalogue Index
+The catalogue consists of 50,000 products. Build the SQLite FTS5 index (no API key required):
 
 ```bash
 .venv/bin/python -m shopping_agent index
-# To replace an existing index explicitly:
-.venv/bin/python -m shopping_agent index --rebuild
 ```
 
-The index is generated at `data/index/catalogue.sqlite`; it is not session memory. Source
-hashes and index version are recorded. Chat checks the source hash and refuses a stale index.
-The measured local index size is about 173 MB, in addition to about 61 MB of raw catalogue.
-
-## Live chat UI
-
-From this repository, install the optional UI dependencies and launch the local app:
-
-```bash
-.venv/bin/python -m pip install -r requirements-ui-lock.txt
-.venv/bin/python -m pip install --no-deps -e .
-# Configure DEEPSEEK_API_KEY in this project's ignored .env; see .env.example.
-.venv/bin/python -m streamlit run streamlit_app.py
-```
-
-Open [the local chat UI](http://127.0.0.1:8501). The user-provided key remains server-side;
-no key should be entered into chat or committed. If the index is absent, first run
-`.venv/bin/python -m shopping_agent index`. The UI binds to loopback by default and assumes
-a trusted local operator; shopper labels are not authentication.
-
-The UI reads only the project's explicit `.env` file (or `ASTRA_ENV_FILE`), accepts
-`DEEPSEEK_API_KEY` and `DEEPSEEK_MODEL`, and gives process variables precedence. File values
-are not copied into os.environ, so later reruns can pick up a changed file key. Restart the
-server after upgrading code to ensure the final module versions are loaded. A missing or
-invalid key disables chat. HTTP/auth/network failures surface as safe errors; **there is no
-scripted fallback**. No live request runs just from startup, refresh or session inspection.
-
-Sending a prompt or using a suggested prompt makes paid DeepSeek requests. Defaults remain
-three API attempts (including repairs) and two searches per turn, with a 2,000-output-token
-cap per request. There is no lifetime spend cap. Each answer shows API attempts/searches and
-reported input/output usage; incomplete usage is labelled. Dollar cost is not estimated.
-
-Try a shopping request and a follow-up correction, such as `boots under 100 USD` then
-`actually under 30 USD`. The model chooses what to clarify, which queries to run, and which
-returned candidates to recommend; the Python gates still enforce stored hard constraints
-and valid/current product IDs. Prompt `shopping-baseline-v2` includes a schema and an example
-JSON shape, following [DeepSeek JSON-output guidance](https://api-docs.deepseek.com/guides/json_mode/).
-
-Use the sidebar to start/select/resume a chat, inspect active needs/preferences and history,
-or switch the local shopper label. **View activity** shows real state edits, search counts
-and recommendation events. Product text remains available when images are missing.
-New live chats default to ignored `data/ui-sessions/deepseek/`. Earlier mock histories remain
-untouched in `data/ui-sessions/mock/` and are not migrated or listed in the default live UI.
-Refresh creates a fresh UI session; select/resume a saved UUID to recover history.
-
-Process variables `ASTRA_CATALOGUE`, `ASTRA_INDEX`, `ASTRA_UI_SESSIONS` and `ASTRA_ENV_FILE`
-can override UI paths; these are not additional accepted keys in the `.env` file. Keep custom
-live storage separate from historical mock fixtures. The UI lock records the tested UI/dev
-environment; the core lock remains separate. `ChatService` now requires explicit policy
-injection; tests supply a fixture or mock HTTP, while production supplies DeepSeekPolicy.
-
-## Simulated-shopper evaluation
-
-An offline-tested harness (`python -m astra_eval`) generates catalogue-grounded shopping
-scenarios, plays them against ASTRA with a scripted or Ollama-backed simulated shopper that
-keeps a fixed hidden profile and a bounded conversation memory, scores them independently from
-raw catalogue data and reports Success@K, nDCG@K, violations, turns, cost and retrieval
-diagnostics. Both preference-based evaluation and target-item evaluation (`--evaluation-mode target_item`,
-with `audit-targets` for offline eligibility) are supported. Ollama is only needed to run the real
-simulator; the paid DeepSeek path requires `--live --max-model-calls N`. See
-[docs/simulated-shopper-evaluation.md](docs/simulated-shopper-evaluation.md) for the Mac setup
-guide. No real evaluation result exists yet.
-
-## Experiment A (BM25 card presentation)
-
-Optional, offline-first controlled comparison of card count/format profiles; see
-[`experiments/experiment_a/README.md`](experiments/experiment_a/README.md). It needs the
-extra `requirements-experiment-lock.txt`, the pinned DeepSeek V4 `tokenizer.json`, and an
-independently verified frozen benchmark under ignored `data/`. The application default is
-unchanged (`--cards-profile baseline`). No paid live run has been made.
-
-## Chat with DeepSeek
-
+### 3. Configure API Credentials
+Create `.env` from `.env.example`:
 ```bash
 cp .env.example .env
-# Edit this project's .env and set DEEPSEEK_API_KEY locally.
-.venv/bin/python -m shopping_agent chat --user yangxu
+```
+Edit `.env` and set your key:
+```ini
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
-The CLI prints a new session UUID. Try a conversation such as:
-
-1. `I need hiking boots.`
-2. Answer a clarification, or volunteer: `My budget is under 100 USD.`
-3. `Actually, keep the budget under 60 USD.`
-4. `Prefer red, but that is optional.`
-
-The live model chooses its own questions/actions; this sequence is illustrative, not a
-scripted production path. It may ask more questions or find no verified matches. Enter
-`/state` to see active and superseded requirements, or `/quit` to exit. Resume the same chat:
-
+### 4. Launch the Streamlit Interactive UI
 ```bash
-.venv/bin/python -m shopping_agent chat --user yangxu --session SESSION_UUID
+.venv/bin/python -m streamlit run streamlit_app.py
 ```
+Open [http://localhost:8501](http://localhost:8501) in your browser.
+- **Persistent Memory Toggle**: Check "Remember me across chats" to test cross-session memory.
+- **Product Cards**: Click "Buy (Demo)" to register immediate purchase reinforcement.
+- **Developer Console**: Expand the drawer to inspect real-time execution traces, session events, memory cards, and the Mock Customer Lab.
 
-Only `DEEPSEEK_API_KEY` and `DEEPSEEK_MODEL` are accepted in `.env` (simple KEY=value, optional
-quotes, whole-line comments; no shell expansion). Existing process variables take precedence.
-The default model is `deepseek-flash`; `DEEPSEEK_MODEL` overrides it. The adapter is covered
-by mocked HTTP tests and a successful five-request live integration smoke. Broad interpretation
-quality, reliability across tasks/model versions and actual dollar cost remain unmeasured.
-Each user turn allows at most three requests (repairs included), each capped at 2,000 output
-tokens, and two searches. HTTP/network errors stop without automatic retries. Total spend
-still grows with turns. Credentials are not placed in prompts or persisted in session logs.
-
-For a single JSON response and an explicit retry key:
-
+### 5. Interactive CLI Chat
+Run interactive shopping sessions directly from the terminal:
 ```bash
-.venv/bin/python -m shopping_agent chat --user yangxu --session SESSION_UUID \
-  --message 'Actually, under 60 USD' --request-id budget-correction-1 --json
+# Start a new session with persistent memory enabled
+.venv/bin/python -m shopping_agent chat --user alice --user-memory
 ```
 
-Repeating a **completed** request ID with the same message returns its recorded response.
-Using a different message with that ID fails. An incomplete request fails closed; inspect
-its log and state before deliberately starting a new request. Accepted edits survive failed
-or interrupted turns. Request IDs prevent local replay; they cannot guarantee exactly-once
-billing if the process dies after a provider request.
+---
 
-## Inspect session memory and traces
+## Verification & Reproducibility
 
+### 1. Reproduce Returning-Customer Evaluation Figures
+Regenerate all headline metrics and visualization charts from the frozen evaluation artifacts:
 ```bash
-.venv/bin/python -m shopping_agent inspect --user yangxu --session SESSION_UUID
-.venv/bin/python -m shopping_agent inspect --user yangxu --session SESSION_UUID --events
+python3 tools/analyze_returning_customers.py
 ```
+Outputs the 4 publication charts to `docs/reports/charts/` and prints the verification table.
 
-These commands do not call a model. Each session has:
-
-```text
-data/sessions/<session UUID>/
-  events.jsonl   # authoritative, append-only conversation/action/state-version history
-  state.json    # rebuildable latest snapshot, including requirement correction history
-  .lock         # local single-writer lock
-```
-
-The log records full user/assistant messages, actual bounded model prompts, JSON decisions,
-validation failures, state transitions, tool calls/results, recommendations, reported token
-usage and durations. New records use lossless references for repeated data, state deltas and
-bounded stdlib compression for long prompt strings. The inspect commands and UI expand these
-into complete events; raw JSONL is a storage format, not the model context. Snapshots omit
-default/empty fields while retaining correction history and provenance. Old logs remain
-readable and are never rewritten; new turns append compact records. Use the current reader
-for new logs, as older application versions cannot decode storage version 2. See the
-[compaction evidence and reproduction instructions](docs/reviews/context-and-storage-compaction.md).
-The log excludes authorization headers and provider reasoning fields. Logs
-contain private conversation data and remain ignored by Git. Owner checks isolate sessions
-but are not authentication: the CLI assumes a trusted local operator. Do not host it as a
-multi-user service without adding authentication and a suitable storage/security design.
-
-## How the baseline works
-
-```text
-User turn → owned session/event log → bounded context → LLM JSON decision
-  → validate quoted state edits → commit a versioned requirement ledger
-  → CLARIFY / RESPOND: terminal message
-  → SEARCH: deterministic tool → trace actual results → another LLM decision
-  → RECOMMEND: current inspected IDs + constraint recheck → deterministic product cards
-```
-
-| Module | Responsibility |
-| --- | --- |
-| `contracts.py`, `state.py` | Closed action schemas; evidence-linked ADD/REPLACE/RETRACT/NEW_GOAL edits; simple conflict detection |
-| `sessions.py` | Owner checks, JSONL replay, atomic snapshot replacement, process/thread locks |
-| `event_codec.py` | Lossless event references, state deltas and bounded prompt-string compression |
-| `retrieval.py` | Source-hashed SQLite FTS5 index, literal queries, BM25, hard gates and soft-match evidence |
-| `context.py` | Active state/current results/recent dialogue under a context cap; separate from execution |
-| `provider.py` | DeepSeek JSON-mode transport; sanitized failures; no hidden fallback |
-| `agent.py` | Decision validation, bounded execution, current-result checks, trace and retry handling |
-| `cli.py` | Index build, interactive/single-turn chat, inspection |
-
-The model chooses clarification attributes/questions, query tokens and all/any matching,
-when to search, and which eligible candidates to recommend in which order. It cannot supply
-SQL, change search code, silently remove filters at tool invocation, or invent recommendation
-IDs. All **stored active hard constraints** are applied by the tool; soft preferences are
-annotated for the model, not automatically reranked. Deterministic validation cannot prove
-that the model extracted every need or understood a correction correctly. Inspect `/state`.
-
-A replacement names an active same-field requirement ID, cites the current message, retires
-the previous entry and appends a new one. Retraction removes an exclusion without inventing
-a positive preference. An explicit new goal retires the old active requirements. A state or
-retrieval-strategy change invalidates previous search results. Recommendations must use the
-result provided to their decision and pass a current hard-constraint recheck.
-Quotes must be nonblank excerpts of the current message. Conflicts are flagged only when
-no product could satisfy the stored requirements under the gate's own semantics (department
-aliases; product-type token containment). If the final decision proposes a SEARCH that cannot
-run, the turn closes with a fixed, product-free RESPOND (`closure` field, `turn_closed_safely`
-event) instead of an error. The CLI exits 0 for it; scripted callers should check `closure`.
-
-Policy, context builder, retrieval tool and storage are separate interfaces. Scoped procedural
-experience is injected through the existing context boundary, without replacing the executor.
-There is no persistent cross-session user-preference reuse.
-
-## Conservative catalogue semantics and limitations
-
-- Missing price/required attributes are **unknown**, including when checking exclusions.
-  Such products cannot pass the relevant hard requirement. Unknown soft attributes are not
-  failures. Exact positive prices are accepted; zero, missing, `from` and ranges are unknown.
-- Brand/color/material/size/department come from explicit detail fields. Store is not brand.
-  Product type checks literal category tokens; keyword checks catalogue text. This is lexical
-  evidence, not semantic understanding, verified safety claims or an inferred product ontology.
-- Exact equality and token containment differ. For example, material `not_contains: leather`
-  rejects `Leather and cotton`; `neq: leather` only excludes the exact normalized value.
-- Parent-product metadata and historical USD prices do not establish child-variant stock,
-  current price or purchasable size/color combinations. Availability is unverified.
-- BM25 is a retrieval baseline; it does not establish recommendation quality. Sparse fields
-  can produce few or zero verified candidates. No live crawling or attribute imputation occurs.
-- Full history is stored; compact prompts use active requirement IDs/predicates, current
-  candidate facts/provenance and up to twelve prior dialogue messages. Product images, ranking
-  floats and repeated title/category text stay outside the prompt. Omitted facts mean unknown;
-  no candidate IDs are dropped. Old dialogue is trimmed first under 40,000 characters. Essential
-  context is never silently truncated; oversized essential context fails before a paid call.
-- Schema/quote checks do not prove semantic entailment. RESPOND/CLARIFY natural-language
-  factual accuracy and resistance to prompt injection remain unverified. Recommendation
-  cards, IDs and stored-constraint checks have deterministic gates.
-- Session files are a local single-writer design, not a transactional database or tamper-proof
-  audit system. Malformed/truncated/inconsistent logs are preserved and rejected for manual
-  repair. An intact event log rebuilds a corrupt or stale snapshot.
-
-## Verification & Quality Assurance
-
-See the authoritative [Submission Report & QA Checklist](docs/submission_report.md) for full acceptance status.
-
-### 1. Fast Standalone Offline Smoke-Test (< 0.1s)
-Runs without network, API keys, or external 50k assets:
+### 2. Run Full Test Suite (742 Tests)
+Run all unit, integration, memory lifecycle, and regression tests:
 ```bash
-.venv/bin/python tools/submission_smoke_test.py
+PYTHONPATH=. pytest tests/ -q
+```
+*Expected: `742 passed, 1 skipped, 1 xfailed` (< 45s).*
+
+### 3. Fast Standalone Smoke Test (< 0.1s)
+Validate core deterministic safety gates without network or catalogue assets:
+```bash
+python tools/submission_smoke_test.py
 ```
 
-### 2. End-to-End Integration Acceptance
-Validates P0 12-step workflow, Mock Customer Lab namespaces, and P3 procedural learning:
+### 4. Code Quality & Formatting
 ```bash
-.venv/bin/python -m unittest tests/test_submission_acceptance.py
-```
-
-### 3. Full Regression Suite (719 Tests)
-```bash
-.venv/bin/python -m unittest discover -s tests
 .venv/bin/ruff check src tests tools
 .venv/bin/ruff format --check src tests tools
-.venv/bin/python -m pip check
 ```
 
-The suite uses generated catalogue fixtures, scripted **test-only** policies and mocked
-DeepSeek HTTP responses; no application module supplies scripted decisions. UI acceptance
-tests exercise the real provider adapter with offline responses, never the local key. UI tests are explicitly skipped without the optional
-`[ui]` extra; install the UI lock to run them. Coverage includes corrections, retractions,
-unknown data, real SQLite search/filtering,
-owner/session isolation, restart recovery, a second-process writer lock, bounded repairs,
-unseen/stale IDs, failed eligibility rechecks, request replay and CLI execution. These tests
-are acceptance checks, not the future simulated-shopper evaluation framework.
+---
 
-The actual 50k index was also exercised with a test-only policy through clarification → search
-→ recommendation → budget correction → fresh search/recommendation. The 341 lexical `hiking
-boots` matches yielded 13 verified matches below USD100, and 8 below USD60 with the stored
-literal `boots` category filter. These overlapping failure/unknown counters are not relevance
-or shopping-success measurements. No API tokens were used and no learning benefit is claimed.
+## Methodology, Caveats & Limitations
 
-See [milestone notes](docs/milestone-1.md) for checkpoint evidence and trade-offs,
-[project context](docs/project-context.md), [research questions](docs/research-questions.md),
-[open decisions](docs/open-decisions.md) and [coding guidance](AGENTS.md).
-
-Current session working memory includes goal-scoped asked/disclosed attribute ledgers, cached
-in `state.json` and reconstructed from the event log. Confirmed values remain in the existing
-requirements; no-preference/declined responses and distinct clarification facets prevent
-redundant questions. See `docs/architecture.md` for evidence and replay boundaries.
-
-Experiential self-improvement (`shopping_agent.experience`) provides persistent, versioned
-procedural lessons stored in SQLite. Candidate lessons extracted from learning traces require
-explicit human confirmation before becoming active. Retrieval matches behavioral triggers and
-decision context cues. Injected procedural guidance and observable action compliance are
-tracked separately, and immutable content-hashed snapshots enable side-by-side evaluation
-(`--experience-snapshot`) across distinct tasks.
-
-An opt-in [autonomous shopper V3 prototype](docs/simulator-v3.md) supports Ollama or Claude
-for longitudinal evaluation, generated openings/replies, dialogue-derived disclosure evidence
-and actual prior-visit continuity. V2 remains default. Both transports are tested with mocks;
-no V3 live quality or memory benefit is established. [Provider comparison protocol](experiments/longitudinal/shopper-v3-comparison.md).
-
-V3 Claude shopper configuration can share the ignored `.env`: set `ANTHROPIC_API_KEY` and
-`ANTHROPIC_MODEL=claude-sonnet-5-5` (see `.env.example`). Use `--shopper-version v3
---shopper-provider claude`; `--sim-model` overrides the configured model, and
-`--shopper-env-file` can select a separate settings file. No calls run just from setting these fields.
-
-Claude Sonnet 5.5 compatibility and two-call live smoke are now verified for V3. Sampling
-parameters are omitted; use `--sim-max-tokens 512`. Live longitudinal Claude requires a shared
-`--max-cost-usd` ceiling; carry prior costs via `--prior-cost-usd`. See the [readiness report and
-exact approval-gated run command](docs/reviews/claude-sonnet55-readiness.md). No memory-effectiveness result exists.
-
-A [conversation reliability pass](docs/reviews/conversation-reliability.md) adds complete offline
-lifecycle regressions, session-scoped offer auditing, category number matching, empty-search
-guards and safer state corrections. Isolated invalid timelines now preserve independent
-customers; infrastructure faults stop globally. No paid rerun or memory benefit is claimed.
+1. **Post-Hoc Hit@10 vs. K=5 Stopping Rules**:
+   The live experiment evaluated dialogue stopping rules at $K=5$. Forensic trace inspection of all 64 sessions confirmed that zero target products occurred at ranks 6 through 10 in any turn. Consequently, post-hoc Hit@10 is mathematically identical to Hit@5.
+2. **Clustered Data & Uncertainty**:
+   The 22 returning visits originate from 10 distinct customer personas (2 to 4 visits per customer). Visits within a customer are correlated. A paired McNemar exact test on discordant pairs (3 gains vs. 1 regression) yields $p = 0.625$. A 1,000-iteration cluster bootstrap yields a 95% confidence interval of **$[-9.1\text{ pp}, +27.3\text{ pp}]$** for the Hit@10 delta.
+3. **Causal Attribution**:
+   While Memory ON achieved higher recommendation accuracy, dialogue paths naturally diverge across arms. Memory injection strongly correlates with ranking success, but does not constitute isolated causal proof for every visit.
+4. **Compliance Auditor Lexical Flaw**:
+   The compliance auditor flags violations using exact string subset matching (`tokens(wanted) <= tokens(actual)`). Natural language singular entity extraction (e.g., `necklace`, `button-down shirt`, `wallet`) fails against Amazon's plural category taxonomy (`Necklaces`, `Casual Button-Down Shirts`, `Wallets`). Qualitative review confirms recommendations satisfied user intent, but this metric is reported as an auditor limitation rather than an authoritative measure.
+5. **Estimated vs. Billed API Costs**:
+   Reported costs ($0.0146 OFF vs. $0.0153 ON per visit) are model execution estimates computed from recorded prompt, cache hit/miss, and completion tokens multiplied by provider list rates, rather than billed invoices.

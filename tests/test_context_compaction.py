@@ -154,7 +154,7 @@ class ContextCompactionTests(unittest.TestCase):
             self.assertIn(key, compact)
         self.assertEqual(compact["required"], schema["required"])
         self.assertEqual(
-            compact["$defs"]["Search"]["properties"]["limit"]["maximum"], 20
+            compact["$defs"]["Search"]["properties"]["limit"]["maximum"], 50
         )
         self.assertEqual(
             compact["$defs"]["Search"]["properties"]["limit"]["minimum"], 1

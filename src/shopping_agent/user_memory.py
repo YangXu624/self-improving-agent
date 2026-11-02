@@ -36,10 +36,15 @@ from .sessions import Session
 
 class MemoryProposal(Strict):
     op: Literal["ADD", "REPLACE", "RETRACT"] = "ADD"
-    category: Literal["fact", "preference", "dislike", "purchase"] = "preference"
+    category: Literal["fact", "preference", "dislike", "contextual", "purchase"] = (
+        "preference"
+    )
     attribute: str = Field(default="attribute", pattern=r"^[a-z][a-z0-9_]{0,39}$")
     value: str = Field(default="", min_length=1, max_length=160)
     scope: str = Field(default="general", pattern=r"^[a-z][a-z0-9 /-]{0,79}$")
+    strength: Literal["hard", "soft", "inferred"] = "soft"
+    evidence_type: Literal["explicit", "inferred"] = "explicit"
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     basis: Literal["confirmed", "inferred"] = "confirmed"
     quote: str = Field(default="", min_length=1, max_length=500)
     target_id: str | None = Field(
@@ -59,6 +64,7 @@ SECTIONS = {
     "fact": "Facts",
     "preference": "Preferences",
     "dislike": "Dislikes",
+    "contextual": "Shopping History & Context",
     "purchase": "Purchases",
 }
 MAX_PROFILE_BYTES = 512_000
@@ -80,13 +86,18 @@ def parse_iso(dt_str: str) -> datetime:
 
 
 class MemoryRecord(Strict):
-    """A durable customer fact, preference, dislike, or purchase record."""
+    """A durable customer fact, preference, dislike, contextual history, or purchase record."""
 
     id: str = Field(default_factory=lambda: "um-" + uuid4().hex)
-    category: Literal["fact", "preference", "dislike", "purchase"] = "preference"
+    category: Literal["fact", "preference", "dislike", "contextual", "purchase"] = (
+        "preference"
+    )
     attribute: str = Field(min_length=1, max_length=40)
     value: str = Field(min_length=1, max_length=200)
     scope: str = Field(default="general", max_length=80)
+    strength: Literal["hard", "soft", "inferred"] = "soft"
+    evidence_type: Literal["explicit", "inferred"] = "explicit"
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     basis: Literal["confirmed", "inferred"] = "confirmed"
     quote: str = Field(default="", max_length=1000)
     status: Literal["active", "superseded", "deleted", "retracted"] = "active"
@@ -139,6 +150,7 @@ class DecayConfig:
     preference_half_life_days: float = 60.0
     fact_half_life_days: float = 365.0
     dislike_half_life_days: float = 90.0
+    contextual_half_life_days: float = 120.0
     purchase_half_life_days: float = 180.0
     min_decay_multiplier: float = 0.2
 
@@ -170,16 +182,24 @@ def memory_text(record: dict) -> str:
     attribute = record.get("attribute", "")
     value = record.get("value", "")
     scope = record.get("scope", "general")
+    strength = record.get("strength", "soft")
     scope_str = f" (for {scope})" if scope and scope != "general" else ""
 
     if category == "preference":
-        return f"Usually prefers {attribute}: {value}{scope_str}."
+        prefix = (
+            "Always prefers"
+            if strength == "hard"
+            else ("Tends to prefer" if strength == "inferred" else "Usually prefers")
+        )
+        return f"{prefix} {attribute}: {value}{scope_str}."
     elif category == "dislike":
         return f"Dislikes {attribute}: {value}{scope_str}."
     elif category == "fact":
         return f"{attribute.title()}: {value}{scope_str}."
+    elif category == "contextual":
+        return f"Context: {value}{scope_str}."
     elif category == "purchase":
-        return f"Past purchase: {value}{scope_str}."
+        return f"Confirmed purchase: {value}{scope_str}."
     return f"{attribute}: {value}{scope_str}."
 
 
@@ -198,12 +218,14 @@ def render_profile(profile: UserProfile) -> str:
         "User: " + escaped(profile.user_id),
     ]
     for category, heading in SECTIONS.items():
-        lines.extend(["", "## " + heading])
         active = [
             r
             for r in profile.records
             if r.status == "active" and r.category == category
         ]
+        if category == "contextual" and not active:
+            continue
+        lines.extend(["", "## " + heading])
         lines.extend("- " + escaped(memory_text(r.model_dump())) for r in active)
         if not active:
             lines.append("- None recorded.")
@@ -561,6 +583,14 @@ class UserMemoryStore:
         self.bypass_semantic_validation = bypass_semantic_validation
         self.decay_config = decay_config
 
+    @property
+    def embedding_provider_name(self) -> str:
+        return getattr(
+            self.embedding_provider,
+            "name",
+            self.embedding_provider.__class__.__name__,
+        )
+
     def directory(self, user_id: str) -> Path:
         if not isinstance(user_id, str) or not user_id.strip() or len(user_id) > 128:
             raise UserMemoryError("invalid_user_id")
@@ -624,6 +654,9 @@ class UserMemoryStore:
                 attribute TEXT NOT NULL,
                 value TEXT NOT NULL,
                 scope TEXT NOT NULL,
+                strength TEXT NOT NULL DEFAULT 'soft',
+                evidence_type TEXT NOT NULL DEFAULT 'explicit',
+                confidence REAL NOT NULL DEFAULT 1.0,
                 basis TEXT NOT NULL,
                 quote TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -639,6 +672,22 @@ class UserMemoryStore:
             );
             CREATE INDEX IF NOT EXISTS idx_records_status ON records(status);
             """)
+        cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(records)").fetchall()
+        }
+        with conn:
+            if "strength" not in cols:
+                conn.execute(
+                    "ALTER TABLE records ADD COLUMN strength TEXT NOT NULL DEFAULT 'soft'"
+                )
+            if "evidence_type" not in cols:
+                conn.execute(
+                    "ALTER TABLE records ADD COLUMN evidence_type TEXT NOT NULL DEFAULT 'explicit'"
+                )
+            if "confidence" not in cols:
+                conn.execute(
+                    "ALTER TABLE records ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0"
+                )
         return conn
 
     def _sync_legacy_markdown(
@@ -665,11 +714,11 @@ class UserMemoryStore:
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO records (
-                            id, category, attribute, value, scope, basis, quote,
-                            status, created_at, updated_at, last_confirmed_at,
+                            id, category, attribute, value, scope, strength, evidence_type, confidence,
+                            basis, quote, status, created_at, updated_at, last_confirmed_at,
                             source_session_id, source_event_id, supersedes_id,
                             superseded_by_id, closed_by_event_id, embedding_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             r.id,
@@ -677,6 +726,9 @@ class UserMemoryStore:
                             r.attribute,
                             r.value,
                             r.scope,
+                            r.strength,
+                            r.evidence_type,
+                            r.confidence,
                             r.basis,
                             r.quote,
                             r.status,
@@ -753,11 +805,11 @@ class UserMemoryStore:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO records (
-                        id, category, attribute, value, scope, basis, quote,
-                        status, created_at, updated_at, last_confirmed_at,
+                        id, category, attribute, value, scope, strength, evidence_type, confidence,
+                        basis, quote, status, created_at, updated_at, last_confirmed_at,
                         source_session_id, source_event_id, supersedes_id,
                         superseded_by_id, closed_by_event_id, embedding_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         r.id,
@@ -765,6 +817,9 @@ class UserMemoryStore:
                         r.attribute,
                         r.value,
                         r.scope,
+                        r.strength,
+                        r.evidence_type,
+                        r.confidence,
                         r.basis,
                         r.quote,
                         r.status,
@@ -811,13 +866,16 @@ class UserMemoryStore:
         user_id: str,
         query: str,
         *,
-        min_similarity: float = 0.45,
-        limit: int = 5,
+        min_similarity: float = 0.35,
+        limit: int = 15,
+        small_profile_threshold: int = 10,
         now: datetime | None = None,
     ) -> list[tuple[MemoryRecord, float]]:
-        """Retrieve relevant active memories for a customer using vector similarity and recency decay.
+        """Stage A: Broad semantic candidate retrieval using vector similarity, lexical signals, and recency decay.
 
-        DOES NOT USE HARD LEXICAL SUBSET MATCHING. Recognizes semantic matches across paraphrases.
+        For small profiles (<= small_profile_threshold), all active memories are scored and retained
+        to avoid false negatives before Stage B contextual assessment.
+        For larger profiles, candidate memories meeting the calibrated similarity cutoff are retained.
         """
         now = now or datetime.now(UTC)
         profile = self.read(user_id)
@@ -848,7 +906,6 @@ class UserMemoryStore:
 
         query_words = set(re.findall(r"[^\W_]+", query.casefold()))
         query_stems = {w.rstrip("s") for w in query_words if len(w) > 2} | query_words
-
         for record in active_records:
             if not record.embedding:
                 continue
@@ -864,15 +921,14 @@ class UserMemoryStore:
             val_stems = {w.rstrip("s") for w in val_words if len(w) > 2} | val_words
 
             overlap_bonus = (
-                0.20
+                0.15
                 if (query_stems & scope_stems) or (query_stems & val_stems)
                 else 0.0
             )
 
             combined_score = (sim + overlap_bonus) * decay
 
-            # Check general scope fallback or similarity threshold
-            if combined_score >= min_similarity or record.scope == "general":
+            if combined_score >= min_similarity:
                 scored.append((record, combined_score))
 
         # Sort by score descending
@@ -885,55 +941,84 @@ class UserMemoryStore:
         message: str,
         *,
         limit: int = 5,
-        min_similarity: float = 0.45,
+        min_similarity: float = 0.35,
+        candidate_limit: int = 15,
+        small_profile_threshold: int = 10,
     ) -> dict:
-        """Build model-visible user_memory context block before agent turn processing."""
+        """Build model-visible user_memory context block with two-stage selection.
+
+        Stage A: Retrieve broad candidate memories via vector similarity and metadata.
+        Stage B: Contextually evaluate candidates against current shopping request to select
+        only applicable memories, explicitly marking irrelevant or conflicting memories as ignored.
+        """
+        from .memory_selection import assess_memory_applicability
+
         user_id = session.user_id
-        # Combine current user message with any active goal/product_type requirements
         context_query = message
         for req in session.state.requirements:
             if req.status == "active" and req.field == "product_type":
                 context_query += f" {req.value}"
 
-        is_gift = False
-        for req in session.state.requirements:
-            if req.status == "active" and req.field == "recipient":
-                val = str(req.value or "").strip().lower()
-                if val and val not in {"self", "me"}:
-                    is_gift = True
-                    break
-        if not is_gift and re.search(
-            r"\b(?:gift\s+for|present\s+for|buying\s+for\s+my|for\s+my\s+(?:niece|nephew|mom|dad|sister|brother|friend|daughter|son|wife|husband))\b",
-            message,
-            re.I,
-        ):
-            is_gift = True
-
         profile = self.read(user_id)
-        if is_gift:
-            return {"revision": profile.revision, "records": []}
-
-        results = self.retrieve(
-            user_id, context_query, min_similarity=min_similarity, limit=limit
+        candidates_scored = self.retrieve(
+            user_id,
+            context_query,
+            min_similarity=min_similarity,
+            limit=candidate_limit,
+            small_profile_threshold=small_profile_threshold,
         )
+
+        candidate_dicts = [
+            {
+                "id": record.id,
+                "category": record.category,
+                "attribute": record.attribute,
+                "value": record.value,
+                "scope": record.scope,
+                "strength": record.strength,
+                "evidence_type": record.evidence_type,
+                "confidence": record.confidence,
+                "quote": record.quote,
+                "basis": record.basis,
+                "score": round(score, 4),
+                "created_at": record.created_at,
+                "last_confirmed_at": record.last_confirmed_at,
+            }
+            for record, score in candidates_scored
+        ]
+
+        # Stage B: Assess applicability
+        assessments = assess_memory_applicability(
+            candidate_dicts, message, session.state
+        )
+        assessments_by_id = {a.memory_id: a for a in assessments}
+
+        applicable_records = []
+        ignored_records = []
+
+        for cand in candidate_dicts:
+            assessment = assessments_by_id.get(cand["id"])
+            if assessment and assessment.use_policy == "soft_preference":
+                cand_copy = dict(cand)
+                cand_copy["applicability_reason"] = assessment.reason
+                applicable_records.append(cand_copy)
+            else:
+                reason = (
+                    assessment.reason
+                    if assessment
+                    else "Not applicable to current request."
+                )
+                cand_copy = dict(cand)
+                cand_copy["ignore_reason"] = reason
+                ignored_records.append(cand_copy)
 
         return {
             "revision": profile.revision,
-            "records": [
-                {
-                    "id": record.id,
-                    "category": record.category,
-                    "attribute": record.attribute,
-                    "value": record.value,
-                    "scope": record.scope,
-                    "quote": record.quote,
-                    "basis": record.basis,
-                    "score": round(score, 4),
-                    "created_at": record.created_at,
-                    "last_confirmed_at": record.last_confirmed_at,
-                }
-                for record, score in results
-            ],
+            "records": applicable_records[:limit],
+            "candidates": candidate_dicts,
+            "assessments": [a.model_dump() for a in assessments],
+            "ignored": ignored_records,
+            "embedding_provider": self.embedding_provider_name,
         }
 
     def withdraw_matching(
@@ -1035,6 +1120,15 @@ class UserMemoryStore:
                         if target:
                             target.last_confirmed_at = now_str
                             target.updated_at = now_str
+                            if (
+                                "confidence" in op_dict
+                                and op_dict["confidence"] is not None
+                            ):
+                                target.confidence = min(
+                                    1.0, float(op_dict["confidence"])
+                                )
+                            if "strength" in op_dict and op_dict["strength"]:
+                                target.strength = op_dict["strength"]
                             changed_ids.append(target.id)
                     elif op in ("SUPERSEDE", "UPDATE", "REPLACE"):
                         if target:
@@ -1046,6 +1140,19 @@ class UserMemoryStore:
                                 attribute=op_dict.get("attribute", target.attribute),
                                 value=op_dict.get("value", target.value),
                                 scope=op_dict.get("scope", target.scope),
+                                strength=op_dict.get(
+                                    "strength", getattr(target, "strength", "soft")
+                                ),
+                                evidence_type=op_dict.get(
+                                    "evidence_type",
+                                    getattr(target, "evidence_type", "explicit"),
+                                ),
+                                confidence=float(
+                                    op_dict.get(
+                                        "confidence",
+                                        getattr(target, "confidence", 1.0),
+                                    )
+                                ),
                                 basis=op_dict.get("basis", target.basis),
                                 quote=op_dict.get("quote", target.quote),
                                 status="active",
@@ -1089,6 +1196,9 @@ class UserMemoryStore:
                                 attribute=op_dict.get("attribute", "attribute"),
                                 value=op_dict.get("value", ""),
                                 scope=op_dict.get("scope", "general"),
+                                strength=op_dict.get("strength", "soft"),
+                                evidence_type=op_dict.get("evidence_type", "explicit"),
+                                confidence=float(op_dict.get("confidence", 1.0)),
                                 basis=op_dict.get("basis", "confirmed"),
                                 quote=op_dict.get("quote", ""),
                                 status="active",
@@ -1250,6 +1360,9 @@ class UserMemoryStore:
                         attribute=proposal.attribute,
                         value=proposal.value,
                         scope=proposal.scope,
+                        strength=proposal.strength,
+                        evidence_type=proposal.evidence_type,
+                        confidence=proposal.confidence,
                         basis=proposal.basis,
                         quote=proposal.quote,
                         status="active",

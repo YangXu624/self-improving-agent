@@ -19,26 +19,41 @@ from .user_memory import UserMemoryStore
 CONSOLIDATION_SYSTEM_PROMPT = """You are ASTRA's customer memory consolidation policy.
 Your task is to analyze a completed shopping session dialogue, customer decisions, and any simulated purchase records, then update the customer's durable memory profile.
 
-Analyze what the customer explicitly stated about their enduring preferences, habits, sizes, or dislikes, as well as confirmed purchase choices:
-- Explicit statement + purchase: If the customer stated a preference (e.g. "I usually prefer minimalist bags") and then purchased a matching item, this strongly reinforces that preference.
-- Single purchase: A single purchase (e.g. one black bag) is factual episodic evidence of that decision, not definitive proof of a general rule unless supported by customer statements or repeated purchases.
-- Repeated purchases: Multiple purchases sharing an attribute (e.g., multiple black bags) support a tentative generalization (basis: "inferred").
-- GIFT PURCHASES: When recipient_context is "gift" or the customer notes the item is a gift, DO NOT infer that the customer's personal style matches the gift recipient's preferences.
-- STRICT IDENTITY RESTRICTION: Never infer a customer's gender, age, or personal identity solely from product categories or items purchased.
-- Do NOT store the entire purchase history as duplicate semantic memories; keep the purchase ledger as the source of truth and distill only useful, supported summaries.
-- Do NOT store one-off situational needs (e.g. "for a friend's wedding", "gift for my dad", "just for today", or temporary budgets) as durable customer preferences.
+Differentiate memory types and properties:
 
-Review the existing active memory records provided in context. Determine appropriate operations:
-- ADD: A genuinely new durable preference or fact not present in the existing profile.
+1. DURABLE EXPLICIT PREFERENCES AND DISLIKES (category: "preference" or "dislike"):
+- Stable personal preferences for colors, styles, fits, brands, or materials (e.g. "I always buy black workout clothing", "I prefer minimalist designs").
+- Strength: Use "hard" ONLY if the customer stated a non-negotiable rule ("always", "must", "strictly"). Otherwise use "soft" ("usually", "prefer", "tend to").
+- Scoped preferences: If a preference applies to a specific domain (e.g. "for formal events, I prefer cream"), set scope to that domain (e.g. "formalwear") rather than "general". Do NOT overwrite or delete a general preference when establishing a narrower domain-specific preference.
+
+2. STABLE FACTS AND SIZES (category: "fact"):
+- Enduring physical measurements, shoe sizes, clothing sizes (e.g. "I wear size 10 shoes"). Strength is typically "hard", confidence 1.0.
+
+3. CONTEXTUAL & EPISODIC SHOPPING HISTORY (category: "contextual"):
+- Categories previously shopped for, shopping goals, or recipient context for personal use.
+- Example: When the customer asks "I'm looking for a women's bag for myself", record this under category: "contextual", attribute: "shopping_history", value: "previously shopped for women's bags for personal use", scope: "bags", strength: "soft", confidence: 0.9.
+- Note: This captures useful context for future visits. Do NOT infer that the customer is a woman, or that all future bags must be women's bags.
+
+4. INFERRED PREFERENCES (basis: "inferred", strength: "inferred"):
+- Repeated purchases or consistent choices sharing an attribute without an explicit statement. Confidence should be moderate (0.6 - 0.7). Never present as confirmed facts.
+
+5. GIFT PURCHASES & OTHER RECIPIENTS:
+- When recipient_context is "gift" or the customer notes the item is for someone else (e.g., "for my sister"), DO NOT attribute the recipient's preferences to the customer's personal profile. If relevant, record as contextual history (e.g. "shopped for sister's birthday gift: red bag").
+
+6. STRICT IDENTITY RESTRICTION:
+- Never infer a customer's gender, age, or personal demographic identity solely from product categories or items purchased.
+
+Review existing active memory records provided in context. Determine appropriate operations:
+- ADD: A genuinely new preference, fact, or contextual history not present in the existing profile.
 - REINFORCE: The customer reaffirmed or purchased in alignment with an existing memory (refreshes recency).
 - SUPERSEDE: The customer updated or changed an earlier memory. Provide target_id of the existing memory.
 - DELETE: The customer explicitly requested to forget or remove an existing preference. Provide target_id.
-- NOOP: No durable information worth remembering, or dialogue/purchases were inconclusive.
+- NOOP: No new durable or contextual information worth remembering.
 
 Rules:
-1. quote MUST be an exact excerpt from the customer's messages in this session or from a confirmed purchase record in this session.
-2. attribute must be a concise lowercase key (e.g. 'color', 'size', 'style', 'brand', 'fit', 'material').
-3. scope should specify domain (e.g. 'workout clothing', 'bags', 'shoes') or 'general'.
+1. quote MUST be an exact verbatim excerpt from the customer's messages in this session or from a confirmed purchase record.
+2. attribute must be a concise lowercase key (e.g. 'color', 'size', 'style', 'brand', 'fit', 'material', 'shopping_history').
+3. scope should specify domain (e.g. 'workout clothing', 'bags', 'formalwear', 'shoes') or 'general'.
 4. Do NOT invent memories or infer preferences from recommendations the customer did not accept.
 5. If no durable memory was disclosed or demonstrated, return empty operations.
 
@@ -48,14 +63,16 @@ Output JSON matching the schema:
   "operations": [
     {
       "op": "ADD | REINFORCE | SUPERSEDE | DELETE | NOOP",
-      "category": "preference | fact | dislike | purchase",
+      "category": "preference | fact | dislike | contextual | purchase",
       "attribute": "lowercase_attribute",
-      "value": "preferred value",
+      "value": "preferred value or context description",
       "scope": "domain or general",
+      "strength": "hard | soft | inferred",
+      "evidence_type": "explicit | inferred",
+      "confidence": 1.0,
       "basis": "confirmed | inferred",
       "quote": "exact quote from customer or purchase record",
       "target_id": "um-... (only for REINFORCE, SUPERSEDE, DELETE)",
-      "confidence": 1.0,
       "rationale": "explanation"
     }
   ]
@@ -65,10 +82,14 @@ Output JSON matching the schema:
 
 class ConsolidationOperation(Strict):
     op: Literal["ADD", "REINFORCE", "UPDATE", "SUPERSEDE", "DELETE", "NOOP"] = "ADD"
-    category: Literal["preference", "fact", "dislike", "purchase"] = "preference"
+    category: Literal["preference", "fact", "dislike", "contextual", "purchase"] = (
+        "preference"
+    )
     attribute: str = Field(default="attribute", min_length=1, max_length=40)
     value: str = Field(default="", max_length=200)
     scope: str = Field(default="general", max_length=80)
+    strength: Literal["hard", "soft", "inferred"] = "soft"
+    evidence_type: Literal["explicit", "inferred"] = "explicit"
     basis: Literal["confirmed", "inferred"] = "confirmed"
     quote: str = Field(default="", max_length=1000)
     target_id: str | None = None
@@ -197,6 +218,9 @@ def consolidate_session(
             "attribute": r.attribute,
             "value": r.value,
             "scope": r.scope,
+            "strength": getattr(r, "strength", "soft"),
+            "evidence_type": getattr(r, "evidence_type", "explicit"),
+            "confidence": getattr(r, "confidence", 1.0),
             "quote": r.quote,
             "created_at": r.created_at,
             "last_confirmed_at": r.last_confirmed_at,

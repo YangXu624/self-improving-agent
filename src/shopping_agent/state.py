@@ -222,6 +222,37 @@ def apply_updates(state, updates, *, expected_version, user_message, source_even
             raise StateError("replacement_must_modify_same_field")
         if target:
             target.status = "superseded"
+
+        # Explicit customer corrections override previous incompatible active state for the same field
+        if u.requirement:
+            field = u.requirement.field
+            is_correction = bool(
+                re.search(
+                    r"\b(?:instead|actually|rather|no longer|change|switch|replace|different|not|relax)\b",
+                    user_message.casefold(),
+                )
+            )
+            if is_correction and field in {
+                "product_type",
+                "department",
+                "color",
+                "material",
+                "brand",
+                "size",
+            }:
+                for existing in result.requirements:
+                    if (
+                        existing.status == "active"
+                        and existing.field == field
+                        and existing.id != u.target_id
+                    ):
+                        if existing.op in {"eq", "in"} and u.requirement.op in {
+                            "eq",
+                            "in",
+                        }:
+                            existing.status = "superseded"
+                            changed = True
+
         spec = u.requirement.model_dump()
         if u.op == "ADD" and any(
             r.status == "active"
