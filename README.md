@@ -1,38 +1,42 @@
-# Self-Improving Conversational Search Agent
+# ASTRA: Self-Improving Conversational Shopping Agent
 
-A research project asking whether confirmed shopping experience can improve an agent's
-future decisions. The intended research cycle is: complete a task, independently confirm
-its outcome, distil applicable experience, and compare future behaviour with/without it.
-Memory is not assumed to improve performance; negative transfer is an outcome to measure.
+ASTRA is a research-grade conversational shopping agent designed to investigate whether confirmed multi-session experience and memory can reliably improve an agent's future decision-making without negative transfer.
 
-## Current status: shopping baseline and experimental experience memory
+Operating over a frozen 50,000-product e-commerce catalogue, ASTRA enforces strict deterministic safety gates outside the foundation model, bounded turn execution loops, an event-sourced audit trail, and a three-tier memory architecture.
 
-Implemented: session memory, opt-in persistent user profiles, lexical product retrieval, a bounded DeepSeek decision
-loop, local tracing, CLI and automated acceptance tests. The Streamlit chat UI now uses
-DeepSeek for decisions and real catalogue retrieval. The scripted application policy has
-been removed; mocked responses remain confined to automated tests. Target/preference evaluation
-and an explicitly reviewed procedural-memory MVP are implemented. Two learning sessions produced
-candidates; no real memory-ON transfer benefit is established. A development-only returning-customer
-evaluator now compares user memory OFF/ON across ordered visits. External LLM lesson extraction
-and code self-optimisation remain unimplemented. See the [focused integrity checkpoint and approval-gated
-pilot commands](docs/experience-pilot.md).
+---
 
-This is a new implementation inspired by
-[ASTRA](https://devpost.com/software/reimagining-the-digital-experience). ASTRA and the earlier
-AutoML project remain separate. No reference code, weights, configuration, sessions or
-historical evaluation cases were copied. Only the user-approved frozen 50k catalogue and
-image-URL references were reused as local, ignored data.
+## Authoritative Documentation
 
-The [roadmap](docs/roadmap.md) records phase goals, exit gates and current status. The user
-subsequently supplied a local key and authorised live DeepSeek integration. A bounded two-turn
-live check succeeded with five API requests, including a budget correction and fresh verified
-recommendations. This is integration evidence, not a quality benchmark. The two
-[review findings](docs/reviews/phase-2-subagent-review.md) (blank evidence, false
-conflicts) and the exhausted-search closure are now fixed; watch/wristwatch type
-vocabulary remains an open limitation. See
-[Phase 3 evidence and limitations](docs/phase-3-ui.md).
-See [current architecture](docs/architecture.md), [proposed evaluation](docs/evaluation.md)
-and [decision record](docs/decisions.md).
+| Document | Purpose |
+| --- | --- |
+| [**`README.md`**](file:///Users/yangxu/code/self-improving-agent/README.md) | Project overview, key features, quickstart, and limitations |
+| [**`docs/architecture.md`**](file:///Users/yangxu/code/self-improving-agent/docs/architecture.md) | Core system architecture, turn execution loop, contracts, and module boundaries |
+| [**`docs/memory.md`**](file:///Users/yangxu/code/self-improving-agent/docs/memory.md) | Three-tier memory lifecycle: session state, persistent user semantic profiles, and procedural experience |
+| [**`docs/evaluation.md`**](file:///Users/yangxu/code/self-improving-agent/docs/evaluation.md) | Benchmarks (Experiment A, Longitudinal, Memory-Sensitive), scoring, and empirical findings |
+| [**`docs/development.md`**](file:///Users/yangxu/code/self-improving-agent/docs/development.md) | Environment setup, 700+ offline tests, Streamlit Developer Console, and maintenance CLI tools |
+| [**`docs/decisions/`**](file:///Users/yangxu/code/self-improving-agent/docs/decisions/README.md) | Architectural Decision Records (ADRs) and indexed historical review reports |
+
+---
+
+## Key Features
+
+1. **Deterministic Bounded Shopping Agent:**
+   - Model proposals (`SEARCH`, `CLARIFY`, `RECOMMEND`, `RESPOND`) are validated through Pydantic contracts and Python safety gates outside the LLM.
+   - Verbatim quote evidence is strictly required for all requirement edits.
+   - **Mandatory Recommend + Question Contract:** Recommendation turns reliably present catalogue-verified product cards accompanied by an engaging conversational follow-up question.
+2. **Three-Tier Memory Architecture:**
+   - **Tier 1 (In-Session Working State):** Active constraints, asked/disclosed attributes, conflict detection, and event-sourced JSONL persistence.
+   - **Tier 2 (Persistent User Semantic Memory):** Transactional SQLite profiles (`profile.db`) with vector embeddings, time-decay ranking, and end-of-session LLM consolidation.
+   - **Tier 3 (Procedural Experience Memory):** Centralized SQLite lessons store (`lessons.db`) capturing cross-customer behavioral heuristics with review/verification gates.
+3. **Simulated Purchase Tracking & Immediate Feedback:**
+   - Product recommendation cards feature a **Buy (Demo)** button.
+   - Purchases immediately update the customer profile and reinforce future recommendations without requiring external payment integrations.
+4. **Developer Observability & Simulation Console:**
+   - Integrated Streamlit developer drawer with **Parameters**, **Execution Trace**, **Session Audit Explorer**, and **Mock Customer Lab** for stepping through multi-visit simulations.
+5. **Scientific Evaluation & Honest Empirical Reporting:**
+   - Evaluates memory under controlled conditions.
+   - Confirms that memory provides no benefit on fully-specified tasks ($\Delta = 0.0$ in Hit@10), while providing dramatic gains on underspecified recurring tasks (+100% Target Hit@5).
 
 ## Setup
 

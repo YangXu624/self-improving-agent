@@ -68,22 +68,35 @@ CLI or Streamlit UI message + user/session/request IDs
 
 | Code | Responsibility |
 | --- | --- |
-| `src/shopping_agent/contracts.py` | Closed state/edit/action schemas |
-| `src/shopping_agent/state.py` | ADD/REPLACE/RETRACT/NEW_GOAL, quoted evidence, history and simple conflicts |
+| `src/shopping_agent/contracts.py` | Closed state/edit/action schemas, recommendation cards contract |
+| `src/shopping_agent/state.py` | ADD/REPLACE/RETRACT/NEW_GOAL, quoted evidence, history and conflicts |
+| `src/shopping_agent/attributes.py` | Asked and disclosed attribute working memory tracking |
 | `src/shopping_agent/sessions.py` | User/session ownership, JSONL replay, snapshots and thread/process locks |
-| `src/shopping_agent/event_codec.py` | Lossless compact disk records; expands to canonical events before replay/presentation |
-| `src/shopping_agent/retrieval.py` | ProductSearch interface, versioned index, literal queries, BM25 and constraint assessment |
-| `src/shopping_agent/context.py` | Bounded prompt construction and current-search selection |
-| `src/shopping_agent/provider.py` | DeepSeek transport, token limit, safe errors; no automatic retries |
-| `src/shopping_agent/agent.py` | DecisionPolicy interface, bounded turn execution, validation, recommendations and tracing |
-| `src/shopping_agent/cli.py` | CLI index/chat/inspect composition and explicit local environment loading |
-| `src/shopping_agent/ui_service.py` | UI session boundary with mandatory policy injection and real agent/tool execution |
+| `src/shopping_agent/event_codec.py` | Lossless compact disk records; expands to canonical events before replay |
+| `src/shopping_agent/retrieval.py` | ProductSearch interface, versioned index, literal queries, BM25 and hard gates |
+| `src/shopping_agent/catalogue_browser.py` | Browsing and faceted search engine interface over catalogue index |
+| `src/shopping_agent/context.py` | Bounded prompt construction, memory context, and cards visibility receipt |
+| `src/shopping_agent/cards.py` | Product presentation profiles (baseline, v3, shared) and visibility receipts |
+| `src/shopping_agent/provider.py` | Unified DecisionPolicy transport (DeepSeek, Claude, Gemini, OpenAI, Mock) |
+| `src/shopping_agent/agent.py` | ShoppingAgent turn loop, verification gates, recommendations and tracing |
+| `src/shopping_agent/trace.py` | Fine-grained structured execution tracing for turns, LLM calls, and tools |
+| `src/shopping_agent/user_memory.py` | Persistent SQLite profile store, vector similarity, and temporal decay |
+| `src/shopping_agent/consolidation.py` | Asynchronous end-of-session LLM consolidation pipeline |
+| `src/shopping_agent/experience/*` | Centralized procedural lessons store, extractor, sanitizer, verifier |
+| `src/shopping_agent/purchases.py` | Simulated purchase history recorder and profile integration |
+| `src/shopping_agent/runtime_config.py` | Dynamic runtime configuration presets and overrides |
+| `src/shopping_agent/cli.py` | CLI index/chat/inspect composition and explicit environment loading |
+| `src/shopping_agent/ui_service.py` | UI session boundary bridging Streamlit and Agent/Sessions/Storage |
+| `src/shopping_agent/dev_console.py` | Developer Console UI (Parameters, Trace, Audit, Mock Lab, Results) |
+| `src/shopping_agent/session_audit.py` | Session Audit Explorer UI tab for inspecting past/active sessions |
+| `src/shopping_agent/mock_lab.py` | Mock Customer Lab UI runner for multi-visit visual simulation |
 | `src/shopping_agent/configuration.py` | Shared explicit environment-file parsing; values never logged |
-| `src/shopping_agent/ui.py`, `streamlit_app.py` | Optional Streamlit chat, product cards, session controls, state and activity views |
+| `src/shopping_agent/ui.py`, `streamlit_app.py` | Streamlit chat UI, product cards, buy button, and customer drawer |
 
-Policy, context construction, retrieval and storage are separate. Future guidance can enter
-through context construction; future search implementations must keep tool contracts and
-hard gates. Procedural experience and opt-in persistent user profiles use these seams.
+Policy, context construction, retrieval, memory, and storage are modularly separated:
+- For the full memory lifecycle across all three tiers, see [docs/memory.md](memory.md).
+- For local testing, developer console tabs, and debugging workflows, see [docs/development.md](development.md).
+- For architectural decision records and historical reviews, see [docs/decisions/](decisions/README.md).
 
 ## Card profiles and visibility receipts (Experiment A)
 
