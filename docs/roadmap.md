@@ -296,3 +296,11 @@ redundant retractions and failure-scope isolation are implemented with full life
 The [readiness decision](reviews/conversation-reliability.md) is GO for deterministic review,
 NO-GO for an unattended paid rerun or a memory-effectiveness claim. Human review and a separately
 authorized controlled canary precede any fresh full pilot.
+
+## Isolated framework experiment
+
+The `experiment/langchain-refactor` branch contains a runnable optional LangChain v1 /
+LangGraph alternative based on merged PR #28. It preserves the custom implementation and
+uses separate local state. See [architecture, run instructions and limitations](langchain-experiment.md).
+This is an architectural experiment; it does not establish live recommendation or memory
+improvement and is not a replacement for the primary long-term memory redesign.

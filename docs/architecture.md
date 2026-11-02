@@ -244,3 +244,11 @@ matching without changing FTS/BM25 or the scoring oracle. The executor fingerpri
 searches, rejects conditional hard-color proposals and audits narrowly redundant retractions.
 Longitudinal failure scope separates dependent timelines from global infrastructure. See the
 [hardening report](reviews/conversation-reliability.md) for tested contracts and remaining limits.
+
+## Isolated framework experiment
+
+The `experiment/langchain-refactor` branch contains a runnable optional LangChain v1 /
+LangGraph alternative based on merged PR #28. It preserves the custom implementation and
+uses separate local state. See [architecture, run instructions and limitations](langchain-experiment.md).
+This is an architectural experiment; it does not establish live recommendation or memory
+improvement and is not a replacement for the primary long-term memory redesign.

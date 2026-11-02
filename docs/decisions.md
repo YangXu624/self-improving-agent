@@ -287,3 +287,11 @@ already-absent retractions and preserve the original proposal/no-op audit. Inval
 dialogue blocks dependent visits; independent timelines continue until a declared systemic
 threshold. Provider/accounting/integrity faults always stop globally. Scoring and frozen ground
 truth remain unchanged. [Failure taxonomy and tests](reviews/conversation-reliability.md).
+
+## Isolated framework experiment
+
+The `experiment/langchain-refactor` branch contains a runnable optional LangChain v1 /
+LangGraph alternative based on merged PR #28. It preserves the custom implementation and
+uses separate local state. See [architecture, run instructions and limitations](langchain-experiment.md).
+This is an architectural experiment; it does not establish live recommendation or memory
+improvement and is not a replacement for the primary long-term memory redesign.

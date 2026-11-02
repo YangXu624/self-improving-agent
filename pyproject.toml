@@ -16,6 +16,12 @@ shopping-agent = "shopping_agent.cli:main"
 dev = ["ruff>=0.14,<1"]
 ui = ["streamlit>=1.66,<2"]
 experiment = ["tokenizers==0.23.3"]
+langchain = [
+    "langchain==1.4.7",
+    "langgraph==1.2.19",
+    "langchain-deepseek==1.1.1",
+    "langgraph-checkpoint-sqlite==3.1.3",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

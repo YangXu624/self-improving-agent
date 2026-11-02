@@ -214,3 +214,11 @@ adds 22 offline lifecycle tests. Isolated simulator-invalid sessions block depen
 allow independent customers/conditions; a declared consecutive-failure threshold stops systemic
 model failure. Provider, integrity and accounting errors stop globally. This changes orchestration
 and application guards, not evaluation scoring. No new paid effectiveness experiment has run.
+
+## Isolated framework experiment
+
+The `experiment/langchain-refactor` branch contains a runnable optional LangChain v1 /
+LangGraph alternative based on merged PR #28. It preserves the custom implementation and
+uses separate local state. See [architecture, run instructions and limitations](langchain-experiment.md).
+This is an architectural experiment; it does not establish live recommendation or memory
+improvement and is not a replacement for the primary long-term memory redesign.
