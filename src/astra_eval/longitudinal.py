@@ -52,6 +52,8 @@ class LongitudinalConfig:
     stop_on_error: bool = False
     max_consecutive_simulator_failures: int = 3
     bypass_semantic_validation: bool = False
+    force_target_item_evaluation: bool = False
+    auto_finalize_memory: bool = False
 
     def __post_init__(self):
         if not 1 <= self.max_consecutive_simulator_failures <= 20:
@@ -356,6 +358,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                 user_memory=memories[name],
                 experience=None,
                 memory_format=config.memory_format,
+                auto_finalize=config.auto_finalize_memory if enabled else False,
             )
         for customer, name in _timelines(config, customers):
             visits = [t for t in tasks if t.customer_id == customer.user_id]
@@ -377,6 +380,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     consistency=ConsistencyConfig(),
                     budget=budget,
                 )
+                is_target = config.force_target_item_evaluation or task.visit.evaluation_mode == "target_item"
                 record = runner.run(
                     task.scenario,
                     condition=name,
@@ -387,7 +391,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     target_rule=TargetRule(
                         task.target_truth.target_id, config.score.headline_k
                     )
-                    if task.visit.evaluation_mode == "target_item"
+                    if is_target
                     else None,
                     session_max_calls=config.session_max_model_calls,
                     turn_limit=max_turns,
@@ -409,7 +413,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                         config.score,
                         max_turns=max_turns,
                     )
-                    if task.visit.evaluation_mode == "target_item"
+                    if is_target
                     else suitability
                 )
                 disclosed = compliance(record, oracle)
@@ -432,7 +436,7 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     "sequence": task.visit.sequence,
                     "astra_session_id": record.astra_session_id,
                     "condition": name,
-                    "evaluation_mode": task.visit.evaluation_mode,
+                    "evaluation_mode": "target_item" if is_target else task.visit.evaluation_mode,
                     "recipient": task.visit.recipient,
                     "termination": record.termination,
                     "failure_scope": failure_scope(record),
@@ -449,6 +453,8 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     "suitability": suitability,
                     "disclosed_requirement_compliance": disclosed,
                     "user_memory": audit,
+                    "target_hit": record.target_hit,
+                    "consolidation": record.consolidation,
                     "token_accounting": {
                         "simulator_failure_may_have_unreported_attempts": record.termination
                         in {"simulator_error", "simulator_failure"}
@@ -463,6 +469,8 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                         "condition": name,
                         "astra_session_id": record.astra_session_id,
                         "termination": record.termination,
+                        "target_hit": record.target_hit,
+                        "consolidation": record.consolidation,
                         "turns": [asdict(t) for t in record.turns],
                         "user_memory": audit,
                     },

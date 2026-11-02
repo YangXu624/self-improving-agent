@@ -69,6 +69,7 @@ class SessionRecord:
     retrieved_experience: list = field(default_factory=list)
     injected_experience: list = field(default_factory=list)
     applied_experience: list = field(default_factory=list)
+    consolidation: dict | None = None
 
 
 def card(product, *, include_facts=False):
@@ -528,7 +529,7 @@ class DialogueRunner:
                 "turns": len(record.turns),
             }
             try:
-                self.agent.finalize_session(user, sid, outcome=outcome)
-            except Exception:
-                pass
+                record.consolidation = self.agent.finalize_session(user, sid, outcome=outcome)
+            except Exception as exc:
+                record.consolidation = {"error": str(exc)}
         return record
