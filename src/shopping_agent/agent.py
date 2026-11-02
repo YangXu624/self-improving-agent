@@ -424,8 +424,17 @@ class ShoppingAgent:
                                         },
                                         request_id,
                                     )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            if calls == 0:
+                                session.append(
+                                    "purchase_retrieval_failed",
+                                    {
+                                        "user_id": user_id,
+                                        "error": str(exc),
+                                        "error_type": type(exc).__name__,
+                                    },
+                                    request_id,
+                                )
                     remaining_calls = self.max_calls - calls
                     remaining_searches = max(
                         0, min(self.max_searches - searches, remaining_calls - 1)

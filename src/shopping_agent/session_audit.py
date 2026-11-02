@@ -229,6 +229,12 @@ def extract_session_audit(
                 turns.append(current_turn)
             current_turn.user_message = payload.get("message", "")
 
+        elif ev_type == "decision_validated":
+            if current_turn:
+                updates = payload.get("updates", [])
+                if updates:
+                    current_turn.state_updates.extend(updates)
+
         elif ev_type in {"state_committed", "state_updated"}:
             if current_turn:
                 current_turn.state_version_after = (
@@ -238,7 +244,8 @@ def extract_session_audit(
                 )
                 running_state_version = current_turn.state_version_after
                 updates = payload.get("updates", [])
-                current_turn.state_updates.extend(updates)
+                if updates:
+                    current_turn.state_updates.extend(updates)
 
                 # Reconstruct requirements
                 if payload.get("requirements_after"):
@@ -246,6 +253,10 @@ def extract_session_audit(
                 elif payload.get("state", {}).get("requirements"):
                     running_requirements = list(
                         payload.get("state", {}).get("requirements", [])
+                    )
+                elif payload.get("state_delta", {}).get("requirements"):
+                    running_requirements.extend(
+                        payload.get("state_delta", {}).get("requirements", [])
                     )
                 else:
                     for u in updates:
@@ -341,6 +352,15 @@ def extract_session_audit(
                 total_compl_tok += c_tok
                 total_dur += dur
 
+        elif ev_type == "recommendation":
+            if current_turn:
+                if payload.get("product_ids"):
+                    current_turn.recommended_product_ids = list(
+                        payload.get("product_ids")
+                    )
+                if payload.get("follow_up_question"):
+                    current_turn.follow_up_question = payload.get("follow_up_question")
+
         elif ev_type in {"assistant_response", "assistant_message"}:
             if current_turn:
                 current_turn.assistant_message = payload.get("message")
@@ -348,12 +368,20 @@ def extract_session_audit(
                 prods = (
                     payload.get("products") or payload.get("recommended_products") or []
                 )
-                prod_ids = payload.get("recommended_product_ids") or [
-                    p.get("id") if isinstance(p, dict) else str(p) for p in prods
-                ]
-                current_turn.recommended_product_ids = prod_ids
-                current_turn.recommended_products = prods
-                current_turn.follow_up_question = payload.get("follow_up_question")
+                prod_ids = (
+                    payload.get("recommended_product_ids")
+                    or payload.get("products_ref", {}).get("ids")
+                    or [p.get("id") if isinstance(p, dict) else str(p) for p in prods]
+                )
+                if prod_ids and not current_turn.recommended_product_ids:
+                    current_turn.recommended_product_ids = prod_ids
+                if prods and not current_turn.recommended_products:
+                    current_turn.recommended_products = prods
+                if (
+                    payload.get("follow_up_question")
+                    and not current_turn.follow_up_question
+                ):
+                    current_turn.follow_up_question = payload.get("follow_up_question")
 
         elif ev_type in {
             "purchase_recorded",
@@ -361,7 +389,22 @@ def extract_session_audit(
             "simulated_purchase",
         }:
             if current_turn:
-                current_turn.purchases.append(payload)
+                pid = payload.get("purchase_id")
+                if pid:
+                    existing_idx = next(
+                        (
+                            i
+                            for i, p in enumerate(current_turn.purchases)
+                            if p.get("purchase_id") == pid
+                        ),
+                        None,
+                    )
+                    if existing_idx is not None:
+                        current_turn.purchases[existing_idx].update(payload)
+                    else:
+                        current_turn.purchases.append(payload)
+                else:
+                    current_turn.purchases.append(payload)
 
         elif ev_type in {"turn_failed", "turn_closed_safely", "model_error"}:
             if current_turn:
