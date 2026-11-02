@@ -262,3 +262,119 @@ class UserMemoryAgentTests(unittest.TestCase):
         # Verify memory OFF has no persistent profile access
         off_context = policy_off.contexts[0]
         self.assertNotIn("user_memory", off_context)
+
+    def test_offline_memory_proof_visit1_visit2_and_explicit_update(self):
+        user_id = "shopper-activewear"
+        v1_sid = self.store.create(user_id)
+        memory_store = UserMemoryStore(self.root / "exp-memory", bypass_semantic_validation=True)
+
+        # Visit 1: Customer discloses preference; DeepSeek proposes; Python accepts and saves
+        utterance_v1 = "Hi! I'm looking for a workout top. I usually go for black."
+        v1_proposal = {
+            "op": "ADD",
+            "category": "preference",
+            "attribute": "color",
+            "value": "black",
+            "scope": "workout",
+            "quote": "I usually go for black.",
+            "basis": "confirmed",
+        }
+
+        def v1_response(ctx):
+            res = decision(ctx, {"type": "RESPOND", "message": "I will find black workout tops."})
+            res["user_memory_updates"] = [v1_proposal]
+            return res
+
+        policy_v1 = fixtures.ScriptedPolicy(v1_response)
+        agent_v1 = ShoppingAgent(self.store, self.search, policy_v1, user_memory=memory_store)
+        turn1_result = agent_v1.turn(user_id, v1_sid, utterance_v1, request_id="v1-t1")
+        self.assertEqual(turn1_result["status"], "ok")
+        self.assertEqual(turn1_result["user_memory"]["rejected"], [])
+        self.assertEqual(len(turn1_result["user_memory"]["updates"]), 1)
+
+        # Verify memory exists in the persisted profile
+        profile_v1 = memory_store.read(user_id)
+        self.assertEqual(profile_v1.revision, 1)
+        active_v1 = [r for r in profile_v1.records if r.status == "active"]
+        self.assertEqual(len(active_v1), 1)
+        self.assertEqual(active_v1[0].value, "black")
+        self.assertEqual(active_v1[0].attribute, "color")
+        self.assertEqual(active_v1[0].scope, "workout")
+        saved_id = active_v1[0].id
+
+        # Visit 2: Fresh session, customer does not repeat color, ASTRA retrieves & injects
+        v2_sid = self.store.create(user_id)
+        fresh_memory_store = UserMemoryStore(self.root / "exp-memory", bypass_semantic_validation=True)
+
+        def v2_response(ctx):
+            return decision(ctx, {"type": "RESPOND", "message": "Here are workout tops."})
+
+        policy_v2 = fixtures.ScriptedPolicy(v2_response)
+        agent_v2 = ShoppingAgent(self.store, self.search, policy_v2, user_memory=fresh_memory_store)
+        utterance_v2 = "I need another workout top for the gym."
+        agent_v2.turn(user_id, v2_sid, utterance_v2, request_id="v2-t1")
+
+        # Verify ASTRA retrieves the memory and it appears in DeepSeek's model-visible prompt
+        ctx_v2 = policy_v2.contexts[0]
+        self.assertIn("user_memory", ctx_v2)
+        records_v2 = ctx_v2["user_memory"]["records"]
+        self.assertEqual(len(records_v2), 1)
+        self.assertEqual(records_v2[0]["id"], saved_id)
+        self.assertEqual(records_v2[0]["value"], "black")
+        self.assertEqual(records_v2[0]["attribute"], "color")
+        self.assertEqual(records_v2[0]["scope"], "workout")
+
+        # Verify Memory OFF has no access
+        v_off_sid = self.store.create(user_id)
+        policy_off = fixtures.ScriptedPolicy(lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Hi."}))
+        agent_off = ShoppingAgent(self.store, self.search, policy_off, user_memory=None)
+        agent_off.turn(user_id, v_off_sid, utterance_v2, request_id="voff-t1")
+        ctx_off = policy_off.contexts[0]
+        self.assertNotIn("user_memory", ctx_off)
+
+        # Explicit update from black to cream:
+        v3_sid = self.store.create(user_id)
+        utterance_v3 = "Actually, I've switched to cream for my workout tops now."
+
+        def v3_response(ctx):
+            prev_record = ctx["user_memory"]["records"][0]
+            res = decision(ctx, {"type": "RESPOND", "message": "Updated your preference to cream."})
+            res["user_memory_updates"] = [
+                {
+                    "op": "REPLACE",
+                    "target_id": prev_record["id"],
+                    "category": "preference",
+                    "attribute": "color",
+                    "value": "cream",
+                    "scope": "workout",
+                    "quote": "Actually, I've switched to cream for my workout tops now.",
+                    "basis": "confirmed",
+                }
+            ]
+            return res
+
+        policy_v3 = fixtures.ScriptedPolicy(v3_response)
+        agent_v3 = ShoppingAgent(self.store, self.search, policy_v3, user_memory=fresh_memory_store)
+        turn3_result = agent_v3.turn(user_id, v3_sid, utterance_v3, request_id="v3-t1")
+        self.assertEqual(turn3_result["status"], "ok")
+        self.assertEqual(turn3_result["user_memory"]["rejected"], [])
+        self.assertEqual(len(turn3_result["user_memory"]["updates"]), 1)
+
+        # Verify profile revision is 2
+        profile_v3 = fresh_memory_store.read(user_id)
+        self.assertEqual(profile_v3.revision, 2)
+
+        # Working memory reflects the update: exactly 1 active record with value "cream"
+        active_records = [r for r in profile_v3.records if r.status == "active"]
+        self.assertEqual(len(active_records), 1)
+        self.assertEqual(active_records[0].value, "cream")
+        self.assertEqual(active_records[0].attribute, "color")
+        self.assertEqual(active_records[0].scope, "workout")
+
+        # Audit trail retained: earlier record with value "black" has status "superseded"
+        superseded_records = [r for r in profile_v3.records if r.status == "superseded"]
+        self.assertEqual(len(superseded_records), 1)
+        self.assertEqual(superseded_records[0].id, saved_id)
+        self.assertEqual(superseded_records[0].value, "black")
+        self.assertIsNotNone(superseded_records[0].closed_by_event_id)
+        self.assertEqual(len(profile_v3.records), 2)
