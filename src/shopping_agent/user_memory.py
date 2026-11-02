@@ -798,8 +798,25 @@ class UserMemoryStore:
             if req.status == "active" and req.field == "product_type":
                 context_query += f" {req.value}"
 
-        results = self.retrieve(user_id, context_query, min_similarity=min_similarity, limit=limit)
+        is_gift = False
+        for req in session.state.requirements:
+            if req.status == "active" and req.field == "recipient":
+                val = str(req.value or "").strip().lower()
+                if val and val not in {"self", "me"}:
+                    is_gift = True
+                    break
+        if not is_gift and re.search(
+            r"\b(?:gift\s+for|present\s+for|buying\s+for\s+my|for\s+my\s+(?:niece|nephew|mom|dad|sister|brother|friend|daughter|son|wife|husband))\b",
+            message,
+            re.I,
+        ):
+            is_gift = True
+
         profile = self.read(user_id)
+        if is_gift:
+            return {"revision": profile.revision, "records": []}
+
+        results = self.retrieve(user_id, context_query, min_similarity=min_similarity, limit=limit)
 
         return {
             "revision": profile.revision,

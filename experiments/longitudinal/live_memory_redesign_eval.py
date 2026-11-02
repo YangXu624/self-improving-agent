@@ -35,8 +35,10 @@ from shopping_agent.retrieval import LexicalSearch
 GLOBAL_CEILING = Decimal("10.00")
 DEFAULT_INCREMENTAL_CAP = Decimal("3.00")
 SANITY_INCREMENTAL_CAP = Decimal("0.50")
-DEFAULT_PRIOR_LEDGER = Path(
-    "data/eval/canaries/v3-paired-bypass-20261102/paired.api-cost.jsonl"
+DEFAULT_PRIOR_LEDGER = (
+    Path("data/eval/live-redesign-20261102/full/full.api-cost.jsonl")
+    if Path("data/eval/live-redesign-20261102/full/full.api-cost.jsonl").exists()
+    else Path("data/eval/canaries/v3-paired-bypass-20261102/paired.api-cost.jsonl")
 )
 MODELS = {"shopper": "claude-sonnet-5-5", "astra": "deepseek-flash"}
 
@@ -63,10 +65,18 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")
 
 
-def build_subset(source_data: dict, customer_ids: list[str]) -> dict:
+def build_subset(
+    source_data: dict, customer_ids: list[str], max_visits: int | None = None
+) -> dict:
     selected = copy.deepcopy(source_data)
     by_id = {c["user_id"]: c for c in source_data["customers"]}
-    selected["customers"] = [copy.deepcopy(by_id[cid]) for cid in customer_ids]
+    custs = []
+    for cid in customer_ids:
+        c = copy.deepcopy(by_id[cid])
+        if max_visits is not None:
+            c["visits"] = c["visits"][:max_visits]
+        custs.append(c)
+    selected["customers"] = custs
     return selected
 
 
@@ -419,6 +429,8 @@ def run_experiment(
     root: Path,
     *,
     sanity: bool = False,
+    customers: list[str] | None = None,
+    max_visits: int | None = None,
     live: bool = False,
     incremental_cap: Decimal = DEFAULT_INCREMENTAL_CAP,
     prior_ledger: Path = DEFAULT_PRIOR_LEDGER,
@@ -428,13 +440,20 @@ def run_experiment(
     catalogue_path = Path("data/catalogue/catalog.jsonl")
     index_path = Path("data/index/catalogue.sqlite")
 
-    customers_list = SANITY_CUSTOMERS if sanity else SELECTED_10_CUSTOMERS
+    if sanity:
+        customers_list = SANITY_CUSTOMERS
+    elif customers:
+        customers_list = customers
+    else:
+        customers_list = SELECTED_10_CUSTOMERS
     root = Path(root)
 
     print("=== ASTRA Live Memory Redesign Evaluation ===")
-    print(f"Mode: {'SANITY CHECK' if sanity else 'FULL 10-CUSTOMER EXPERIMENT'}")
+    print(f"Mode: {'SANITY CHECK' if sanity else ('CUSTOM SUBSET' if customers else 'FULL 10-CUSTOMER EXPERIMENT')}")
     print(f"Root: {root}")
     print(f"Customers: {customers_list}")
+    if max_visits:
+        print(f"Max Visits Per Customer: {max_visits}")
     print(f"Incremental Cap: ${incremental_cap}")
     print(f"Prior Ledger: {prior_ledger}")
     print(f"Live Execution: {live}")
@@ -451,7 +470,7 @@ def run_experiment(
 
     # 1. Prepare frozen customer subset
     source_data = json.loads(source_path.read_text())
-    subset_data = build_subset(source_data, customers_list)
+    subset_data = build_subset(source_data, customers_list, max_visits=max_visits)
     customers_frozen = root / "customers.frozen.json"
     write_json(customers_frozen, subset_data)
 
@@ -467,9 +486,9 @@ def run_experiment(
     total_sessions = len(tasks) * 2  # OFF then ON
     print(f"Total planned sessions: {total_sessions} ({len(tasks)} OFF, {len(tasks)} ON)")
 
-    stage_dir = root / ("sanity" if sanity else "full")
-    ledger_path = root / ("sanity.api-cost.jsonl" if sanity else "full.api-cost.jsonl")
-    journal_path = root / ("sanity.shopper-v3.jsonl" if sanity else "full.shopper-v3.jsonl")
+    stage_dir = root / ("sanity" if sanity else ("custom" if customers else "full"))
+    ledger_path = root / ("sanity.api-cost.jsonl" if sanity else ("custom.api-cost.jsonl" if customers else "full.api-cost.jsonl"))
+    journal_path = root / ("sanity.shopper-v3.jsonl" if sanity else ("custom.shopper-v3.jsonl" if customers else "full.shopper-v3.jsonl"))
 
     cfg = LongitudinalConfig(
         customers=customers_frozen,
@@ -536,7 +555,9 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--sanity", action="store_true", help="Run 1-customer sanity check (dev-activewear)")
     group.add_argument("--full", action="store_true", help="Run full 10-customer experiment")
+    group.add_argument("--customers", type=str, help="Comma-separated customer IDs to evaluate")
 
+    parser.add_argument("--max-visits", type=int, default=None, help="Maximum visits per customer")
     parser.add_argument("--root", type=Path, required=True, help="Root directory for outputs")
     parser.add_argument("--incremental-cap", type=Decimal, default=DEFAULT_INCREMENTAL_CAP)
     parser.add_argument("--prior-ledger", type=Path, default=DEFAULT_PRIOR_LEDGER)
@@ -545,11 +566,14 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    customers = [c.strip() for c in args.customers.split(",")] if args.customers else None
     inc_cap = SANITY_INCREMENTAL_CAP if args.sanity and args.incremental_cap == DEFAULT_INCREMENTAL_CAP else args.incremental_cap
 
     return run_experiment(
         args.root,
         sanity=args.sanity,
+        customers=customers,
+        max_visits=args.max_visits,
         live=args.live,
         incremental_cap=inc_cap,
         prior_ledger=args.prior_ledger,

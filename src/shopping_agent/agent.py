@@ -612,7 +612,16 @@ class ShoppingAgent:
                         )
                         started = time.monotonic()
                         try:
-                            found = self.search.search(action, session.state)
+                            found = self.search.search(
+                                action, session.state, user_memory=memory_view, fallback=True
+                            )
+                        except TypeError:
+                            try:
+                                found = self.search.search(
+                                    action, session.state, user_memory=memory_view
+                                )
+                            except TypeError:
+                                found = self.search.search(action, session.state)
                         except ValueError:
                             raise ActionError("invalid_search_query_or_state") from None
                         found["request_fingerprint"] = fingerprint
