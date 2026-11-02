@@ -13,7 +13,9 @@ from .catalogue_browser import render_catalogue_browser
 from .dev_console import (
     render_evaluation_runner_section,
     render_execution_trace_section,
+    render_mock_customer_lab_section,
     render_parameters_section,
+    render_session_audit_section,
 )
 from .memory_views import FORMATS
 from .provider import DeepSeekPolicy, ProviderError
@@ -673,6 +675,7 @@ def run_app(project_root: Path) -> None:
         page_title="ASTRA · Interactive Personal Shopping",
         page_icon="✦",
         layout="centered",
+        initial_sidebar_state="collapsed",
     )
     st.html(CSS)
     try:
@@ -787,17 +790,23 @@ def run_app(project_root: Path) -> None:
         render_catalogue_browser(service, show_images)
 
     with dev_tab:
-        sec_param, sec_trace, sec_eval = st.tabs(
+        sec_param, sec_trace, sec_audit, sec_mock, sec_eval = st.tabs(
             [
-                "⚙️ Operational Parameters",
+                "⚙️ Parameters",
                 "🔍 Live Execution Trace",
-                "📊 Synthetic Evaluation Runner",
+                "📋 Session Audit",
+                "🧪 Mock Customer Lab",
+                "📊 Evaluation Results",
             ]
         )
         with sec_param:
             render_parameters_section(service, view, project_root)
         with sec_trace:
             render_execution_trace_section(view, service)
+        with sec_audit:
+            render_session_audit_section(service, view, project_root, owner)
+        with sec_mock:
+            render_mock_customer_lab_section(project_root, service)
         with sec_eval:
             render_evaluation_runner_section(project_root, service)
 

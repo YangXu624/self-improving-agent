@@ -15,13 +15,23 @@ from typing import Any
 
 import streamlit as st
 
+from .mock_lab import render_mock_customer_lab_section
 from .runtime_config import (
     PARAMETER_METADATA,
     PRESETS,
     RuntimeConfig,
 )
+from .session_audit import render_session_audit_section
 from .trace import TraceExtractor, diagnose_turn_failure
 from .ui_service import ChatService
+
+__all__ = [
+    "render_parameters_section",
+    "render_execution_trace_section",
+    "render_evaluation_runner_section",
+    "render_session_audit_section",
+    "render_mock_customer_lab_section",
+]
 
 
 def render_parameters_section(
