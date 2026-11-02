@@ -182,3 +182,83 @@ class UserMemoryAgentTests(unittest.TestCase):
             self.assertIn("user_memory", payload)
             self.assertIn("user_memory_updates", built.messages[0]["content"])
         self.assertIn("user_memory_updates", MemoryDecision.model_fields)
+
+    def test_stage2_natural_preference_end_to_end_lifecycle_on_and_off(self):
+        # Visit 1 (Memory ON): Exact customer utterance and proposal from Stage 2 canary
+        visit1_sid = self.store.create("dev-activewear")
+        utterance = (
+            "Hi! I'm looking for a casual tank top to wear to the gym. Nothing fancy, "
+            "and I'd like to keep it affordable, under $50 ideally. Black is usually "
+            "my go-to for workout stuff if you have any."
+        )
+        quote = "Black is usually my go-to for workout stuff"
+        proposal = {
+            "category": "preference",
+            "attribute": "color",
+            "value": "black",
+            "scope": "workout",
+            "quote": quote,
+            "basis": "confirmed",
+        }
+
+        def visit1_decision(ctx):
+            res = decision(ctx, {"type": "RESPOND", "message": "I found workout options."})
+            res["user_memory_updates"] = [proposal]
+            return res
+
+        agent_on = self.agent(visit1_decision)
+        turn1_result = agent_on.turn(
+            "dev-activewear", visit1_sid, utterance, request_id="v1-turn1"
+        )
+        self.assertEqual(turn1_result["status"], "ok")
+        # Verify memory update was accepted and not rejected
+        self.assertEqual(turn1_result["user_memory"]["rejected"], [])
+        self.assertEqual(len(turn1_result["user_memory"]["updates"]), 1)
+
+        # Verify persistent profile on disk was written with revision 1
+        profile = self.memory.read("dev-activewear")
+        self.assertEqual(profile.revision, 1)
+        active_records = [r for r in profile.records if r.status == "active"]
+        self.assertEqual(len(active_records), 1)
+        self.assertEqual(active_records[0].value, "black")
+        self.assertEqual(active_records[0].scope, "workout")
+        self.assertEqual(active_records[0].quote, quote)
+
+        # Visit 2 (Memory ON): Fresh subsequent session for the same returning customer
+        visit2_sid = self.store.create("dev-activewear")
+        fresh_memory_store = UserMemoryStore(self.root / "user-memory")
+        policy_on = fixtures.ScriptedPolicy(
+            lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Looking for workout tops."})
+        )
+        agent_on_visit2 = ShoppingAgent(
+            self.store, self.search, policy_on, user_memory=fresh_memory_store
+        )
+        agent_on_visit2.turn(
+            "dev-activewear",
+            visit2_sid,
+            "I'm back looking for a workout top for the gym.",
+            request_id="v2-turn1",
+        )
+        # Verify preference was retrieved and injected into ASTRA's model-visible context
+        injected_context = policy_on.contexts[0]
+        self.assertIn("user_memory", injected_context)
+        memory_records = injected_context["user_memory"]["records"]
+        self.assertEqual(len(memory_records), 1)
+        self.assertEqual(memory_records[0]["value"], "black")
+        self.assertEqual(memory_records[0]["scope"], "workout")
+
+        # Memory OFF comparison: Session evaluated without persistent user memory
+        visit_off_sid = self.store.create("dev-activewear")
+        policy_off = fixtures.ScriptedPolicy(
+            lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Looking for tops."})
+        )
+        agent_off = ShoppingAgent(self.store, self.search, policy_off, user_memory=None)
+        agent_off.turn(
+            "dev-activewear",
+            visit_off_sid,
+            "I'm back looking for a workout top for the gym.",
+            request_id="v-off-turn1",
+        )
+        # Verify memory OFF has no persistent profile access
+        off_context = policy_off.contexts[0]
+        self.assertNotIn("user_memory", off_context)
