@@ -1,0 +1,153 @@
+{
+  "baseline": "6e7b42cb77b6389c9b154e5b967ee699385a7572",
+  "repeats_per_scenario": 20,
+  "parity": "passed",
+  "provider_calls": 0,
+  "summary": {
+    "respond": {
+      "custom": {
+        "construction_ms": 0.003166496753692627,
+        "turn_ms": 2.0830626599490643,
+        "payload_bytes": 8620.0,
+        "model_calls": 1.0,
+        "searches": 0.0
+      },
+      "framework": {
+        "construction_ms": 2.804666291922331,
+        "turn_ms": 5.303729325532913,
+        "payload_bytes": 12956.0,
+        "model_calls": 1.0,
+        "searches": 0.0
+      }
+    },
+    "search_recommend": {
+      "custom": {
+        "construction_ms": 0.003541354089975357,
+        "turn_ms": 4.0750205516815186,
+        "payload_bytes": 18554.0,
+        "model_calls": 2.0,
+        "searches": 1.0
+      },
+      "framework": {
+        "construction_ms": 2.805520547553897,
+        "turn_ms": 8.12875060364604,
+        "payload_bytes": 27226.0,
+        "model_calls": 2.0,
+        "searches": 1.0
+      }
+    },
+    "hard_price": {
+      "custom": {
+        "construction_ms": 0.0035210978239774704,
+        "turn_ms": 4.473437322303653,
+        "payload_bytes": 18311.0,
+        "model_calls": 2.0,
+        "searches": 1.0
+      },
+      "framework": {
+        "construction_ms": 2.7703954838216305,
+        "turn_ms": 8.521562442183495,
+        "payload_bytes": 26983.0,
+        "model_calls": 2.0,
+        "searches": 1.0
+      }
+    },
+    "repair_unseen_id": {
+      "custom": {
+        "construction_ms": 0.004125293344259262,
+        "turn_ms": 5.612541455775499,
+        "payload_bytes": 28544.0,
+        "model_calls": 3.0,
+        "searches": 1.0
+      },
+      "framework": {
+        "construction_ms": 2.7884789742529392,
+        "turn_ms": 10.725895641371608,
+        "payload_bytes": 41552.0,
+        "model_calls": 3.0,
+        "searches": 1.0
+      }
+    },
+    "deduplicate_empty": {
+      "custom": {
+        "construction_ms": 0.0032710377126932144,
+        "turn_ms": 4.869458032771945,
+        "payload_bytes": 26538.0,
+        "model_calls": 3.0,
+        "searches": 1.0
+      },
+      "framework": {
+        "construction_ms": 2.65647959895432,
+        "turn_ms": 9.57643729634583,
+        "payload_bytes": 39546.0,
+        "model_calls": 3.0,
+        "searches": 1.0
+      }
+    },
+    "terminal_search_budget": {
+      "custom": {
+        "construction_ms": 0.002624932676553726,
+        "turn_ms": 2.087333472445607,
+        "payload_bytes": 8620.0,
+        "model_calls": 1.0,
+        "searches": 0.0
+      },
+      "framework": {
+        "construction_ms": 2.684625331312418,
+        "turn_ms": 5.147833144292235,
+        "payload_bytes": 12956.0,
+        "model_calls": 1.0,
+        "searches": 0.0
+      }
+    }
+  },
+  "limitations": "Synthetic latency; wire-size proxy is not token usage. Legacy context, not compact v7. No quality measurement.",
+  "implementation_commit": "4e7ad5b",
+  "python": "3.14.3",
+  "environment": "macOS arm64; local synthetic catalogue, disk-backed session logs; checkpoints disabled for timing",
+  "source_lines": {
+    "src/astra_langchain/__init__.py": 3,
+    "src/astra_langchain/__main__.py": 131,
+    "src/astra_langchain/demo.py": 66,
+    "src/astra_langchain/engine.py": 355,
+    "src/astra_langchain/memory.py": 80,
+    "src/astra_langchain/middleware.py": 149,
+    "src/astra_langchain/provider.py": 65,
+    "src/astra_langchain/workflow.py": 234,
+    "src/shopping_agent/agent.py": 770
+  },
+  "dependency_counts": {
+    "framework_closure": 48,
+    "baseline_runtime_closure": 5,
+    "additional_distributions": 43
+  },
+  "verification": {
+    "run": 660,
+    "failures": 0,
+    "errors": 0,
+    "skipped": [
+      {
+        "test": "test_actual_catalogue_taxonomy_has_the_plural_categories_in_the_incident (test_conversation_reliability.StateAndTaxonomyTests.test_actual_catalogue_taxonomy_has_the_plural_categories_in_the_incident)",
+        "reason": "Local catalogue is not installed"
+      },
+      {
+        "test": "test_all_frozen_counts_hashes_and_witness_sources_validate (test_expanded_customers.ExpandedCatalogueTests.test_all_frozen_counts_hashes_and_witness_sources_validate)",
+        "reason": "Local approved 50k assets required"
+      },
+      {
+        "test": "test_cycling_scope_excludes_sport_clothing_despite_root_label (test_expanded_customers.ExpandedCatalogueTests.test_cycling_scope_excludes_sport_clothing_despite_root_label)",
+        "reason": "Local approved 50k assets required"
+      },
+      {
+        "test": "test_inventory_reproduces_from_local_assets (test_expanded_customers.ExpandedCatalogueTests.test_inventory_reproduces_from_local_assets)",
+        "reason": "Local approved 50k assets required"
+      },
+      {
+        "test": "test_real_tokenizer_loads_when_present (test_experiment_a_run.FrozenArtifactTests.test_real_tokenizer_loads_when_present)",
+        "reason": "pinned tokenizer asset not installed"
+      }
+    ],
+    "expected_failures": 1
+  },
+  "raw_samples_sha256": "a853d4a10436f213ade09e3fed949dbfd289d599276139e60133009d509f6f65"
+}

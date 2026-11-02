@@ -384,3 +384,11 @@ A [conversation reliability pass](docs/reviews/conversation-reliability.md) adds
 lifecycle regressions, session-scoped offer auditing, category number matching, empty-search
 guards and safer state corrections. Isolated invalid timelines now preserve independent
 customers; infrastructure faults stop globally. No paid rerun or memory benefit is claimed.
+
+## Isolated framework experiment
+
+The `experiment/langchain-refactor` branch contains a runnable optional LangChain v1 /
+LangGraph alternative based on merged PR #28. It preserves the custom implementation and
+uses separate local state. See [architecture, run instructions and limitations](docs/langchain-experiment.md).
+This is an architectural experiment; it does not establish live recommendation or memory
+improvement and is not a replacement for the primary long-term memory redesign.
