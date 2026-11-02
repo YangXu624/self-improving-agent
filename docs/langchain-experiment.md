@@ -187,3 +187,6 @@ is not installed. Baseline test files are unchanged.
 The offline comparison runner reports behavioral parity, model/search counts, construction
 and turn timings, and serialized request-size proxies. These measurements do not establish
 recommendation quality or live token costs.
+
+Measured results and the adoption recommendation are in the
+[comparison report](reviews/langchain-comparison.md).
