@@ -279,17 +279,126 @@ def assess(record, state):
     }
 
 
+def score_preferences(record, verdict, user_memory=None, state=None):
+    base_score = float(len(verdict.get("matched_soft_ids", [])))
+    matched_memory_ids = []
+
+    if not user_memory or not isinstance(user_memory, dict):
+        return base_score, matched_memory_ids
+
+    memory_records = user_memory.get("records", [])
+    if not isinstance(memory_records, list):
+        return base_score, matched_memory_ids
+
+    memory_score = 0.0
+    record_text = normalized(record.get("text", ""))
+    record_title = normalized(record.get("title", ""))
+    record_facts = record.get("facts", {})
+
+    # Detect active state requirements by field: current explicit preferences override contradictory memories
+    state_reqs_by_field = {}
+    if state and hasattr(state, "requirements"):
+        for r in state.requirements:
+            if getattr(r, "status", None) == "active":
+                state_reqs_by_field.setdefault(r.field, []).append(r)
+
+    for mem in memory_records:
+        if not isinstance(mem, dict):
+            continue
+        if mem.get("status", "active") != "active":
+            continue
+        category = mem.get("category")
+        val = normalized(str(mem.get("value") or ""))
+        attr = normalized(str(mem.get("attribute") or ""))
+        if not val or val in {"none", "unknown", "n/a"}:
+            continue
+
+        is_dislike = category == "dislike"
+        is_pref = category in {"preference", "fact"}
+        if not is_dislike and not is_pref:
+            continue
+
+        # Current explicit preference always overrides contradictory historical memory
+        if attr in state_reqs_by_field:
+            contradicted = False
+            for req in state_reqs_by_field[attr]:
+                req_val = normalized(str(req.value or ""))
+                # If current state explicitly excludes this memory value
+                if req.op in {"neq", "not_contains", "not_in"} and (
+                    val in req_val or req_val in val
+                ):
+                    contradicted = True
+                    break
+                # If current state explicitly specifies a different positive value for this attribute
+                if req.op in {"eq", "contains", "in"}:
+                    if val != req_val and val not in req_val and req_val not in val:
+                        contradicted = True
+                        break
+            if contradicted:
+                continue
+
+        # Check scope relevance if provided
+        scope_val = normalized(str(mem.get("scope") or ""))
+        if scope_val and scope_val not in {"general", "all", "any", "none"}:
+            scope_words = [w for w in re.findall(r"\w+", scope_val) if len(w) > 2]
+            if scope_words:
+                scope_matched = any(
+                    w in record_text or w in record_title for w in scope_words
+                )
+                if not scope_matched:
+                    continue
+
+        matched = False
+        # 1. Attribute fact match
+        if attr in record_facts and record_facts[attr] is not None:
+            fact_val = facet(attr, record_facts[attr])
+            target_val = facet(attr, val)
+            if (
+                fact_val == target_val
+                or target_val in fact_val
+                or fact_val in target_val
+            ):
+                matched = True
+
+        # 2. Text / title word-boundary match
+        if not matched:
+            val_words = [w for w in re.findall(r"\w+", val) if len(w) > 2]
+            if val_words:
+                all_in_title = all(w in record_title for w in val_words)
+                all_in_text = all(w in record_text for w in val_words)
+                if all_in_title or all_in_text:
+                    matched = True
+
+        if matched:
+            mem_id = mem.get("id")
+            if mem_id:
+                matched_memory_ids.append(mem_id)
+            if is_pref:
+                memory_score += 1.0
+            elif is_dislike:
+                memory_score -= 1.0
+
+    return base_score + memory_score, matched_memory_ids
+
+
 class ProductSearch(Protocol):
     catalogue_version: str
     strategy_version: str
 
-    def search(self, action: Search, state: ShoppingState) -> dict: ...
+    def search(
+        self,
+        action: Search,
+        state: ShoppingState,
+        *,
+        user_memory: dict | None = None,
+        fallback: bool | None = None,
+    ) -> dict: ...
 
     def eligible(self, product_id: str, state: ShoppingState) -> bool: ...
 
 
 class LexicalSearch:
-    def __init__(self, path, *, expected_catalogue_hash=None):
+    def __init__(self, path, *, expected_catalogue_hash=None, fallback=False):
         path = Path(path).resolve()
         self.db = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
         meta = dict(self.db.execute("SELECT key,value FROM metadata"))
@@ -299,6 +408,7 @@ class LexicalSearch:
         self.catalogue_version = meta["catalogue_sha256"]
         self.strategy_version = meta["index_version"]
         self.count = int(meta["count"])
+        self.fallback = fallback
         if (
             expected_catalogue_hash
             and expected_catalogue_hash != self.catalogue_version
@@ -309,7 +419,7 @@ class LexicalSearch:
     def close(self):
         self.db.close()
 
-    def search(self, action, state):
+    def search(self, action, state, *, user_memory=None, fallback=None):
         action = Search.model_validate(action.model_dump())
         state = ShoppingState.model_validate(state.model_dump())
         if state.conflicts:
@@ -324,19 +434,26 @@ class LexicalSearch:
         ]
         if not terms and not hard_filters:
             raise ValueError("query_or_hard_filter_required")
-        query = (" AND " if action.mode == "all" else " OR ").join(
-            '"' + t + '"' for t in terms
-        )
-        if terms:
-            cursor = self.db.execute(
-                """SELECT p.record,bm25(product_fts,5.0,3.0,2.0,1.0)
-                FROM product_fts JOIN products p ON p.rowid=product_fts.rowid
-                WHERE product_fts MATCH ? ORDER BY bm25(product_fts,5.0,3.0,2.0,1.0),p.id""",
-                (query,),
+
+        use_fallback = self.fallback if fallback is None else fallback
+
+        def _execute_query(query_terms, mode):
+            q = (" AND " if mode == "all" else " OR ").join(
+                '"' + t + '"' for t in query_terms
             )
-        else:
-            cursor = self.db.execute("SELECT record,0.0 FROM products ORDER BY id")
-        candidates, matched, eligible, unknown, excluded = [], 0, 0, 0, 0
+            if query_terms:
+                cur = self.db.execute(
+                    """SELECT p.record,bm25(product_fts,5.0,3.0,2.0,1.0)
+                    FROM product_fts JOIN products p ON p.rowid=product_fts.rowid
+                    WHERE product_fts MATCH ? ORDER BY bm25(product_fts,5.0,3.0,2.0,1.0),p.id""",
+                    (q,),
+                )
+            else:
+                cur = self.db.execute("SELECT record,0.0 FROM products ORDER BY id")
+            return cur
+
+        cursor = _execute_query(terms, action.mode)
+        eligible_pool, matched, eligible, unknown, excluded = [], 0, 0, 0, 0
         for raw, score in cursor:
             matched += 1
             record = json.loads(raw)
@@ -346,20 +463,142 @@ class LexicalSearch:
             if not verdict["eligible"]:
                 continue
             eligible += 1
-            if len(candidates) < action.limit:
-                candidates.append(
-                    {
-                        "id": record["id"],
-                        "title": record["title"][:500],
-                        "facts": record["facts"],
-                        "categories": record["categories"],
-                        "evidence": record["evidence"],
-                        "snippet": record["text"][:400],
-                        "image_url": record["image_url"],
-                        "bm25": score,
-                        **verdict,
-                    }
+            pref_score, matched_mem_ids = score_preferences(
+                record, verdict, user_memory, state
+            )
+            eligible_pool.append(
+                {
+                    "record": record,
+                    "score": score,
+                    "verdict": verdict,
+                    "pref_score": pref_score,
+                    "matched_mem_ids": matched_mem_ids,
+                }
+            )
+
+        fallback_triggered = False
+        effective_mode = action.mode
+        fallback_reason = None
+        # Safe fallback enabled identically for both Memory OFF and Memory ON when use_fallback is True:
+        # If action.mode == "all" and terms > 1 yields 0 eligible candidates,
+        # relax over-constrained query terms while strictly enforcing all hard constraints via assess().
+        if (
+            action.mode == "all"
+            and len(terms) > 1
+            and len(eligible_pool) == 0
+            and use_fallback
+        ):
+            if user_memory:
+                memory_records = (
+                    user_memory.get("records", [])
+                    if isinstance(user_memory, dict)
+                    else []
                 )
+                pref_words = set()
+                for m in memory_records:
+                    if isinstance(m, dict) and m.get("status", "active") == "active":
+                        val = str(m.get("value") or "")
+                        for w in re.findall(r"\w+", val, flags=re.UNICODE):
+                            if len(w) > 1:
+                                pref_words.add(w.lower())
+
+                relaxed_terms = [t for t in terms if t.lower() not in pref_words]
+                if relaxed_terms and len(relaxed_terms) < len(terms):
+                    fallback_triggered = True
+                    fallback_reason = "relaxed_remembered_preferences"
+                    cursor_fb = _execute_query(relaxed_terms, "all")
+                    fb_matched, fb_unknown, fb_excluded, fb_eligible = 0, 0, 0, 0
+                    for raw, score in cursor_fb:
+                        fb_matched += 1
+                        record = json.loads(raw)
+                        verdict = assess(record, state)
+                        fb_unknown += bool(verdict["unknown_ids"])
+                        fb_excluded += bool(verdict["failed_ids"])
+                        if not verdict["eligible"]:
+                            continue
+                        fb_eligible += 1
+                        pref_score, matched_mem_ids = score_preferences(
+                            record, verdict, user_memory, state
+                        )
+                        eligible_pool.append(
+                            {
+                                "record": record,
+                                "score": score,
+                                "verdict": verdict,
+                                "pref_score": pref_score,
+                                "matched_mem_ids": matched_mem_ids,
+                            }
+                        )
+                    if fb_eligible > 0:
+                        matched, eligible, unknown, excluded = (
+                            fb_matched,
+                            fb_eligible,
+                            fb_unknown,
+                            fb_excluded,
+                        )
+
+            # Broad fallback to mode="any" for both Memory OFF and Memory ON:
+            if len(eligible_pool) == 0:
+                fallback_triggered = True
+                fallback_reason = "relaxed_to_any_mode"
+                effective_mode = "any"
+                cursor_fb = _execute_query(terms, "any")
+                fb_matched, fb_unknown, fb_excluded, fb_eligible = 0, 0, 0, 0
+                for raw, score in cursor_fb:
+                    fb_matched += 1
+                    record = json.loads(raw)
+                    verdict = assess(record, state)
+                    fb_unknown += bool(verdict["unknown_ids"])
+                    fb_excluded += bool(verdict["failed_ids"])
+                    if not verdict["eligible"]:
+                        continue
+                    fb_eligible += 1
+                    pref_score, matched_mem_ids = score_preferences(
+                        record, verdict, user_memory, state
+                    )
+                    eligible_pool.append(
+                        {
+                            "record": record,
+                            "score": score,
+                            "verdict": verdict,
+                            "pref_score": pref_score,
+                            "matched_mem_ids": matched_mem_ids,
+                        }
+                    )
+                matched, eligible, unknown, excluded = (
+                    fb_matched,
+                    fb_eligible,
+                    fb_unknown,
+                    fb_excluded,
+                )
+
+        # Stage 2: Soft preference-based ranking among verified eligible candidates
+        eligible_pool.sort(
+            key=lambda item: (
+                -item["pref_score"],
+                item["score"],
+                item["record"]["id"],
+            )
+        )
+
+        candidates = []
+        for item in eligible_pool[: action.limit]:
+            record = item["record"]
+            candidates.append(
+                {
+                    "id": record["id"],
+                    "title": record["title"][:500],
+                    "facts": record["facts"],
+                    "categories": record["categories"],
+                    "evidence": record["evidence"],
+                    "snippet": record["text"][:400],
+                    "image_url": record["image_url"],
+                    "bm25": item["score"],
+                    "preference_score": item["pref_score"],
+                    "matched_memory_ids": item["matched_mem_ids"],
+                    **item["verdict"],
+                }
+            )
         return {
             "search_id": uuid4().hex,
             "state_version": state.version,
@@ -368,6 +607,9 @@ class LexicalSearch:
             "category_match_version": "number-inflection-v2",
             "query": action.query,
             "match_mode": action.mode,
+            "effective_match_mode": effective_mode,
+            "fallback_triggered": fallback_triggered,
+            "fallback_reason": fallback_reason,
             "applied_hard_filters": [r.model_dump() for r in hard_filters],
             "counts": {
                 "lexical_matches": matched,

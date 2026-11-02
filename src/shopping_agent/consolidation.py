@@ -72,7 +72,9 @@ class ConsolidationOperation(Strict):
 
 class ConsolidationDecision(Strict):
     reason: str = Field(default="", max_length=1000)
-    operations: list[ConsolidationOperation] = Field(default_factory=list, max_length=10)
+    operations: list[ConsolidationOperation] = Field(
+        default_factory=list, max_length=10
+    )
 
 
 @dataclass(frozen=True)
@@ -120,23 +122,29 @@ def consolidate_session(
             action = ev.payload.get("action", {})
             act_type = action.get("type", "")
             if act_type == "CLARIFY":
-                dialogue_summary.append({
-                    "role": "assistant",
-                    "action": "CLARIFY",
-                    "question": action.get("question", ""),
-                })
+                dialogue_summary.append(
+                    {
+                        "role": "assistant",
+                        "action": "CLARIFY",
+                        "question": action.get("question", ""),
+                    }
+                )
             elif act_type == "RECOMMEND":
-                dialogue_summary.append({
-                    "role": "assistant",
-                    "action": "RECOMMEND",
-                    "products": action.get("product_ids", []),
-                })
+                dialogue_summary.append(
+                    {
+                        "role": "assistant",
+                        "action": "RECOMMEND",
+                        "products": action.get("product_ids", []),
+                    }
+                )
             elif act_type == "RESPOND":
-                dialogue_summary.append({
-                    "role": "assistant",
-                    "action": "RESPOND",
-                    "message": action.get("message", ""),
-                })
+                dialogue_summary.append(
+                    {
+                        "role": "assistant",
+                        "action": "RESPOND",
+                        "message": action.get("message", ""),
+                    }
+                )
 
     if not user_messages:
         return ConsolidationResult(
@@ -211,28 +219,37 @@ def consolidate_session(
         # 1. Quote provenance check: quote must be in customer messages
         if op.op != "DELETE":
             q = op.quote.strip()
-            if not q or (q not in full_user_text and q.casefold() not in full_user_text.casefold()):
-                rejected_ops.append({
-                    "operation": op_dict,
-                    "rejection_reason": "quote_not_found_in_session_user_messages",
-                })
+            if not q or (
+                q not in full_user_text
+                and q.casefold() not in full_user_text.casefold()
+            ):
+                rejected_ops.append(
+                    {
+                        "operation": op_dict,
+                        "rejection_reason": "quote_not_found_in_session_user_messages",
+                    }
+                )
                 continue
 
         # 2. Target ID validation for update/supersede/delete/reinforce
         if op.op in ("REINFORCE", "UPDATE", "SUPERSEDE", "DELETE"):
             if not op.target_id or op.target_id not in active_ids:
-                rejected_ops.append({
-                    "operation": op_dict,
-                    "rejection_reason": "target_id_not_active_in_user_profile",
-                })
+                rejected_ops.append(
+                    {
+                        "operation": op_dict,
+                        "rejection_reason": "target_id_not_active_in_user_profile",
+                    }
+                )
                 continue
 
         # 3. Content completeness
         if op.op in ("ADD", "UPDATE", "SUPERSEDE") and not op.value.strip():
-            rejected_ops.append({
-                "operation": op_dict,
-                "rejection_reason": "value_cannot_be_empty",
-            })
+            rejected_ops.append(
+                {
+                    "operation": op_dict,
+                    "rejection_reason": "value_cannot_be_empty",
+                }
+            )
             continue
 
         validated_ops.append(op_dict)

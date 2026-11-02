@@ -9,8 +9,9 @@ from .scoring import Judge, ScoreConfig, resources
 
 @dataclass(frozen=True)
 class TargetRule:
-    target_id: str | None
+    target_id: str | None = None
     k: int = 5
+    acceptable_target_ids: tuple[str, ...] | None = None
 
     def __post_init__(self):
         if not 1 <= self.k <= 5:
@@ -33,15 +34,24 @@ class TargetRule:
             or ids != event_ids
         ):
             raise ValueError("recommendation_response_event_mismatch")
-        return (
-            ids.index(self.target_id) + 1 if self.target_id in ids[: self.k] else None
-        )
+        candidates = set(self.acceptable_target_ids or ())
+        if self.target_id:
+            candidates.add(self.target_id)
+        for idx, pid in enumerate(ids[: self.k]):
+            if pid in candidates:
+                return idx + 1
+        return None
 
 
 def target_score(record, truth, oracle, config=ScoreConfig(headline_k=5), *, max_turns):
     """Recompute hit proof from the runner's presented lists; failures never improve MRR."""
     k = config.headline_k
-    rule = TargetRule(truth.target_id, k)
+    acceptable = getattr(truth, "acceptable_target_ids", None)
+    rule = TargetRule(
+        truth.target_id,
+        k,
+        acceptable_target_ids=tuple(acceptable) if acceptable else None,
+    )
     hit, integrity_error = None, record.termination == "harness_error"
     if not integrity_error:
         try:

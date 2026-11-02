@@ -208,24 +208,29 @@ class TestMemoryRedesign(unittest.TestCase):
         user_id = "bob"
         sid = self.session_store.create(user_id)
         with self.session_store.open(user_id, sid) as s:
-            s.append("user_message", {"message": "I'm looking for gym wear. I usually wear black."})
+            s.append(
+                "user_message",
+                {"message": "I'm looking for gym wear. I usually wear black."},
+            )
             s.append("turn_completed", {"response": {"status": "ok"}})
 
-        mock_policy = MockLLMPolicy({
-            "reason": "Learned color preference for gym wear",
-            "operations": [
-                {
-                    "op": "ADD",
-                    "category": "preference",
-                    "attribute": "color",
-                    "value": "black",
-                    "scope": "gym wear",
-                    "basis": "confirmed",
-                    "quote": "I usually wear black.",
-                    "confidence": 0.95,
-                }
-            ],
-        })
+        mock_policy = MockLLMPolicy(
+            {
+                "reason": "Learned color preference for gym wear",
+                "operations": [
+                    {
+                        "op": "ADD",
+                        "category": "preference",
+                        "attribute": "color",
+                        "value": "black",
+                        "scope": "gym wear",
+                        "basis": "confirmed",
+                        "quote": "I usually wear black.",
+                        "confidence": 0.95,
+                    }
+                ],
+            }
+        )
 
         with self.session_store.open(user_id, sid) as s:
             res = consolidate_session(s, user_id, self.user_store, mock_policy)
@@ -273,23 +278,30 @@ class TestMemoryRedesign(unittest.TestCase):
         # New session: customer corrects preference
         sid = self.session_store.create(user_id)
         with self.session_store.open(user_id, sid) as s:
-            s.append("user_message", {"message": "Actually, I no longer like slim-fit; I now prefer oversized shirts."})
+            s.append(
+                "user_message",
+                {
+                    "message": "Actually, I no longer like slim-fit; I now prefer oversized shirts."
+                },
+            )
             s.append("turn_completed", {"response": {"status": "ok"}})
 
-        mock_policy = MockLLMPolicy({
-            "reason": "Customer corrected fit preference from slim-fit to oversized",
-            "operations": [
-                {
-                    "op": "SUPERSEDE",
-                    "target_id": target_id,
-                    "category": "preference",
-                    "attribute": "fit",
-                    "value": "oversized",
-                    "scope": "workout shirts",
-                    "quote": "Actually, I no longer like slim-fit; I now prefer oversized shirts.",
-                }
-            ],
-        })
+        mock_policy = MockLLMPolicy(
+            {
+                "reason": "Customer corrected fit preference from slim-fit to oversized",
+                "operations": [
+                    {
+                        "op": "SUPERSEDE",
+                        "target_id": target_id,
+                        "category": "preference",
+                        "attribute": "fit",
+                        "value": "oversized",
+                        "scope": "workout shirts",
+                        "quote": "Actually, I no longer like slim-fit; I now prefer oversized shirts.",
+                    }
+                ],
+            }
+        )
 
         with self.session_store.open(user_id, sid) as s:
             res = consolidate_session(s, user_id, self.user_store, mock_policy)
@@ -334,22 +346,27 @@ class TestMemoryRedesign(unittest.TestCase):
         # Session 2: Customer specifies cream for formal clothing
         sid = self.session_store.create(user_id)
         with self.session_store.open(user_id, sid) as s:
-            s.append("user_message", {"message": "For formal shirts, I generally prefer cream."})
+            s.append(
+                "user_message",
+                {"message": "For formal shirts, I generally prefer cream."},
+            )
             s.append("turn_completed", {"response": {"status": "ok"}})
 
-        mock_policy = MockLLMPolicy({
-            "reason": "New scoped preference for formal wear",
-            "operations": [
-                {
-                    "op": "ADD",
-                    "category": "preference",
-                    "attribute": "color",
-                    "value": "cream",
-                    "scope": "formal clothing",
-                    "quote": "For formal shirts, I generally prefer cream.",
-                }
-            ],
-        })
+        mock_policy = MockLLMPolicy(
+            {
+                "reason": "New scoped preference for formal wear",
+                "operations": [
+                    {
+                        "op": "ADD",
+                        "category": "preference",
+                        "attribute": "color",
+                        "value": "cream",
+                        "scope": "formal clothing",
+                        "quote": "For formal shirts, I generally prefer cream.",
+                    }
+                ],
+            }
+        )
 
         with self.session_store.open(user_id, sid) as s:
             consolidate_session(s, user_id, self.user_store, mock_policy)
@@ -372,18 +389,20 @@ class TestMemoryRedesign(unittest.TestCase):
             s.append("turn_completed", {"response": {"status": "ok"}})
 
         # Policy invents a quote not spoken by the user
-        mock_policy = MockLLMPolicy({
-            "reason": "Invented preference",
-            "operations": [
-                {
-                    "op": "ADD",
-                    "category": "preference",
-                    "attribute": "color",
-                    "value": "red",
-                    "quote": "I always buy red shoes",  # NOT in user message
-                }
-            ],
-        })
+        mock_policy = MockLLMPolicy(
+            {
+                "reason": "Invented preference",
+                "operations": [
+                    {
+                        "op": "ADD",
+                        "category": "preference",
+                        "attribute": "color",
+                        "value": "red",
+                        "quote": "I always buy red shoes",  # NOT in user message
+                    }
+                ],
+            }
+        )
 
         with self.session_store.open(user_id, sid) as s:
             res = consolidate_session(s, user_id, self.user_store, mock_policy)
@@ -481,17 +500,19 @@ class TestMemoryRedesign(unittest.TestCase):
                 {"action": {"type": "RECOMMEND", "product_ids": ["B001"]}},
             )
 
-        mock_policy = MockLLMPolicy({
-            "has_lesson": True,
-            "situation": "Customer specifies clothing color but leaves style ambiguous",
-            "strategy": "Clarify style before issuing recommendations",
-            "rationale": "Narrowing style reduces irrelevant candidate pool",
-            "directive": "Clarify style when color is specified but clothing style is ambiguous.",
-            "expected_action": "CLARIFY",
-            "trigger_type": "attribute_clarification",
-            "trigger_condition": {"is_underspecified": True},
-            "action_signature": {"attribute": "style"},
-        })
+        mock_policy = MockLLMPolicy(
+            {
+                "has_lesson": True,
+                "situation": "Customer specifies clothing color but leaves style ambiguous",
+                "strategy": "Clarify style before issuing recommendations",
+                "rationale": "Narrowing style reduces irrelevant candidate pool",
+                "directive": "Clarify style when color is specified but clothing style is ambiguous.",
+                "expected_action": "CLARIFY",
+                "trigger_type": "attribute_clarification",
+                "trigger_condition": {"is_underspecified": True},
+                "action_signature": {"attribute": "style"},
+            }
+        )
 
         with self.session_store.open("anon-customer", sid) as s:
             distill_res = distill_session_experience(

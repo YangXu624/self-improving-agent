@@ -69,6 +69,7 @@ class SessionRecord:
     retrieved_experience: list = field(default_factory=list)
     injected_experience: list = field(default_factory=list)
     applied_experience: list = field(default_factory=list)
+    consolidation: dict | None = None
 
 
 def card(product, *, include_facts=False):
@@ -521,14 +522,18 @@ class DialogueRunner:
         record.applied_experience = sorted(
             {x for t in record.turns for x in t.applied_experience}
         )
-        if getattr(self.agent, "auto_finalize", False) and hasattr(self.agent, "finalize_session"):
+        if getattr(self.agent, "auto_finalize", False) and hasattr(
+            self.agent, "finalize_session"
+        ):
             outcome = {
                 "termination": record.termination,
                 "target_hit": getattr(record, "target_hit", None) is not None,
                 "turns": len(record.turns),
             }
             try:
-                self.agent.finalize_session(user, sid, outcome=outcome)
-            except Exception:
-                pass
+                record.consolidation = self.agent.finalize_session(
+                    user, sid, outcome=outcome
+                )
+            except Exception as exc:
+                record.consolidation = {"error": str(exc)}
         return record

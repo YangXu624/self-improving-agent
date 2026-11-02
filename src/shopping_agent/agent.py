@@ -31,6 +31,7 @@ from .memory_views import (
     redundant_retractions,
 )
 from .provider import PolicyReply, ProviderError
+from .runtime_config import RuntimeConfig
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
 from .user_memory import MemoryDecision, UserMemoryError
@@ -100,7 +101,14 @@ class ShoppingAgent:
         user_memory=None,
         memory_format="legacy",
         auto_finalize: bool = False,
+        runtime_config: RuntimeConfig | None = None,
     ):
+        self.runtime_config = runtime_config
+        if runtime_config is not None:
+            max_calls = runtime_config.agent_max_calls
+            max_searches = runtime_config.agent_max_searches
+            if memory_format == "legacy" and runtime_config.memory_format != "legacy":
+                memory_format = runtime_config.memory_format
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
         self.store, self.search, self.policy = store, search, policy
@@ -143,23 +151,92 @@ class ShoppingAgent:
                 raise SessionError(
                     "interrupted_turn; inspect history and use a new request ID"
                 )
+
+            # Check maximum conversation turns
+            user_msg_count = sum(1 for e in session.events if e.type == "user_message")
+            max_turns = (
+                self.runtime_config.max_conversation_turns
+                if self.runtime_config
+                else 20
+            )
+            if user_msg_count >= max_turns:
+                closure = "conversation_turn_limit_reached"
+                msg = f"Maximum conversation turns ({max_turns}) reached for this session."
+                resp = {
+                    "status": "closed",
+                    "action": "RESPOND",
+                    "message": msg,
+                    "products": [],
+                    "closure": closure,
+                }
+                return self._complete(session, request_id, resp, 0, 0, closure=closure)
+
+            # Check session API spending ceiling
+            total_prompt_tok = sum(
+                e.payload.get("metadata", {}).get("usage", {}).get("prompt_tokens", 0)
+                for e in session.events
+                if e.type == "model_response"
+            )
+            total_compl_tok = sum(
+                e.payload.get("metadata", {})
+                .get("usage", {})
+                .get("completion_tokens", 0)
+                for e in session.events
+                if e.type == "model_response"
+            )
+            est_cost = (total_prompt_tok * 1.4e-7) + (total_compl_tok * 2.8e-7)
+            cost_cap = (
+                self.runtime_config.session_api_cost_ceiling_usd
+                if self.runtime_config
+                else 50.0
+            )
+            if est_cost > cost_cap:
+                closure = "session_api_cost_ceiling_exceeded"
+                msg = f"Session API spending limit (${cost_cap:.2f}) reached (estimated spend: ${est_cost:.3f})."
+                resp = {
+                    "status": "closed",
+                    "action": "RESPOND",
+                    "message": msg,
+                    "products": [],
+                    "closure": closure,
+                }
+                return self._complete(session, request_id, resp, 0, 0, closure=closure)
+
             session.append(
                 "turn_started",
-                {"max_calls": self.max_calls, "max_searches": self.max_searches},
+                {
+                    "max_calls": self.max_calls,
+                    "max_searches": self.max_searches,
+                    **(
+                        {"runtime_config": self.runtime_config.to_dict()}
+                        if self.runtime_config
+                        else {}
+                    ),
+                },
                 request_id,
             )
             user_event = session.append(
                 "user_message", {"message": message}, request_id
             )
-            if self.user_memory is not None and hasattr(self.user_memory, "check_and_apply_explicit_forgetting"):
-                withdrawn = self.user_memory.check_and_apply_explicit_forgetting(user_id, message)
+            if self.user_memory is not None and hasattr(
+                self.user_memory, "check_and_apply_explicit_forgetting"
+            ):
+                withdrawn = self.user_memory.check_and_apply_explicit_forgetting(
+                    user_id, message
+                )
                 if withdrawn:
-                    session.append("user_memory_withdrawn", {"withdrawn_ids": withdrawn}, request_id)
+                    session.append(
+                        "user_memory_withdrawn",
+                        {"withdrawn_ids": withdrawn},
+                        request_id,
+                    )
             calls, searches, feedback, edits_allowed = 0, 0, [], True
             retrieved_experience: list[str] = []
             injected_experience: list[str] = []
             applied_experience: list[str] = []
             memory_changes, memory_rejections = [], []
+            retrieved_user_memories: list[dict] = []
+            injected_user_memories: list[dict] = []
 
             def finish(resp):
                 if self.user_memory is not None:
@@ -167,6 +244,13 @@ class ShoppingAgent:
                         "enabled": True,
                         "updates": memory_changes,
                         "rejected": memory_rejections,
+                        "retrieved": [
+                            r.get("id") for r in retrieved_user_memories if r.get("id")
+                        ],
+                        "injected": [
+                            r.get("id") for r in injected_user_memories if r.get("id")
+                        ],
+                        "injected_records": injected_user_memories,
                     }
                 exp_payload = {
                     "retrieved": retrieved_experience,
@@ -206,7 +290,19 @@ class ShoppingAgent:
                 memory_view = None
                 if self.user_memory is not None:
                     try:
-                        memory_view = self.user_memory.context(session, message)
+                        min_sim = (
+                            self.runtime_config.user_memory_similarity_threshold
+                            if self.runtime_config
+                            else 0.45
+                        )
+                        top_k = (
+                            self.runtime_config.user_memory_top_k
+                            if self.runtime_config
+                            else 5
+                        )
+                        memory_view = self.user_memory.context(
+                            session, message, min_similarity=min_sim, limit=top_k
+                        )
                     except (UserMemoryError, OSError):
                         failure = "user_memory_unavailable"
                         session.append(
@@ -221,6 +317,9 @@ class ShoppingAgent:
                         },
                         request_id,
                     )
+                    retrieved_user_memories = [
+                        dict(r) for r in memory_view.get("records", [])
+                    ]
                 result = latest_search(
                     session, self.search.catalogue_version, self.search.strategy_version
                 )
@@ -259,7 +358,9 @@ class ShoppingAgent:
                             message, limit=1, scope=scope, context_cues=cues
                         )
                         if sem_matches:
-                            retrieved_lessons = [lesson for lesson, score in sem_matches]
+                            retrieved_lessons = [
+                                lesson for lesson, score in sem_matches
+                            ]
                     if not retrieved_lessons:
                         for trig in possible_triggers:
                             matches = self.experience.retrieve(
@@ -300,16 +401,21 @@ class ShoppingAgent:
                         context_options["memory_format"] = "compact"
                     if memory_view is not None:
                         context_options["user_memory"] = memory_view
+                    remaining_calls = self.max_calls - calls
+                    remaining_searches = max(
+                        0, min(self.max_searches - searches, remaining_calls - 1)
+                    )
+                    budget = {
+                        "model_calls": remaining_calls,
+                        "searches": remaining_searches,
+                    }
                     try:
                         built = self.context_builder(
                             session,
                             message,
                             result,
                             feedback,
-                            {
-                                "model_calls": self.max_calls - calls,
-                                "searches": self.max_searches - searches,
-                            },
+                            budget,
                             edits_allowed,
                             **context_options,
                         )
@@ -319,10 +425,7 @@ class ShoppingAgent:
                             message,
                             result,
                             feedback,
-                            {
-                                "model_calls": self.max_calls - calls,
-                                "searches": self.max_searches - searches,
-                            },
+                            budget,
                             edits_allowed,
                         )
                     if not isinstance(built, BuiltContext):
@@ -380,6 +483,10 @@ class ShoppingAgent:
                         },
                         request_id,
                     )
+                    if memory_injected:
+                        injected_user_memories = [
+                            dict(r) for r in memory_view.get("records", [])
+                        ]
                 session.append(
                     "model_request",
                     {
@@ -449,7 +556,9 @@ class ShoppingAgent:
                 )
                 try:
                     contract = (
-                        MemoryDecision if self.user_memory is not None else Decision
+                        MemoryDecision
+                        if (self.user_memory is not None and not compact)
+                        else Decision
                     )
                     ignored_retractions = []
                     if compact:
@@ -599,6 +708,11 @@ class ShoppingAgent:
                             raise ActionError(
                                 "search_requires_a_remaining_decision_call"
                             )
+                        if self.runtime_config:
+                            action.limit = min(
+                                action.limit,
+                                self.runtime_config.candidate_retrieval_limit,
+                            )
                         searches += 1
                         session.append(
                             "tool_call",
@@ -611,8 +725,25 @@ class ShoppingAgent:
                             request_id,
                         )
                         started = time.monotonic()
+                        fallback_opt = (
+                            self.runtime_config.search_fallback
+                            if self.runtime_config
+                            else True
+                        )
                         try:
-                            found = self.search.search(action, session.state)
+                            found = self.search.search(
+                                action,
+                                session.state,
+                                user_memory=memory_view,
+                                fallback=fallback_opt,
+                            )
+                        except TypeError:
+                            try:
+                                found = self.search.search(
+                                    action, session.state, user_memory=memory_view
+                                )
+                            except TypeError:
+                                found = self.search.search(action, session.state)
                         except ValueError:
                             raise ActionError("invalid_search_query_or_state") from None
                         found["request_fingerprint"] = fingerprint
@@ -626,7 +757,20 @@ class ShoppingAgent:
                             request_id,
                         )
                         accepted(decision, sent_lessons)
-                        feedback = []
+                        if not found.get("candidates"):
+                            feedback = [
+                                {
+                                    "code": "empty_search_zero_eligible",
+                                    "message": (
+                                        "The previous search returned zero eligible products. "
+                                        "Do not repeat the exact same search query. "
+                                        "Try broader keywords, adjust or remove restrictive constraints, "
+                                        "or ask a clarifying question."
+                                    ),
+                                }
+                            ]
+                        else:
+                            feedback = []
                         continue
                     if action.type == "RECOMMEND":
                         # Must be a result actually provided to THIS decision, still current
@@ -727,7 +871,15 @@ class ShoppingAgent:
                         "message": (
                             "This search already returned no verified matches. Please change the query or requirements before trying again; no products are recommended."
                             if closure == "repeated_empty_search"
-                            else CLOSURE_MESSAGE
+                            else (
+                                "I couldn't find verified matches for that specific search within this turn's budget. Could you specify what kind of items you are looking for (such as tops, shorts, or pants)?"
+                                if any(
+                                    r.status == "active"
+                                    and r.field in {"product_type", "category"}
+                                    for r in session.state.requirements
+                                )
+                                else CLOSURE_MESSAGE
+                            )
                         ),
                         "products": [],
                         "closure": closure,

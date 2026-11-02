@@ -1,0 +1,973 @@
+{
+  "schema_version": 1,
+  "dataset_id": "memory-sensitive-target-benchmark-v1",
+  "split": "evaluation",
+  "catalogue_sha256": "da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67",
+  "provenance": "Dedicated memory-sensitive evaluation fixture partitioned into three scenario groups: memory-helpful (historical preference applies to new task without restatement), memory-neutral (historical memory unrelated to task), and memory-conflicting (explicit preference override or gift recipient). All targets pre-registered and cryptographically frozen against the 50k catalogue.",
+  "customers": [
+    {
+      "user_id": "mem-helpful-activewear",
+      "personality": "Direct and active; values quality workout clothing.",
+      "background": "Runs and trains regularly; builds a coordinated athletic wardrobe.",
+      "interests": [
+        "running",
+        "training",
+        "fitness"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "workout clothing",
+          "fact": {
+            "key": "workout_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black workout clothing.",
+            "keywords": [
+              "color",
+              "colour",
+              "shade"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "mem-help-active-01",
+          "sequence": 1,
+          "goal": "Buy a workout tank top.",
+          "category": "Tanks Tops",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Tanks Tops. I generally prefer Black workout clothing.",
+          "opening_keys": [
+            "type",
+            "workout_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Tanks Tops",
+              "statement": "I need Tanks Tops.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price",
+                "cost"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "workout_color"
+          ],
+          "witness_id": "B088LHSNW4",
+          "evidence": {
+            "acceptable_count": 116,
+            "acceptable_ids_sha256": "ba1396513fd402d33397034af7f72164ec9a32e71225ef7bddaf04b27cec961d",
+            "best_ids_sha256": "43bc194ae347fa4f00a633eea6734945d5b911c4c51a49eb7ee1f851dbd41dc5",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "workout_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-helpful",
+          "acceptable_target_ids": null
+        },
+        {
+          "task_id": "mem-help-active-02",
+          "sequence": 2,
+          "goal": "Buy an active shirt for training.",
+          "category": "Active Shirts & Tees",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Active Shirts & Tees.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Active Shirts & Tees",
+              "statement": "I need Active Shirts & Tees.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 45.0,
+              "statement": "My budget is under 45 USD.",
+              "keywords": [
+                "budget",
+                "price",
+                "cost"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "workout_color"
+          ],
+          "witness_id": "B08L5CNVZ6",
+          "evidence": {
+            "acceptable_count": 86,
+            "acceptable_ids_sha256": "a04bdcab35cc1e5a94e819a58722087145d9cb3ecea2112ae6c196104723f8c9",
+            "best_ids_sha256": "617ebdc77f2fdfe823902d2b661b6db17ce154112cca7710a7ceda5f1f23fdd8",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "workout_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-helpful",
+          "acceptable_target_ids": null
+        }
+      ]
+    },
+    {
+      "user_id": "mem-helpful-commuter",
+      "personality": "Practical commuter; keeps reliable rain gear.",
+      "background": "Walks to the transit station and keeps umbrellas for home and work.",
+      "interests": [
+        "commuting",
+        "city life"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "umbrellas",
+          "fact": {
+            "key": "umbrella_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Yellow",
+            "statement": "I generally prefer Yellow umbrellas.",
+            "keywords": [
+              "color",
+              "colour",
+              "shade"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "mem-help-commute-01",
+          "sequence": 1,
+          "goal": "Buy a compact folding umbrella.",
+          "category": "Folding Umbrellas",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Folding Umbrellas. I generally prefer Yellow umbrellas.",
+          "opening_keys": [
+            "type",
+            "umbrella_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Folding Umbrellas",
+              "statement": "I need Folding Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price",
+                "cost"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "umbrella_color"
+          ],
+          "witness_id": "B08MDRTL62",
+          "evidence": {
+            "acceptable_count": 6,
+            "acceptable_ids_sha256": "ffccb7283d02f1665c54228319501636bd588d8af23892c67bbe0214b8e8c5ac",
+            "best_ids_sha256": "aa401a25f972eb2fc66a37aa3d604ef5a5a7881e2af897260312ac8622cd0f5e",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "umbrella_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-helpful",
+          "acceptable_target_ids": null
+        },
+        {
+          "task_id": "mem-help-commute-02",
+          "sequence": 2,
+          "goal": "Keep a stick umbrella at work.",
+          "category": "Stick Umbrellas",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Stick Umbrellas.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "recall_probe",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Stick Umbrellas",
+              "statement": "I need Stick Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 50.0,
+              "statement": "My budget is under 50 USD.",
+              "keywords": [
+                "budget",
+                "price",
+                "cost"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "umbrella_color"
+          ],
+          "witness_id": "B0714MVRLH",
+          "evidence": {
+            "acceptable_count": 8,
+            "acceptable_ids_sha256": "73cf2934cd072044358f924341073cbd9cb8f5ccb8bcb248bca62588f802e316",
+            "best_ids_sha256": "d9d77b2d85d89fcee1d19e89e3abe8723e4310a8ae7f2688000415fd1c30a2df",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "umbrella_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-helpful",
+          "acceptable_target_ids": null
+        }
+      ]
+    },
+    {
+      "user_id": "mem-neutral-traveler",
+      "personality": "Frequent traveler needing specific items for upcoming trips.",
+      "background": "Keeps travel gear organized; purchases items across varied departments.",
+      "interests": [
+        "travel",
+        "organization"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "umbrellas",
+          "fact": {
+            "key": "umbrella_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Yellow",
+            "statement": "I generally prefer Yellow umbrellas.",
+            "keywords": [
+              "color",
+              "colour",
+              "shade"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "mem-neut-travel-01",
+          "sequence": 1,
+          "goal": "Buy an umbrella for travel.",
+          "category": "Folding Umbrellas",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Folding Umbrellas. I generally prefer Yellow umbrellas.",
+          "opening_keys": [
+            "type",
+            "umbrella_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Folding Umbrellas",
+              "statement": "I need Folding Umbrellas.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 40.0,
+              "statement": "My budget is under 40 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "umbrella_color"
+          ],
+          "witness_id": "B08MDRTL62",
+          "evidence": {
+            "acceptable_count": 6,
+            "acceptable_ids_sha256": "ffccb7283d02f1665c54228319501636bd588d8af23892c67bbe0214b8e8c5ac",
+            "best_ids_sha256": "aa401a25f972eb2fc66a37aa3d604ef5a5a7881e2af897260312ac8622cd0f5e",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "umbrella_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-neutral",
+          "acceptable_target_ids": null
+        },
+        {
+          "task_id": "mem-neut-travel-02",
+          "sequence": 2,
+          "goal": "Buy a travel wallet for documents.",
+          "category": "Travel Wallets",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Travel Wallets.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Travel Wallets",
+              "statement": "I need Travel Wallets.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 30.0,
+              "statement": "My budget is under 30 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B010LVBVKA",
+          "evidence": {
+            "acceptable_count": 5,
+            "acceptable_ids_sha256": "9c109ea0715fbbc490db394d524910ec470617722e542e5997900b3f7234e65d",
+            "best_ids_sha256": "9c109ea0715fbbc490db394d524910ec470617722e542e5997900b3f7234e65d",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-neutral",
+          "acceptable_target_ids": [
+            "B00O1FFXH0",
+            "B010LVBVKA",
+            "B01G1ORT5M",
+            "B07MTH4LNG",
+            "B08T9XMHM7"
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "mem-neutral-daypack",
+      "personality": "Casual weekend adventurer with diverse interests.",
+      "background": "Enjoys outdoor day trips and casual accessories.",
+      "interests": [
+        "hiking",
+        "accessories"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "jewelry",
+          "fact": {
+            "key": "jewelry_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Silver",
+            "statement": "I generally prefer Silver necklaces.",
+            "keywords": [
+              "color",
+              "colour",
+              "metal"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "mem-neut-pack-01",
+          "sequence": 1,
+          "goal": "Buy a casual silver necklace.",
+          "category": "Necklaces",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Necklaces. I generally prefer Silver necklaces.",
+          "opening_keys": [
+            "type",
+            "jewelry_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Necklaces",
+              "statement": "I need Necklaces.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 30.0,
+              "statement": "My budget is under 30 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "jewelry_color"
+          ],
+          "witness_id": "B07CBQ79F9",
+          "evidence": {
+            "acceptable_count": 318,
+            "acceptable_ids_sha256": "7726cb6fbd25fee498428d6b032c310279cbfd96c35dc7a5dffc2cbd7716e920",
+            "best_ids_sha256": "01b2e72b84c54d790ab49135371414ff4db2d8f5c83e5d9fdafa4acc0237eace",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "jewelry_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-neutral",
+          "acceptable_target_ids": [
+            "B01J278RMO",
+            "B07CBQ79F9",
+            "B07KMCB7HM"
+          ]
+        },
+        {
+          "task_id": "mem-neut-pack-02",
+          "sequence": 2,
+          "goal": "Buy a casual daypack for day trips.",
+          "category": "Casual Daypacks",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Casual Daypacks.",
+          "opening_keys": [
+            "type"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Casual Daypacks",
+              "statement": "I need Casual Daypacks.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60.0,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B001MUKWQ4",
+          "evidence": {
+            "acceptable_count": 22,
+            "acceptable_ids_sha256": "1c2ef2b5fceba2d0e513b8165d570ba846659b7ddaa630717195a8669a446c5c",
+            "best_ids_sha256": "1c2ef2b5fceba2d0e513b8165d570ba846659b7ddaa630717195a8669a446c5c",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-neutral",
+          "acceptable_target_ids": [
+            "B001MUKWQ4",
+            "B018MUFW2A",
+            "B07C7JRKT9",
+            "B07CBYYHTL",
+            "B07FW4P711",
+            "B07JGG2DZZ",
+            "B082PKXCRT",
+            "B082WTK1SG",
+            "B0881GHY6L",
+            "B08C76XXG6",
+            "B08D9PLWVH",
+            "B08NXV6YB7",
+            "B091F3G5WF",
+            "B09T3NZC3D",
+            "B09YNLKJZ5",
+            "B0B8TK3QNW",
+            "B0BB3D4CGY",
+            "B0BB9NCZ97",
+            "B0BPKYFR1W",
+            "B0BQBWZXPC",
+            "B0BVTBSPXT",
+            "B0C2434D9Y"
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "mem-conflicting-override",
+      "personality": "Style-conscious shopper updating aesthetic preferences.",
+      "background": "Moving away from dark colors toward light and cream tones.",
+      "interests": [
+        "bags",
+        "fashion accessories"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "bags",
+          "fact": {
+            "key": "bag_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Black",
+            "statement": "I generally prefer Black bags.",
+            "keywords": [
+              "color",
+              "colour",
+              "shade"
+            ]
+          }
+        }
+      ],
+      "changes": [
+        {
+          "before_sequence": 2,
+          "updates": [
+            {
+              "category": "preference",
+              "scope": "bags",
+              "fact": {
+                "key": "bag_color",
+                "kind": "soft",
+                "field": "color",
+                "op": "eq",
+                "value": "Cream",
+                "statement": "I now prefer Cream bags.",
+                "keywords": [
+                  "color",
+                  "colour",
+                  "shade"
+                ]
+              }
+            }
+          ],
+          "remove_keys": [],
+          "background": "Updated bag color preference to cream."
+        }
+      ],
+      "visits": [
+        {
+          "task_id": "mem-conf-override-01",
+          "sequence": 1,
+          "goal": "Buy an everyday tote bag.",
+          "category": "Totes",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Totes. I generally prefer Black bags.",
+          "opening_keys": [
+            "type",
+            "bag_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Totes",
+              "statement": "I need Totes.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 60.0,
+              "statement": "My budget is under 60 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "bag_color"
+          ],
+          "witness_id": "B00GDOUL92",
+          "evidence": {
+            "acceptable_count": 43,
+            "acceptable_ids_sha256": "28dc9e9e585bac5ae3944212f848bd664cf89dec2e007a0fda505943edad8e45",
+            "best_ids_sha256": "d3a53e6aecae5375395c1c83637b6c05beb60b8828b20b4eacf67ca1cdb83e22",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "bag_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-conflicting",
+          "acceptable_target_ids": null
+        },
+        {
+          "task_id": "mem-conf-override-02",
+          "sequence": 2,
+          "goal": "Buy a phone bag with updated color preference.",
+          "category": "Crossbody Bags",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Crossbody Bags. I am no longer looking for black; I now prefer Cream bags.",
+          "opening_keys": [
+            "type",
+            "bag_color"
+          ],
+          "disclosure": "announce_change",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Crossbody Bags",
+              "statement": "I need Crossbody Bags.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "bag_color",
+              "kind": "hard",
+              "field": "color",
+              "op": "eq",
+              "value": "Cream",
+              "statement": "I now prefer Cream bags.",
+              "keywords": [
+                "color",
+                "colour",
+                "shade"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 55.0,
+              "statement": "My budget is under 55 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B096NDXZ3X",
+          "evidence": {
+            "acceptable_count": 1,
+            "acceptable_ids_sha256": "69992c47b36ee96ba5a34cb3ea2d041e04a3117adf9e1343083084a750f697ea",
+            "best_ids_sha256": "69992c47b36ee96ba5a34cb3ea2d041e04a3117adf9e1343083084a750f697ea",
+            "witness_sources": {
+              "type": "categories",
+              "bag_color": "details.Color",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-conflicting",
+          "acceptable_target_ids": null
+        }
+      ]
+    },
+    {
+      "user_id": "mem-conflicting-gift",
+      "personality": "Thoughtful gift giver who separates personal preferences from recipient tastes.",
+      "background": "Normally wears silver jewelry but shops for gold pieces when gifting.",
+      "interests": [
+        "jewelry",
+        "gift giving"
+      ],
+      "preferences": [
+        {
+          "category": "preference",
+          "scope": "jewelry",
+          "fact": {
+            "key": "personal_jewelry_color",
+            "kind": "soft",
+            "field": "color",
+            "op": "eq",
+            "value": "Silver",
+            "statement": "I generally prefer Silver necklaces.",
+            "keywords": [
+              "color",
+              "colour",
+              "metal"
+            ]
+          }
+        }
+      ],
+      "changes": [],
+      "visits": [
+        {
+          "task_id": "mem-conf-gift-01",
+          "sequence": 1,
+          "goal": "Buy a personal silver necklace.",
+          "category": "Necklaces",
+          "recipient": "self",
+          "evaluation_mode": "target_item",
+          "opening": "I need Necklaces. I generally prefer Silver necklaces.",
+          "opening_keys": [
+            "type",
+            "personal_jewelry_color"
+          ],
+          "disclosure": "progressive",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Necklaces",
+              "statement": "I need Necklaces.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 30.0,
+              "statement": "My budget is under 30 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [
+            "personal_jewelry_color"
+          ],
+          "witness_id": "B07CBQ79F9",
+          "evidence": {
+            "acceptable_count": 318,
+            "acceptable_ids_sha256": "7726cb6fbd25fee498428d6b032c310279cbfd96c35dc7a5dffc2cbd7716e920",
+            "best_ids_sha256": "01b2e72b84c54d790ab49135371414ff4db2d8f5c83e5d9fdafa4acc0237eace",
+            "witness_sources": {
+              "type": "categories",
+              "budget": "price",
+              "personal_jewelry_color": "details.Color"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-conflicting",
+          "acceptable_target_ids": [
+            "B01J278RMO",
+            "B07CBQ79F9",
+            "B07KMCB7HM"
+          ]
+        },
+        {
+          "task_id": "mem-conf-gift-02",
+          "sequence": 2,
+          "goal": "Buy a gold bangle as a gift for a friend.",
+          "category": "Bangle",
+          "recipient": "gift",
+          "evaluation_mode": "target_item",
+          "opening": "I need Bangle. This is a gift for a friend. My friend prefers Gold jewelry.",
+          "opening_keys": [
+            "type",
+            "gift_color"
+          ],
+          "disclosure": "gift",
+          "hard": [
+            {
+              "key": "type",
+              "kind": "hard",
+              "field": "product_type",
+              "op": "contains",
+              "value": "Bangle",
+              "statement": "I need Bangle.",
+              "keywords": [
+                "type",
+                "category"
+              ]
+            },
+            {
+              "key": "gift_color",
+              "kind": "hard",
+              "field": "color",
+              "op": "eq",
+              "value": "Gold",
+              "statement": "My friend prefers Gold jewelry.",
+              "keywords": [
+                "color",
+                "colour",
+                "metal"
+              ]
+            },
+            {
+              "key": "budget",
+              "kind": "hard",
+              "field": "price",
+              "op": "lt",
+              "value": 50.0,
+              "statement": "My budget is under 50 USD.",
+              "keywords": [
+                "budget",
+                "price"
+              ]
+            }
+          ],
+          "soft": [],
+          "persistent_keys": [],
+          "witness_id": "B00KV7CERY",
+          "evidence": {
+            "acceptable_count": 2,
+            "acceptable_ids_sha256": "8b81604639d9615202b61fa67918a845659831c46f4fa1a14dc3ce11da04fd62",
+            "best_ids_sha256": "8b81604639d9615202b61fa67918a845659831c46f4fa1a14dc3ce11da04fd62",
+            "witness_sources": {
+              "type": "categories",
+              "gift_color": "details.Color",
+              "budget": "price"
+            }
+          },
+          "max_user_turns": 6,
+          "scenario_group": "memory-conflicting",
+          "acceptable_target_ids": [
+            "B00KV7CERY",
+            "B081RGTQD5"
+          ]
+        }
+      ]
+    }
+  ]
+}
