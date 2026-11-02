@@ -81,7 +81,9 @@ def build_subset(
 
 
 def get_prior_accounted(ledger_path: Path) -> Decimal:
-    lines = [line.strip() for line in ledger_path.read_text().splitlines() if line.strip()]
+    lines = [
+        line.strip() for line in ledger_path.read_text().splitlines() if line.strip()
+    ]
     if not lines:
         raise ValueError(f"Prior ledger at {ledger_path} is empty")
     last_entry = json.loads(lines[-1])
@@ -120,18 +122,26 @@ def verify_sanity_results(output_dir: Path) -> dict:
     results_file = output_dir / "results.jsonl"
     if not results_file.exists():
         raise RuntimeError("Sanity run produced no results.jsonl")
-    rows = [json.loads(line) for line in results_file.read_text().splitlines() if line.strip()]
+    rows = [
+        json.loads(line)
+        for line in results_file.read_text().splitlines()
+        if line.strip()
+    ]
 
     # Filter visits for dev-activewear
     on_rows = [r for r in rows if r["condition"] == "user_memory_on"]
     off_rows = [r for r in rows if r["condition"] == "user_memory_off"]
 
     if len(on_rows) < 2 or len(off_rows) < 1:
-        raise RuntimeError(f"Expected at least 1 OFF visit and 2 ON visits, got {len(off_rows)} OFF and {len(on_rows)} ON")
+        raise RuntimeError(
+            f"Expected at least 1 OFF visit and 2 ON visits, got {len(off_rows)} OFF and {len(on_rows)} ON"
+        )
 
     for r in rows:
         if r.get("failure_scope") == "infrastructure":
-            raise RuntimeError(f"Infrastructure failure detected in session {r['astra_session_id']}: {r.get('termination')}")
+            raise RuntimeError(
+                f"Infrastructure failure detected in session {r['astra_session_id']}: {r.get('termination')}"
+            )
 
     # Check visit 1 ON consolidation
     v1_on = next(r for r in on_rows if r["sequence"] == 1)
@@ -140,7 +150,9 @@ def verify_sanity_results(output_dir: Path) -> dict:
         raise RuntimeError(f"Visit 1 ON consolidation failed or had errors: {cons1}")
     applied = cons1["user_memory"].get("applied", [])
     if not applied:
-        raise RuntimeError(f"Visit 1 ON did not apply any consolidated memories: {cons1}")
+        raise RuntimeError(
+            f"Visit 1 ON did not apply any consolidated memories: {cons1}"
+        )
 
     # Check visit 2 ON memory retrieval/injection
     v2_on = next(r for r in on_rows if r["sequence"] == 2)
@@ -167,17 +179,28 @@ def verify_sanity_results(output_dir: Path) -> dict:
 
 def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
     results_file = output_dir / "results.jsonl"
-    rows = [json.loads(line) for line in results_file.read_text().splitlines() if line.strip()]
+    rows = [
+        json.loads(line)
+        for line in results_file.read_text().splitlines()
+        if line.strip()
+    ]
 
     # Read ledger for cost breakdown
     ledger_entries = [
-        json.loads(line) for line in ledger_path.read_text().splitlines() if line.strip()
+        json.loads(line)
+        for line in ledger_path.read_text().splitlines()
+        if line.strip()
     ]
     settled = [e for e in ledger_entries if e["kind"] == "usage_settled"]
     shopper_settled = [e for e in settled if e["provider"] == "claude"]
     agent_settled = [e for e in settled if e["provider"] == "deepseek"]
 
-    total_cost_usd = float(settled[-1]["accounted_usd"]) - float(ledger_entries[0]["prior_allowance_usd"]) if settled else 0.0
+    total_cost_usd = (
+        float(settled[-1]["accounted_usd"])
+        - float(ledger_entries[0]["prior_allowance_usd"])
+        if settled
+        else 0.0
+    )
 
     by_customer = {}
     for r in rows:
@@ -194,7 +217,9 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
         if total_visits == 0:
             return {}
 
-        success_count = sum(1 for r in arm_rows if r["score"].get("outcome") == "success")
+        success_count = sum(
+            1 for r in arm_rows if r["score"].get("outcome") == "success"
+        )
         success_rate = success_count / total_visits
 
         turns_to_success = [
@@ -217,18 +242,25 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
         mrr = sum(1.0 / rank for rank in ranks) / total_visits
 
         hard_violations = sum(
-            r.get("score", {}).get("violations", {}).get("hard_fail", 0) for r in arm_rows
+            r.get("score", {}).get("violations", {}).get("hard_fail", 0)
+            for r in arm_rows
         )
         searches = sum(
-            (r.get("resources") or r.get("score", {}).get("resources", {})).get("searches", 0)
+            (r.get("resources") or r.get("score", {}).get("resources", {})).get(
+                "searches", 0
+            )
             for r in arm_rows
         )
         clarifications = sum(
-            (r.get("resources") or r.get("score", {}).get("resources", {})).get("clarifications", 0)
+            (r.get("resources") or r.get("score", {}).get("resources", {})).get(
+                "clarifications", 0
+            )
             for r in arm_rows
         )
         agent_turns = sum(
-            (r.get("resources") or r.get("score", {}).get("resources", {})).get("agent_turns", 0)
+            (r.get("resources") or r.get("score", {}).get("resources", {})).get(
+                "agent_turns", 0
+            )
             for r in arm_rows
         )
 
@@ -243,8 +275,12 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
             memories_written += len(um_cons.get("applied", []))
             memories_rejected += len(um_cons.get("rejected", []))
             u_audit = r.get("user_memory") or {}
-            memories_retrieved += len(u_audit.get("retrieved_ids", u_audit.get("retrieved", [])))
-            memories_injected += len(u_audit.get("injected_ids", u_audit.get("injected", [])))
+            memories_retrieved += len(
+                u_audit.get("retrieved_ids", u_audit.get("retrieved", []))
+            )
+            memories_injected += len(
+                u_audit.get("injected_ids", u_audit.get("injected", []))
+            )
 
         return {
             "total_visits": total_visits,
@@ -274,7 +310,9 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
         total_visits = len(arm_rows)
         if total_visits == 0:
             return {}
-        success_count = sum(1 for r in arm_rows if r.get("score", {}).get("outcome") == "success")
+        success_count = sum(
+            1 for r in arm_rows if r.get("score", {}).get("outcome") == "success"
+        )
         turns = [
             r["score"]["first_success_turn"]
             for r in arm_rows
@@ -294,11 +332,15 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
             "hit_at_5": sum(1 for rank in ranks if rank <= 5) / total_visits,
             "mrr": sum(1.0 / rank for rank in ranks) / total_visits,
             "searches": sum(
-                (r.get("resources") or r.get("score", {}).get("resources", {})).get("searches", 0)
+                (r.get("resources") or r.get("score", {}).get("resources", {})).get(
+                    "searches", 0
+                )
                 for r in arm_rows
             ),
             "clarifications": sum(
-                (r.get("resources") or r.get("score", {}).get("resources", {})).get("clarifications", 0)
+                (r.get("resources") or r.get("score", {}).get("resources", {})).get(
+                    "clarifications", 0
+                )
                 for r in arm_rows
             ),
         }
@@ -307,11 +349,19 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
     returning_on = summarize_returning("user_memory_on")
 
     # Tokens and cost breakdown
-    shopper_input_tokens = sum(e["usage"].get("prompt_tokens", 0) for e in shopper_settled)
-    shopper_output_tokens = sum(e["usage"].get("completion_tokens", 0) for e in shopper_settled)
+    shopper_input_tokens = sum(
+        e["usage"].get("prompt_tokens", 0) for e in shopper_settled
+    )
+    shopper_output_tokens = sum(
+        e["usage"].get("completion_tokens", 0) for e in shopper_settled
+    )
     agent_input_tokens = sum(e["usage"].get("prompt_tokens", 0) for e in agent_settled)
-    agent_output_tokens = sum(e["usage"].get("completion_tokens", 0) for e in agent_settled)
-    agent_cache_hits = sum(e["usage"].get("prompt_cache_hit_tokens", 0) for e in agent_settled)
+    agent_output_tokens = sum(
+        e["usage"].get("completion_tokens", 0) for e in agent_settled
+    )
+    agent_cache_hits = sum(
+        e["usage"].get("prompt_cache_hit_tokens", 0) for e in agent_settled
+    )
 
     report = {
         "summary": {
@@ -323,7 +373,9 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
         },
         "costs_and_tokens": {
             "total_cost_usd": total_cost_usd,
-            "prior_cost_usd": float(ledger_entries[0]["prior_allowance_usd"]) if ledger_entries else 0.0,
+            "prior_cost_usd": float(ledger_entries[0]["prior_allowance_usd"])
+            if ledger_entries
+            else 0.0,
             "final_cost_usd": float(settled[-1]["accounted_usd"]) if settled else 0.0,
             "shopper_calls": len(shopper_settled),
             "shopper_input_tokens": shopper_input_tokens,
@@ -386,38 +438,54 @@ def generate_evaluation_report(output_dir: Path, ledger_path: Path) -> dict:
         c_data = by_customer[cid]
         lines.append(f"### Customer `{cid}`")
         lines.append("")
-        lines.append("| Visit | Mode / Recipient | OFF Outcome (Turn/Rank) | ON Outcome (Turn/Rank) | Injected Memories (ON) | Consolidation Write (ON) |")
+        lines.append(
+            "| Visit | Mode / Recipient | OFF Outcome (Turn/Rank) | ON Outcome (Turn/Rank) | Injected Memories (ON) | Consolidation Write (ON) |"
+        )
         lines.append("| :---: | :--- | :---: | :---: | :--- | :--- |")
-        
+
         all_seqs = sorted(set(list(c_data["off"].keys()) + list(c_data["on"].keys())))
         for s in all_seqs:
             off_v = c_data["off"].get(s, {})
             on_v = c_data["on"].get(s, {})
-            
+
             mode_rec = f"{off_v.get('evaluation_mode', 'target')} / {off_v.get('recipient', 'self')}"
-            
+
             off_score = off_v.get("score", {})
             off_out = off_score.get("outcome", "unknown")
             off_turn = off_score.get("first_success_turn")
             off_rank = off_score.get("target_rank")
-            off_str = f"**{off_out.upper()}** (T{off_turn}, R#{off_rank})" if off_out == "success" else f"{off_out} ({off_v.get('termination')})"
-            
+            off_str = (
+                f"**{off_out.upper()}** (T{off_turn}, R#{off_rank})"
+                if off_out == "success"
+                else f"{off_out} ({off_v.get('termination')})"
+            )
+
             on_score = on_v.get("score", {})
             on_out = on_score.get("outcome", "unknown")
             on_turn = on_score.get("first_success_turn")
             on_rank = on_score.get("target_rank")
-            on_str = f"**{on_out.upper()}** (T{on_turn}, R#{on_rank})" if on_out == "success" else f"{on_out} ({on_v.get('termination')})"
-            
+            on_str = (
+                f"**{on_out.upper()}** (T{on_turn}, R#{on_rank})"
+                if on_out == "success"
+                else f"{on_out} ({on_v.get('termination')})"
+            )
+
             u_aud = on_v.get("user_memory", {}) or {}
             inj = u_aud.get("injected_ids", u_aud.get("injected", []))
             inj_str = ", ".join(inj) if inj else "none"
-            
+
             cons = on_v.get("consolidation", {}) or {}
             um_c = cons.get("user_memory") or {}
             app = um_c.get("applied", [])
-            app_str = ", ".join(f"{a['op']}:{a['attribute']}='{a['value']}'" for a in app) if app else "none"
-            
-            lines.append(f"| Visit {s} | {mode_rec} | {off_str} | {on_str} | {inj_str} | {app_str} |")
+            app_str = (
+                ", ".join(f"{a['op']}:{a['attribute']}='{a['value']}'" for a in app)
+                if app
+                else "none"
+            )
+
+            lines.append(
+                f"| Visit {s} | {mode_rec} | {off_str} | {on_str} | {inj_str} | {app_str} |"
+            )
         lines.append("")
 
     report_md = "\n".join(lines) + "\n"
@@ -449,7 +517,9 @@ def run_experiment(
     root = Path(root)
 
     print("=== ASTRA Live Memory Redesign Evaluation ===")
-    print(f"Mode: {'SANITY CHECK' if sanity else ('CUSTOM SUBSET' if customers else 'FULL 10-CUSTOMER EXPERIMENT')}")
+    print(
+        f"Mode: {'SANITY CHECK' if sanity else ('CUSTOM SUBSET' if customers else 'FULL 10-CUSTOMER EXPERIMENT')}"
+    )
     print(f"Root: {root}")
     print(f"Customers: {customers_list}")
     if max_visits:
@@ -464,7 +534,9 @@ def run_experiment(
     print(f"Absolute Safety Ceiling: ${absolute_cap}")
 
     if root.exists() and live:
-        raise ValueError(f"Output directory {root} already exists. Fresh directory required.")
+        raise ValueError(
+            f"Output directory {root} already exists. Fresh directory required."
+        )
 
     root.mkdir(parents=True, exist_ok=True)
 
@@ -480,15 +552,27 @@ def run_experiment(
     print(f"Compiled and validated {len(tasks)} customer visits.")
 
     # Validate search index
-    search = LexicalSearch(index_path, expected_catalogue_hash=loaded_data.catalogue_sha256)
+    search = LexicalSearch(
+        index_path, expected_catalogue_hash=loaded_data.catalogue_sha256
+    )
     search.close()
 
     total_sessions = len(tasks) * 2  # OFF then ON
-    print(f"Total planned sessions: {total_sessions} ({len(tasks)} OFF, {len(tasks)} ON)")
+    print(
+        f"Total planned sessions: {total_sessions} ({len(tasks)} OFF, {len(tasks)} ON)"
+    )
 
     stage_dir = root / ("sanity" if sanity else ("custom" if customers else "full"))
-    ledger_path = root / ("sanity.api-cost.jsonl" if sanity else ("custom.api-cost.jsonl" if customers else "full.api-cost.jsonl"))
-    journal_path = root / ("sanity.shopper-v3.jsonl" if sanity else ("custom.shopper-v3.jsonl" if customers else "full.shopper-v3.jsonl"))
+    ledger_path = root / (
+        "sanity.api-cost.jsonl"
+        if sanity
+        else ("custom.api-cost.jsonl" if customers else "full.api-cost.jsonl")
+    )
+    journal_path = root / (
+        "sanity.shopper-v3.jsonl"
+        if sanity
+        else ("custom.shopper-v3.jsonl" if customers else "full.shopper-v3.jsonl")
+    )
 
     cfg = LongitudinalConfig(
         customers=customers_frozen,
@@ -553,21 +637,43 @@ def run_experiment(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--sanity", action="store_true", help="Run 1-customer sanity check (dev-activewear)")
-    group.add_argument("--full", action="store_true", help="Run full 10-customer experiment")
-    group.add_argument("--customers", type=str, help="Comma-separated customer IDs to evaluate")
+    group.add_argument(
+        "--sanity",
+        action="store_true",
+        help="Run 1-customer sanity check (dev-activewear)",
+    )
+    group.add_argument(
+        "--full", action="store_true", help="Run full 10-customer experiment"
+    )
+    group.add_argument(
+        "--customers", type=str, help="Comma-separated customer IDs to evaluate"
+    )
 
-    parser.add_argument("--max-visits", type=int, default=None, help="Maximum visits per customer")
-    parser.add_argument("--root", type=Path, required=True, help="Root directory for outputs")
-    parser.add_argument("--incremental-cap", type=Decimal, default=DEFAULT_INCREMENTAL_CAP)
+    parser.add_argument(
+        "--max-visits", type=int, default=None, help="Maximum visits per customer"
+    )
+    parser.add_argument(
+        "--root", type=Path, required=True, help="Root directory for outputs"
+    )
+    parser.add_argument(
+        "--incremental-cap", type=Decimal, default=DEFAULT_INCREMENTAL_CAP
+    )
     parser.add_argument("--prior-ledger", type=Path, default=DEFAULT_PRIOR_LEDGER)
     parser.add_argument("--env-file", default=".env")
-    parser.add_argument("--live", action="store_true", help="Authorize paid model API calls")
+    parser.add_argument(
+        "--live", action="store_true", help="Authorize paid model API calls"
+    )
 
     args = parser.parse_args(argv)
 
-    customers = [c.strip() for c in args.customers.split(",")] if args.customers else None
-    inc_cap = SANITY_INCREMENTAL_CAP if args.sanity and args.incremental_cap == DEFAULT_INCREMENTAL_CAP else args.incremental_cap
+    customers = (
+        [c.strip() for c in args.customers.split(",")] if args.customers else None
+    )
+    inc_cap = (
+        SANITY_INCREMENTAL_CAP
+        if args.sanity and args.incremental_cap == DEFAULT_INCREMENTAL_CAP
+        else args.incremental_cap
+    )
 
     return run_experiment(
         args.root,

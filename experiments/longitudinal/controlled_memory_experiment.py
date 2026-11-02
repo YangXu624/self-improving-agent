@@ -4,12 +4,9 @@ Demonstrates whether ASTRA can learn a preference in Visit 1, remember it across
 sessions, and use it to improve decisions in Visit 2 under identical customer input.
 """
 
-from decimal import Decimal
 import json
-import os
+from decimal import Decimal
 from pathlib import Path
-import sys
-import time
 
 from astra_eval.api_budget import ApiCostBudget, BudgetedPolicy
 from astra_eval.oracle import CatalogueOracle
@@ -58,22 +55,43 @@ def run_experiment(
     # Check if Visit 1 is already completed in root
     v1_already_done = False
     v1_ledger_file = root / "api-cost.jsonl"
-    if v1_session_dir.exists() and (v1_mem_dir / "79896dcac7912dba269e1b381eb8f07be8560e60e27f287e9cf8ddf2d9ad848b" / "profile.md").exists():
+    if (
+        v1_session_dir.exists()
+        and (
+            v1_mem_dir
+            / "79896dcac7912dba269e1b381eb8f07be8560e60e27f287e9cf8ddf2d9ad848b"
+            / "profile.md"
+        ).exists()
+    ):
         v1_already_done = True
-        print("=== VISIT 1 already completed in root. Reusing Visit 1 session and memory ===")
+        print(
+            "=== VISIT 1 already completed in root. Reusing Visit 1 session and memory ==="
+        )
 
     if v1_already_done:
-        lines = [l.strip() for l in v1_ledger_file.read_text().splitlines() if l.strip()]
+        lines = [
+            line.strip()
+            for line in v1_ledger_file.read_text().splitlines()
+            if line.strip()
+        ]
         last_rec = json.loads(lines[-1])
         prior_accounted = Decimal(str(last_rec["accounted_usd"]))
         # Original prior ledger baseline was from prior_ledger
-        orig_lines = [l.strip() for l in prior_ledger.read_text().splitlines() if l.strip()]
+        orig_lines = [
+            line.strip()
+            for line in prior_ledger.read_text().splitlines()
+            if line.strip()
+        ]
         orig_prior = Decimal(str(json.loads(orig_lines[-1])["accounted_usd"]))
         ceiling = orig_prior + incremental_cap
         ledger_path = root / "api-cost-v2.jsonl"
         budget = ApiCostBudget(ledger_path, ceiling=ceiling, prior=prior_accounted)
     else:
-        lines = [l.strip() for l in prior_ledger.read_text().splitlines() if l.strip()]
+        lines = [
+            line.strip()
+            for line in prior_ledger.read_text().splitlines()
+            if line.strip()
+        ]
         if not lines:
             raise ValueError("Prior ledger is empty")
         last_record = json.loads(lines[-1])
@@ -233,7 +251,6 @@ def extract_session_details(session_data, oracle: CatalogueOracle):
     events = session_data.get("events", [])
     model_requests = [e for e in events if e.get("type") == "model_request"]
     decisions = [e for e in events if e.get("type") == "decision_validated"]
-    actions = [e for e in events if e.get("type") == "action_executed"]
     memory_selections = [e for e in events if e.get("type") == "user_memory_selection"]
     memory_injections = [e for e in events if e.get("type") == "user_memory_injection"]
     memory_updates = [e for e in events if e.get("type") == "user_memory_updated"]
@@ -261,14 +278,17 @@ def extract_session_details(session_data, oracle: CatalogueOracle):
     for pid in recommended_ids:
         row = oracle.row(pid)
         if row:
-            products.append({
-                "id": pid,
-                "title": row.get("title"),
-                "price": row.get("price"),
-                "color": (row.get("details") or {}).get("Color") or (row.get("details") or {}).get("Colour"),
-                "brand": (row.get("details") or {}).get("Brand"),
-                "categories": row.get("categories"),
-            })
+            products.append(
+                {
+                    "id": pid,
+                    "title": row.get("title"),
+                    "price": row.get("price"),
+                    "color": (row.get("details") or {}).get("Color")
+                    or (row.get("details") or {}).get("Colour"),
+                    "brand": (row.get("details") or {}).get("Brand"),
+                    "categories": row.get("categories"),
+                }
+            )
         else:
             products.append({"id": pid, "not_in_catalogue": True})
 
@@ -279,17 +299,29 @@ def extract_session_details(session_data, oracle: CatalogueOracle):
         "memory_selections": [m.get("payload") for m in memory_selections],
         "memory_injections": [m.get("payload") for m in memory_injections],
         "memory_updates": [m.get("payload") for m in memory_updates],
-        "final_action": decisions[-1].get("payload", {}).get("action") if decisions else None,
+        "final_action": decisions[-1].get("payload", {}).get("action")
+        if decisions
+        else None,
     }
 
 
-def write_summary(root: Path, results: dict, budget: ApiCostBudget, oracle: CatalogueOracle):
+def write_summary(
+    root: Path, results: dict, budget: ApiCostBudget, oracle: CatalogueOracle
+):
     analysis = {
-        "visit1": extract_session_details(results["visit1"], oracle) if results.get("visit1") else {},
-        "visit2_off": extract_session_details(results["visit2_off"], oracle) if results.get("visit2_off") else {},
-        "visit2_on": extract_session_details(results["visit2_on"], oracle) if results.get("visit2_on") else {},
+        "visit1": extract_session_details(results["visit1"], oracle)
+        if results.get("visit1")
+        else {},
+        "visit2_off": extract_session_details(results["visit2_off"], oracle)
+        if results.get("visit2_off")
+        else {},
+        "visit2_on": extract_session_details(results["visit2_on"], oracle)
+        if results.get("visit2_on")
+        else {},
         "cost_settled_usd": str(budget.total),
-        "incremental_spent_usd": str(budget.total - Decimal(results["prior_accounted_usd"])),
+        "incremental_spent_usd": str(
+            budget.total - Decimal(results["prior_accounted_usd"])
+        ),
     }
     results["analysis"] = analysis
     (root / "results.json").write_text(json.dumps(results, indent=2, default=str))
@@ -300,5 +332,7 @@ def write_summary(root: Path, results: dict, budget: ApiCostBudget, oracle: Cata
 
 if __name__ == "__main__":
     root_dir = Path("data/eval/canaries/v3-controlled-memory-20261102")
-    prior_ledger_file = Path("data/eval/canaries/v3-paired-bypass-20261102/paired.api-cost.jsonl")
+    prior_ledger_file = Path(
+        "data/eval/canaries/v3-paired-bypass-20261102/paired.api-cost.jsonl"
+    )
     run_experiment(root_dir, prior_ledger=prior_ledger_file)
