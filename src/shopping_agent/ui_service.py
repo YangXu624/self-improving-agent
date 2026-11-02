@@ -415,8 +415,8 @@ class ChatService:
                     saved_dict,
                     turn_id=f"purchase-rec-{saved.purchase_id}",
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            saved_dict["session_audit_error"] = str(exc)
 
         return saved_dict
 
@@ -446,8 +446,8 @@ class ChatService:
                         },
                         turn_id=f"purchase-cancel-{purchase_id}",
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                res_dict["session_audit_error"] = str(exc)
         return res_dict
 
     def get_purchases(
@@ -608,7 +608,7 @@ class ChatService:
             for (raw,) in db.execute(query_sql, query_params):
                 try:
                     records.append(json.loads(raw))
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
                     pass
 
             return {

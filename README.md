@@ -329,12 +329,27 @@ There is no persistent cross-session user-preference reuse.
   audit system. Malformed/truncated/inconsistent logs are preserved and rejected for manual
   repair. An intact event log rebuilds a corrupt or stale snapshot.
 
-## Verification
+## Verification & Quality Assurance
 
+See the authoritative [Submission Report & QA Checklist](docs/submission_report.md) for full acceptance status.
+
+### 1. Fast Standalone Offline Smoke-Test (< 0.1s)
+Runs without network, API keys, or external 50k assets:
 ```bash
-.venv/bin/python -W error::ResourceWarning -m unittest discover -s tests -v
-.venv/bin/ruff check .
-.venv/bin/ruff format --check src tests streamlit_app.py
+.venv/bin/python tools/submission_smoke_test.py
+```
+
+### 2. End-to-End Integration Acceptance
+Validates P0 12-step workflow, Mock Customer Lab namespaces, and P3 procedural learning:
+```bash
+.venv/bin/python -m unittest tests/test_submission_acceptance.py
+```
+
+### 3. Full Regression Suite (719 Tests)
+```bash
+.venv/bin/python -m unittest discover -s tests
+.venv/bin/ruff check src tests tools
+.venv/bin/ruff format --check src tests tools
 .venv/bin/python -m pip check
 ```
 
