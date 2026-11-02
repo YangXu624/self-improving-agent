@@ -93,10 +93,21 @@ def diagnose_turn_failure(events: list[dict], result: dict | None = None) -> str
             return "Search blocked on final call: executing a search requires at least one remaining decision call to view and verify candidate products."
         if code == "repeated_empty_search":
             return "Search blocked: the model repeated an identical search query that already returned 0 eligible products earlier in this turn."
+        if code == "no_match":
+            return "NO_MATCH: 0 eligible products in catalogue after fallback. Customer prompted to relax constraints."
         if code == "provider_network_failure":
             return "LLM API network failure: unable to connect to model endpoint or socket timed out."
         if str(code).startswith("provider_http_"):
             return f"LLM API HTTP error ({code}): upstream provider rejected or failed the request."
+
+    completed_events = [e for e in events if e.get("type") == "turn_completed"]
+    if completed_events:
+        comp_payload = completed_events[-1].get("payload", {})
+        if (
+            comp_payload.get("action") == "NO_MATCH"
+            or comp_payload.get("status") == "no_match"
+        ):
+            return "NO_MATCH: 0 eligible products in catalogue after fallback. Customer prompted to relax constraints."
 
     # 2. Check search result candidate emptiness
     for sr in search_results:
@@ -375,15 +386,29 @@ class TraceExtractor:
         if recs:
             stages["generate_response"].status = "completed"
             prod_ids = recs[-1].get("payload", {}).get("product_ids", [])
+            q = recs[-1].get("payload", {}).get("follow_up_question", "")
             stages[
                 "generate_response"
-            ].summary = f"RECOMMEND: {len(prod_ids)} verified product(s) recommended"
-            stages["generate_response"].outputs = {"product_ids": prod_ids}
+            ].summary = (
+                f"RECOMMEND: {len(prod_ids)} verified product(s) + follow-up question"
+            )
+            stages["generate_response"].outputs = {
+                "product_ids": prod_ids,
+                "follow_up_question": q,
+            }
         elif completed_ev:
             action = completed_ev.get("payload", {}).get("action", "RESPOND")
-            stages["generate_response"].status = "completed"
-            stages["generate_response"].summary = f"{action}: Response generated"
-            stages["generate_response"].outputs = {"action": action}
+            status = completed_ev.get("payload", {}).get("status", "ok")
+            if action == "NO_MATCH" or status == "no_match":
+                stages["generate_response"].status = "failed"
+                stages[
+                    "generate_response"
+                ].summary = "NO_MATCH: No products match all constraints; asked customer to relax criteria"
+                stages["generate_response"].outputs = {"action": "NO_MATCH"}
+            else:
+                stages["generate_response"].status = "completed"
+                stages["generate_response"].summary = f"{action}: Response generated"
+                stages["generate_response"].outputs = {"action": action}
         elif any(
             e.get("type") in {"turn_failed", "turn_closed_safely"} for e in turn_events
         ):

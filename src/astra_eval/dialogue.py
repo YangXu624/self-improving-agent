@@ -41,6 +41,7 @@ class AgentTurn:
     searches: int = 0
     error: str | None = None
     closure: str | None = None
+    follow_up_question: str | None = None
     rejected_decisions: int = 0
     usage: dict = field(default_factory=dict)
     model_seconds: float = 0.0
@@ -138,6 +139,7 @@ def extract_turn(events, request_id, response, turn, wall_ms):
         searches=budget.get("searches", 0),
         error=response.get("error") or failure,
         closure=response.get("closure"),
+        follow_up_question=response.get("follow_up_question"),
         rejected_decisions=rejected,
         usage=usage,
         model_seconds=seconds,
@@ -376,8 +378,14 @@ class DialogueRunner:
             record.turns.append(agent_turn)
             if self.budget is not None:
                 self.budget.charge(agent_turn.model_calls)
+            view_text = agent_turn.message
+            fq = getattr(agent_turn, "follow_up_question", None) or response.get(
+                "follow_up_question"
+            )
+            if fq and fq != agent_turn.message:
+                view_text = f"{agent_turn.message}\n\n{fq}"
             view = AssistantView(
-                text=agent_turn.message,
+                text=view_text,
                 products=tuple(
                     card(p, include_facts=autonomous)
                     for p in response.get("products", [])
@@ -430,7 +438,10 @@ class DialogueRunner:
                 if agent_turn.closure or agent_turn.status != "ok":
                     record.error = agent_turn.error or agent_turn.closure
                     record.termination = (
-                        "provider_error"
+                        "no_match"
+                        if agent_turn.action == "NO_MATCH"
+                        or agent_turn.status == "no_match"
+                        else "provider_error"
                         if str(record.error).startswith(PROVIDER_PREFIX)
                         else "budget_exhausted"
                         if record.error

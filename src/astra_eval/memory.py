@@ -76,7 +76,7 @@ def matched_keys(profile, question):
     lowered = question.lower()
     return [
         f.key
-        for f in profile.facts
+        for f in getattr(profile, "facts", ())
         if any(re.search(rf"\b{re.escape(k.lower())}s?\b", lowered) for k in f.keywords)
     ]
 
@@ -129,13 +129,15 @@ class ShopperMemory:
     def record_assistant(self, view: AssistantView, extra=None):
         """Log ASTRA's message; note which of its questions were already answered."""
         self.turn = view.turn
+        is_recommend = bool(extra and extra.get("action") == "RECOMMEND")
         for question in questions_in(view.text):
             keys = matched_keys(self.profile, question)
             repeat = bool(keys) and all(k in self.revealed for k in keys)
-            self.unmatched_questions += not keys
-            for key in keys:
-                if key in self.revealed:
-                    self.repeat_counts[key] = self.repeat_counts.get(key, 0) + 1
+            if not is_recommend:
+                self.unmatched_questions += not keys
+                for key in keys:
+                    if key in self.revealed:
+                        self.repeat_counts[key] = self.repeat_counts.get(key, 0) + 1
             self.questions.append(
                 {
                     "turn": view.turn,

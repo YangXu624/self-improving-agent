@@ -693,6 +693,10 @@ def run_app(project_root: Path) -> None:
                 if message["role"] == "assistant":
                     if message.get("products"):
                         render_products(message["products"], show_images)
+                    if message.get("follow_up_question") and message.get(
+                        "follow_up_question"
+                    ) != message.get("message"):
+                        st.markdown(f"**{message['follow_up_question']}**")
 
                     # Highlight memory injected during this turn
                     um_data = message.get("user_memory", {})

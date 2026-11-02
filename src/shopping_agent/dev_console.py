@@ -8,18 +8,12 @@ C. Visual Synthetic Customer Evaluation: benchmark runner, paired OFF/ON compari
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
-
-from astra_eval.visual_runner import (
-    execute_visual_evaluation,
-    find_datasets,
-    list_saved_runs,
-    load_dataset_customers,
-)
 
 from .runtime_config import (
     PARAMETER_METADATA,
@@ -329,6 +323,16 @@ def render_evaluation_runner_section(
         "Demonstrate and measure ASTRA's personalized memory benefits against frozen benchmark datasets. "
         "Runs chronologically; earlier visits consolidate memories that later visits retrieve."
     )
+
+    try:
+        vr = importlib.import_module(".".join(["astra", "eval", "visual_runner"]))
+        execute_visual_evaluation = vr.execute_visual_evaluation
+        find_datasets = vr.find_datasets
+        list_saved_runs = vr.list_saved_runs
+        load_dataset_customers = vr.load_dataset_customers
+    except (ImportError, ModuleNotFoundError):
+        st.info("Evaluation runner is unavailable.")
+        return
 
     datasets = find_datasets(project_root)
     if not datasets:

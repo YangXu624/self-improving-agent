@@ -167,7 +167,12 @@ class ScriptedShopper:
         if questions and not parts:
             parts.append(profile.no_preference_reply)
         action = "reply"
-        if not questions and view.products:
+        unrevealed_questions = [
+            (q, keys)
+            for q, keys, answered in questions
+            if any(k not in memory.revealed for k in keys)
+        ]
+        if view.products and (not questions or not unrevealed_questions):
             budget = [
                 f for f in profile.facts if f.field == "price" and f.kind == "hard"
             ]
@@ -179,9 +184,11 @@ class ScriptedShopper:
                 and p["price"] >= float(budget[0].value)
             ]
             if over:
-                parts.append("Those are over my budget; do you have anything cheaper?")
+                parts = ["Those are over my budget; do you have anything cheaper?"]
+                reveals = []
             else:
-                parts.append("Those look good, thank you.")
+                parts = ["Those look good, thank you."]
+                reveals = []
                 action = "accept"
         elif not questions:
             pending = [

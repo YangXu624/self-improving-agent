@@ -64,7 +64,7 @@ def verified_products(action, result, state, search, receipt):
         raise ActionError("resolve_state_conflicts_before_search_or_recommendation")
     if (
         not result
-        or action.search_id != result["search_id"]
+        or (action.search_id is not None and action.search_id != result["search_id"])
         or result["state_version"] != state.version
         or result["catalogue_version"] != search.catalogue_version
     ):
@@ -775,6 +775,16 @@ class ShoppingAgent:
                     if action.type == "RECOMMEND":
                         # Must be a result actually provided to THIS decision, still current
                         # after any state edit, and from this session/catalogue only.
+                        if not action.product_ids:
+                            raise ActionError(
+                                "recommendation_requires_at_least_one_product"
+                            )
+                        q = getattr(action, "follow_up_question", None)
+                        if not q or not str(q).strip():
+                            raise ActionError(
+                                "recommendation_requires_follow_up_question"
+                            )
+
                         products = verified_products(
                             action,
                             result,
@@ -782,11 +792,16 @@ class ShoppingAgent:
                             self.search,
                             built.visible_search,
                         )
+                        msg = (
+                            getattr(action, "message", None)
+                            or "Here are verified recommendations based on your preferences."
+                        )
                         response = {
                             "status": "ok",
                             "action": "RECOMMEND",
-                            "message": "Catalogue matches (historical facts; variant availability unverified).",
+                            "message": msg,
                             "products": products,
+                            "follow_up_question": str(q).strip(),
                             "search_id": result["search_id"],
                         }
                         session.append(
@@ -794,6 +809,7 @@ class ShoppingAgent:
                             {
                                 "search_id": result["search_id"],
                                 "product_ids": action.product_ids,
+                                "follow_up_question": str(q).strip(),
                                 "state_version": session.state.version,
                                 "goal_epoch": session.state.goal_epoch,
                                 "requirements": [
@@ -813,6 +829,23 @@ class ShoppingAgent:
                             },
                             request_id,
                         )
+                    elif action.type == "NO_MATCH":
+                        response = {
+                            "status": "no_match",
+                            "action": "NO_MATCH",
+                            "message": getattr(
+                                action,
+                                "message",
+                                "I could not find verified products matching all your requirements in the catalogue.",
+                            ),
+                            "follow_up_question": getattr(
+                                action,
+                                "follow_up_question",
+                                "Which requirement would you like to relax (e.g. price, color, or style)?",
+                            ),
+                            "products": [],
+                            "closure": "no_match",
+                        }
                     elif action.type == "CLARIFY":
                         if redundant_clarification(session, action.attribute):
                             raise ActionError("redundant_clarification")
@@ -822,6 +855,7 @@ class ShoppingAgent:
                             "message": action.question,
                             "attribute": action.attribute,
                             "products": [],
+                            "follow_up_question": action.question,
                         }
                     else:
                         response = {
@@ -871,15 +905,7 @@ class ShoppingAgent:
                         "message": (
                             "This search already returned no verified matches. Please change the query or requirements before trying again; no products are recommended."
                             if closure == "repeated_empty_search"
-                            else (
-                                "I couldn't find verified matches for that specific search within this turn's budget. Could you specify what kind of items you are looking for (such as tops, shorts, or pants)?"
-                                if any(
-                                    r.status == "active"
-                                    and r.field in {"product_type", "category"}
-                                    for r in session.state.requirements
-                                )
-                                else CLOSURE_MESSAGE
-                            )
+                            else CLOSURE_MESSAGE
                         ),
                         "products": [],
                         "closure": closure,

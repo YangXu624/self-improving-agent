@@ -183,11 +183,14 @@ class HeuristicPolicy:
             and not updates
         ):
             ids = [p["id"] for p in result["candidates"]][:3]
+            follow_up = "Do you prefer a relaxed or fitted style?"
             action = (
                 {
                     "type": "RECOMMEND",
                     "search_id": result["search_id"],
                     "product_ids": ids,
+                    "message": "Here are recommendations based on your preferences.",
+                    "follow_up_question": follow_up,
                 }
                 if ids
                 else {"type": "RESPOND", "message": "I found no verified matches."}
