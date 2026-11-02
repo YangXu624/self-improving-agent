@@ -9,6 +9,7 @@ from uuid import uuid4
 import streamlit as st
 
 from .cards import PROFILES
+from .catalogue_browser import render_catalogue_browser
 from .dev_console import (
     render_evaluation_runner_section,
     render_execution_trace_section,
@@ -549,10 +550,18 @@ def run_app(project_root: Path) -> None:
             icon="ℹ️",
         )
 
-    # Main Tabs: Chat vs Memory Inspector vs Developer Console
-    chat_tab, inspector_tab, dev_tab = st.tabs(
-        ["💬 Shopping Chat", "🧠 Memory Inspector", "🛠️ Developer Console & Eval Runner"]
+    # Main Tabs: Chat vs Catalogue Browser vs Memory Inspector vs Developer Console
+    chat_tab, catalogue_tab, inspector_tab, dev_tab = st.tabs(
+        [
+            "💬 Shopping Chat",
+            "🛍️ Browse Catalogue",
+            "🧠 Memory Inspector",
+            "🛠️ Developer Console & Eval Runner",
+        ]
     )
+
+    with catalogue_tab:
+        render_catalogue_browser(service, show_images)
 
     with dev_tab:
         sec_param, sec_trace, sec_eval = st.tabs(

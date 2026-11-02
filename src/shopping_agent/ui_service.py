@@ -383,3 +383,114 @@ class ChatService:
             "records": [r.model_dump() for r in profile.records],
         }
         return json.dumps(data, indent=2)
+
+    def browse_catalogue(
+        self,
+        *,
+        query: str = "",
+        category: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        price_known_only: bool = False,
+        sort_by: str = "default",
+        limit: int = 24,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Query and paginate through catalogue products with search and attribute filters."""
+        import sqlite3
+
+        db = sqlite3.connect(self.index.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            params: list[Any] = []
+            where_clauses: list[str] = []
+
+            # 1. Text search via product_fts if query is non-empty
+            terms = [t for t in re.findall(r"\w+", query) if len(t) > 0]
+            if terms:
+                match_str = " AND ".join(f'"{t}"' for t in terms)
+                from_clause = (
+                    "FROM product_fts JOIN products p ON p.rowid = product_fts.rowid"
+                )
+                where_clauses.append("product_fts MATCH ?")
+                params.append(match_str)
+            else:
+                from_clause = "FROM products p"
+
+            # 2. Category filtering
+            if category and category.strip() and category != "All Categories":
+                cat_clean = category.strip().replace('"', "")
+                where_clauses.append("json_extract(p.record, '$.categories') LIKE ?")
+                params.append(f'%"{cat_clean}"%')
+
+            # 3. Price filtering
+            if min_price is not None and min_price > 0:
+                where_clauses.append("json_extract(p.record, '$.facts.price') >= ?")
+                params.append(float(min_price))
+
+            if max_price is not None and max_price > 0:
+                where_clauses.append("json_extract(p.record, '$.facts.price') <= ?")
+                params.append(float(max_price))
+
+            if price_known_only:
+                where_clauses.append(
+                    "json_extract(p.record, '$.facts.price') IS NOT NULL"
+                )
+
+            where_str = (
+                ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            )
+
+            # 4. Count query
+            count_sql = f"SELECT count(*) {from_clause} {where_str}"
+            try:
+                total_count = db.execute(count_sql, params).fetchone()[0]
+            except sqlite3.OperationalError:
+                total_count = 0
+
+            if total_count == 0:
+                return {
+                    "total_count": 0,
+                    "products": [],
+                    "limit": limit,
+                    "offset": offset,
+                }
+
+            # 5. Order By
+            if sort_by == "price_asc":
+                order_by = (
+                    "ORDER BY CASE WHEN json_extract(p.record, '$.facts.price') IS NULL THEN 1 ELSE 0 END, "
+                    "json_extract(p.record, '$.facts.price') ASC, p.id"
+                )
+            elif sort_by == "price_desc":
+                order_by = "ORDER BY json_extract(p.record, '$.facts.price') DESC, p.id"
+            elif sort_by == "rating_desc":
+                order_by = (
+                    "ORDER BY CASE WHEN json_extract(p.record, '$.facts.rating') IS NULL THEN 1 ELSE 0 END, "
+                    "json_extract(p.record, '$.facts.rating') DESC, p.id"
+                )
+            else:
+                if terms:
+                    order_by = "ORDER BY bm25(product_fts, 5.0, 3.0, 2.0, 1.0), p.id"
+                else:
+                    order_by = "ORDER BY p.id"
+
+            # 6. Page query
+            query_sql = (
+                f"SELECT p.record {from_clause} {where_str} {order_by} LIMIT ? OFFSET ?"
+            )
+            query_params = list(params) + [int(limit), int(offset)]
+            records = []
+            for (raw,) in db.execute(query_sql, query_params):
+                try:
+                    records.append(json.loads(raw))
+                except Exception:
+                    pass
+
+            return {
+                "total_count": total_count,
+                "products": records,
+                "limit": limit,
+                "offset": offset,
+            }
+        finally:
+            db.close()
