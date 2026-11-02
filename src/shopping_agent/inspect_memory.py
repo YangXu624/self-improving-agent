@@ -18,7 +18,9 @@ def inspect_user_memory(user_id: str, root: str | Path = "data/user-memory") -> 
     profile = store.read(user_id)
     active = [r.model_dump() for r in profile.records if r.status == "active"]
     superseded = [r.model_dump() for r in profile.records if r.status == "superseded"]
-    deleted = [r.model_dump() for r in profile.records if r.status in ("deleted", "retracted")]
+    deleted = [
+        r.model_dump() for r in profile.records if r.status in ("deleted", "retracted")
+    ]
 
     # Exclude raw float embeddings from CLI json display
     for group in (active, superseded, deleted):
@@ -38,7 +40,9 @@ def inspect_user_memory(user_id: str, root: str | Path = "data/user-memory") -> 
     }
 
 
-def inspect_experience_memory(db_path: str | Path = "data/experience/lessons.db") -> dict:
+def inspect_experience_memory(
+    db_path: str | Path = "data/experience/lessons.db",
+) -> dict:
     """Return a structured summary of centralized procedural lessons."""
     store = ExperienceStore(db_path)
     lessons = store.list_lessons()
@@ -62,17 +66,27 @@ def main():
 
     user_parser = subparsers.add_parser("user", help="Inspect customer semantic memory")
     user_parser.add_argument("user_id", help="Customer user ID")
-    user_parser.add_argument("--root", default="data/user-memory", help="User memory root directory")
+    user_parser.add_argument(
+        "--root", default="data/user-memory", help="User memory root directory"
+    )
 
-    query_parser = subparsers.add_parser("query", help="Test semantic retrieval for a user")
+    query_parser = subparsers.add_parser(
+        "query", help="Test semantic retrieval for a user"
+    )
     query_parser.add_argument("user_id", help="Customer user ID")
     query_parser.add_argument("text", help="Query text to match")
-    query_parser.add_argument("--root", default="data/user-memory", help="User memory root directory")
+    query_parser.add_argument(
+        "--root", default="data/user-memory", help="User memory root directory"
+    )
     query_parser.add_argument("--limit", type=int, default=5)
     query_parser.add_argument("--min-similarity", type=float, default=0.50)
 
-    exp_parser = subparsers.add_parser("experience", help="Inspect centralized experience memory")
-    exp_parser.add_argument("--db", default="data/experience/lessons.db", help="Path to experience database")
+    exp_parser = subparsers.add_parser(
+        "experience", help="Inspect centralized experience memory"
+    )
+    exp_parser.add_argument(
+        "--db", default="data/experience/lessons.db", help="Path to experience database"
+    )
 
     args = parser.parse_args()
 
@@ -81,7 +95,12 @@ def main():
         print(json.dumps(info, indent=2))
     elif args.command == "query":
         store = UserMemoryStore(args.root)
-        results = store.retrieve(args.user_id, args.text, limit=args.limit, min_similarity=args.min_similarity)
+        results = store.retrieve(
+            args.user_id,
+            args.text,
+            limit=args.limit,
+            min_similarity=args.min_similarity,
+        )
         output = [
             {
                 "id": r.id,

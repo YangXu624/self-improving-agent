@@ -380,7 +380,10 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     consistency=ConsistencyConfig(),
                     budget=budget,
                 )
-                is_target = config.force_target_item_evaluation or task.visit.evaluation_mode == "target_item"
+                is_target = (
+                    config.force_target_item_evaluation
+                    or task.visit.evaluation_mode == "target_item"
+                )
                 record = runner.run(
                     task.scenario,
                     condition=name,
@@ -389,7 +392,13 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     if task.target_truth.target_title
                     else (),
                     target_rule=TargetRule(
-                        task.target_truth.target_id, config.score.headline_k
+                        task.target_truth.target_id,
+                        config.score.headline_k,
+                        acceptable_target_ids=tuple(
+                            task.target_truth.acceptable_target_ids
+                        )
+                        if task.target_truth.acceptable_target_ids
+                        else None,
                     )
                     if is_target
                     else None,
@@ -436,7 +445,9 @@ def run_longitudinal(config: LongitudinalConfig, *, simulator, policy) -> dict:
                     "sequence": task.visit.sequence,
                     "astra_session_id": record.astra_session_id,
                     "condition": name,
-                    "evaluation_mode": "target_item" if is_target else task.visit.evaluation_mode,
+                    "evaluation_mode": "target_item"
+                    if is_target
+                    else task.visit.evaluation_mode,
                     "recipient": task.visit.recipient,
                     "termination": record.termination,
                     "failure_scope": failure_scope(record),

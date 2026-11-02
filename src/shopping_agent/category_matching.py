@@ -8,17 +8,18 @@ import re
 
 
 def forms(word: str) -> set[str]:
-    result = {word}
-    if (
-        len(word) > 3
-        and word.endswith("s")
-        and not word.endswith(("ss", "us", "is", "ous"))
-    ):
-        result.add(word[:-1])
-        if word.endswith(("ches", "shes", "sses", "xes", "zes")):
-            result.add(word[:-2])
-        if word.endswith("ies") and len(word) > 4:
-            result.add(word[:-3] + "y")
+    w = word.casefold()
+    result = {w}
+    if w in ("clothes", "clothing", "clothe"):
+        result.update({"clothes", "clothing", "clothe"})
+    if w in ("workout", "activewear", "athletic", "active"):
+        result.update({"workout", "activewear", "athletic", "active"})
+    if len(w) > 3 and w.endswith("s") and not w.endswith(("ss", "us", "is", "ous")):
+        result.add(w[:-1])
+        if w.endswith(("ches", "shes", "sses", "xes", "zes")):
+            result.add(w[:-2])
+        if w.endswith("ies") and len(w) > 4:
+            result.add(w[:-3] + "y")
     return result
 
 

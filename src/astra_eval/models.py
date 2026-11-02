@@ -119,6 +119,7 @@ class TargetGroundTruth(Strict):
 
     scenario_id: str
     target_id: str | None = None
+    acceptable_target_ids: list[str] | None = None
     catalogue_sha256: str
     profile_sha256: str
     hard: list[Fact]

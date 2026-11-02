@@ -26,7 +26,9 @@ class EmbeddingProvider(ABC):
 class FastEmbedProvider(EmbeddingProvider):
     """In-process ONNX-based embedding provider using fastembed with caching."""
 
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", cache_size: int = 2048):
+    def __init__(
+        self, model_name: str = "BAAI/bge-small-en-v1.5", cache_size: int = 2048
+    ):
         from fastembed import TextEmbedding
 
         self.model_name = model_name
@@ -83,7 +85,13 @@ class DeterministicEmbeddingProvider(EmbeddingProvider):
         results = []
         for text in texts:
             vec = [0.0] * self.dim
-            words = text.casefold().replace(".", " ").replace(",", " ").replace("-", " ").split()
+            words = (
+                text.casefold()
+                .replace(".", " ")
+                .replace(",", " ")
+                .replace("-", " ")
+                .split()
+            )
             if not words:
                 results.append(vec)
                 continue
@@ -104,7 +112,16 @@ class DeterministicEmbeddingProvider(EmbeddingProvider):
             # Concept equivalence mapping for core benchmark domains
             # e.g., clothing <-> shirt, tee, top; footwear <-> shoe, boot
             synonym_groups = [
-                {"clothing", "clothes", "shirt", "tee", "top", "activewear", "tank", "apparel"},
+                {
+                    "clothing",
+                    "clothes",
+                    "shirt",
+                    "tee",
+                    "top",
+                    "activewear",
+                    "tank",
+                    "apparel",
+                },
                 {"shoes", "shoe", "sneakers", "boots", "footwear"},
                 {"bag", "bags", "backpack", "tote", "duffel", "luggage"},
                 {"umbrella", "umbrellas", "raingear", "rainwear"},
@@ -114,7 +131,9 @@ class DeterministicEmbeddingProvider(EmbeddingProvider):
                 overlap = group.intersection(words)
                 if overlap:
                     # Inject a shared concept signal
-                    concept_h = int(hashlib.md5(sorted(group)[0].encode("utf-8")).hexdigest(), 16)
+                    concept_h = int(
+                        hashlib.md5(sorted(group)[0].encode("utf-8")).hexdigest(), 16
+                    )
                     vec[concept_h % self.dim] += 2.0 * len(overlap)
 
             # L2 normalize

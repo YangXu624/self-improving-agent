@@ -73,7 +73,13 @@ def sanitize_session_for_distillation(session: Session) -> dict:
             user_queries.append(msg)
         elif ev.type == "tool_call" and ev.payload.get("tool") == "product_search":
             action = ev.payload.get("action", {})
-            actions.append({"tool": "SEARCH", "query": action.get("query"), "mode": action.get("mode")})
+            actions.append(
+                {
+                    "tool": "SEARCH",
+                    "query": action.get("query"),
+                    "mode": action.get("mode"),
+                }
+            )
         elif ev.type == "decision_validated":
             action = ev.payload.get("action", {})
             act_type = action.get("type")

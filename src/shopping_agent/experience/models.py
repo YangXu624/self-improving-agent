@@ -59,8 +59,12 @@ class Lesson:
     def semantic_text(self) -> str:
         """Text used for semantic situation embedding."""
         parts = [
-            f"Situation: {self.situation}" if self.situation else f"When: {self.directive}",
-            f"Strategy: {self.strategy}" if self.strategy else f"Action: {self.expected_action}",
+            f"Situation: {self.situation}"
+            if self.situation
+            else f"When: {self.directive}",
+            f"Strategy: {self.strategy}"
+            if self.strategy
+            else f"Action: {self.expected_action}",
             f"Rationale: {self.rationale}" if self.rationale else "",
         ]
         return " ".join(p for p in parts if p).strip()
@@ -94,7 +98,9 @@ class Lesson:
             usage_count=int(data.get("usage_count", 0)),
             success_count=int(data.get("success_count", 0)),
             failure_count=int(data.get("failure_count", 0)),
-            updated_at=data.get("updated_at") or data.get("created_at") or utc_now_iso(),
+            updated_at=data.get("updated_at")
+            or data.get("created_at")
+            or utc_now_iso(),
             embedding=data.get("embedding"),
         )
 

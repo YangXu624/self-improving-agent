@@ -482,7 +482,12 @@ class LexicalSearch:
         # Safe fallback enabled identically for both Memory OFF and Memory ON when use_fallback is True:
         # If action.mode == "all" and terms > 1 yields 0 eligible candidates,
         # relax over-constrained query terms while strictly enforcing all hard constraints via assess().
-        if action.mode == "all" and len(terms) > 1 and len(eligible_pool) == 0 and use_fallback:
+        if (
+            action.mode == "all"
+            and len(terms) > 1
+            and len(eligible_pool) == 0
+            and use_fallback
+        ):
             if user_memory:
                 memory_records = (
                     user_memory.get("records", [])
@@ -604,6 +609,7 @@ class LexicalSearch:
             "match_mode": action.mode,
             "effective_match_mode": effective_mode,
             "fallback_triggered": fallback_triggered,
+            "fallback_reason": fallback_reason,
             "applied_hard_filters": [r.model_dump() for r in hard_filters],
             "counts": {
                 "lexical_matches": matched,

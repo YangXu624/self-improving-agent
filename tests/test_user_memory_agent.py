@@ -202,7 +202,9 @@ class UserMemoryAgentTests(unittest.TestCase):
         }
 
         def visit1_decision(ctx):
-            res = decision(ctx, {"type": "RESPOND", "message": "I found workout options."})
+            res = decision(
+                ctx, {"type": "RESPOND", "message": "I found workout options."}
+            )
             res["user_memory_updates"] = [proposal]
             return res
 
@@ -228,7 +230,9 @@ class UserMemoryAgentTests(unittest.TestCase):
         visit2_sid = self.store.create("dev-activewear")
         fresh_memory_store = UserMemoryStore(self.root / "user-memory")
         policy_on = fixtures.ScriptedPolicy(
-            lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Looking for workout tops."})
+            lambda ctx: decision(
+                ctx, {"type": "RESPOND", "message": "Looking for workout tops."}
+            )
         )
         agent_on_visit2 = ShoppingAgent(
             self.store, self.search, policy_on, user_memory=fresh_memory_store
@@ -250,7 +254,9 @@ class UserMemoryAgentTests(unittest.TestCase):
         # Memory OFF comparison: Session evaluated without persistent user memory
         visit_off_sid = self.store.create("dev-activewear")
         policy_off = fixtures.ScriptedPolicy(
-            lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Looking for tops."})
+            lambda ctx: decision(
+                ctx, {"type": "RESPOND", "message": "Looking for tops."}
+            )
         )
         agent_off = ShoppingAgent(self.store, self.search, policy_off, user_memory=None)
         agent_off.turn(
@@ -266,7 +272,9 @@ class UserMemoryAgentTests(unittest.TestCase):
     def test_offline_memory_proof_visit1_visit2_and_explicit_update(self):
         user_id = "shopper-activewear"
         v1_sid = self.store.create(user_id)
-        memory_store = UserMemoryStore(self.root / "exp-memory", bypass_semantic_validation=True)
+        memory_store = UserMemoryStore(
+            self.root / "exp-memory", bypass_semantic_validation=True
+        )
 
         # Visit 1: Customer discloses preference; DeepSeek proposes; Python accepts and saves
         utterance_v1 = "Hi! I'm looking for a workout top. I usually go for black."
@@ -281,12 +289,16 @@ class UserMemoryAgentTests(unittest.TestCase):
         }
 
         def v1_response(ctx):
-            res = decision(ctx, {"type": "RESPOND", "message": "I will find black workout tops."})
+            res = decision(
+                ctx, {"type": "RESPOND", "message": "I will find black workout tops."}
+            )
             res["user_memory_updates"] = [v1_proposal]
             return res
 
         policy_v1 = fixtures.ScriptedPolicy(v1_response)
-        agent_v1 = ShoppingAgent(self.store, self.search, policy_v1, user_memory=memory_store)
+        agent_v1 = ShoppingAgent(
+            self.store, self.search, policy_v1, user_memory=memory_store
+        )
         turn1_result = agent_v1.turn(user_id, v1_sid, utterance_v1, request_id="v1-t1")
         self.assertEqual(turn1_result["status"], "ok")
         self.assertEqual(turn1_result["user_memory"]["rejected"], [])
@@ -304,13 +316,19 @@ class UserMemoryAgentTests(unittest.TestCase):
 
         # Visit 2: Fresh session, customer does not repeat color, ASTRA retrieves & injects
         v2_sid = self.store.create(user_id)
-        fresh_memory_store = UserMemoryStore(self.root / "exp-memory", bypass_semantic_validation=True)
+        fresh_memory_store = UserMemoryStore(
+            self.root / "exp-memory", bypass_semantic_validation=True
+        )
 
         def v2_response(ctx):
-            return decision(ctx, {"type": "RESPOND", "message": "Here are workout tops."})
+            return decision(
+                ctx, {"type": "RESPOND", "message": "Here are workout tops."}
+            )
 
         policy_v2 = fixtures.ScriptedPolicy(v2_response)
-        agent_v2 = ShoppingAgent(self.store, self.search, policy_v2, user_memory=fresh_memory_store)
+        agent_v2 = ShoppingAgent(
+            self.store, self.search, policy_v2, user_memory=fresh_memory_store
+        )
         utterance_v2 = "I need another workout top for the gym."
         agent_v2.turn(user_id, v2_sid, utterance_v2, request_id="v2-t1")
 
@@ -326,7 +344,9 @@ class UserMemoryAgentTests(unittest.TestCase):
 
         # Verify Memory OFF has no access
         v_off_sid = self.store.create(user_id)
-        policy_off = fixtures.ScriptedPolicy(lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Hi."}))
+        policy_off = fixtures.ScriptedPolicy(
+            lambda ctx: decision(ctx, {"type": "RESPOND", "message": "Hi."})
+        )
         agent_off = ShoppingAgent(self.store, self.search, policy_off, user_memory=None)
         agent_off.turn(user_id, v_off_sid, utterance_v2, request_id="voff-t1")
         ctx_off = policy_off.contexts[0]
@@ -338,7 +358,9 @@ class UserMemoryAgentTests(unittest.TestCase):
 
         def v3_response(ctx):
             prev_record = ctx["user_memory"]["records"][0]
-            res = decision(ctx, {"type": "RESPOND", "message": "Updated your preference to cream."})
+            res = decision(
+                ctx, {"type": "RESPOND", "message": "Updated your preference to cream."}
+            )
             res["user_memory_updates"] = [
                 {
                     "op": "REPLACE",
@@ -354,7 +376,9 @@ class UserMemoryAgentTests(unittest.TestCase):
             return res
 
         policy_v3 = fixtures.ScriptedPolicy(v3_response)
-        agent_v3 = ShoppingAgent(self.store, self.search, policy_v3, user_memory=fresh_memory_store)
+        agent_v3 = ShoppingAgent(
+            self.store, self.search, policy_v3, user_memory=fresh_memory_store
+        )
         turn3_result = agent_v3.turn(user_id, v3_sid, utterance_v3, request_id="v3-t1")
         self.assertEqual(turn3_result["status"], "ok")
         self.assertEqual(turn3_result["user_memory"]["rejected"], [])

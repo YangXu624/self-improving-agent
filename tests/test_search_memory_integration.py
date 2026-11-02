@@ -5,7 +5,6 @@ from pathlib import Path
 
 from shopping_agent.contracts import Requirement, Search, ShoppingState
 from shopping_agent.retrieval import LexicalSearch, build_index, file_hash
-from shopping_agent.state import apply_updates
 
 
 def make_product(id, title, categories, price=50.0, **details):
@@ -295,7 +294,9 @@ class SearchMemoryIntegrationTests(unittest.TestCase):
                 add_req("price", "lt", 100.0, "under 100", "hard"),
             ]
         )
-        action = Search(type="SEARCH", query="active workout shirt", mode="all", limit=5)
+        action = Search(
+            type="SEARCH", query="active workout shirt", mode="all", limit=5
+        )
 
         res_off = self.search.search(action, state, user_memory=None)
         res_empty = self.search.search(
@@ -332,8 +333,10 @@ class SearchMemoryIntegrationTests(unittest.TestCase):
 
     def test_7_gift_intent_suppresses_personal_memories(self):
         """When user is shopping for a gift, personal profile memories are suppressed from context."""
-        from shopping_agent.sessions import Session
-        from shopping_agent.user_memory import UserMemoryStore, UserProfile, MemoryRecord
+        from shopping_agent.user_memory import (
+            MemoryRecord,
+            UserMemoryStore,
+        )
 
         store = UserMemoryStore(self.root / "memories")
         user_id = "customer-gift"
@@ -357,6 +360,7 @@ class SearchMemoryIntegrationTests(unittest.TestCase):
             conn.close()
 
         from shopping_agent.sessions import SessionStore
+
         session_store = SessionStore(self.root / "sessions")
         s_id = session_store.create(user_id)
         with session_store.open(user_id, s_id) as session:
@@ -417,9 +421,7 @@ class SearchMemoryIntegrationTests(unittest.TestCase):
         res_no_black = self.search.search(
             action, state_no_black, user_memory=user_memory
         )
-        self.assertNotIn(
-            "p_black_30", [c["id"] for c in res_no_black["candidates"]]
-        )
+        self.assertNotIn("p_black_30", [c["id"] for c in res_no_black["candidates"]])
         self.assertEqual(res_no_black["candidates"][0]["id"], "p_red_25")
 
     def test_9_broad_fallback_enabled_identically_for_off_and_on(self):

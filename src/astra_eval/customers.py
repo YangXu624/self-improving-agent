@@ -66,6 +66,10 @@ class ShoppingVisit(Strict):
     witness_id: str = Field(min_length=1, max_length=80)
     evidence: VisitEvidence | None = None
     max_user_turns: int = Field(default=6, ge=1, le=20)
+    scenario_group: (
+        Literal["memory-helpful", "memory-neutral", "memory-conflicting"] | None
+    ) = None
+    acceptable_target_ids: list[str] | None = None
 
 
 class Customer(Strict):
@@ -118,7 +122,7 @@ class Customer(Strict):
 class CustomerDataset(Strict):
     schema_version: Literal[1] = 1
     dataset_id: str = Field(pattern=SAFE_ID)
-    split: Literal["development"] = "development"
+    split: Literal["development", "evaluation", "benchmark"] = "development"
     catalogue_sha256: str
     provenance: str
     customers: list[Customer] = Field(min_length=1)
@@ -313,9 +317,13 @@ def validate_dataset(
                 catalogue_sha256=oracle.sha256,
                 evidence_contract="longitudinal-development-v1/raw-catalogue",
             )
+            target_candidates = visit.acceptable_target_ids or (
+                best if len(best) > 1 else None
+            )
             target = TargetGroundTruth(
                 scenario_id=visit.task_id,
                 target_id=visit.witness_id,
+                acceptable_target_ids=target_candidates,
                 catalogue_sha256=oracle.sha256,
                 profile_sha256=digest(scenario.profile.model_dump()),
                 hard=hard,

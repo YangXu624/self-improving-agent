@@ -42,7 +42,9 @@ class MemoryProposal(Strict):
     scope: str = Field(default="general", pattern=r"^[a-z][a-z0-9 /-]{0,79}$")
     basis: Literal["confirmed", "inferred"] = "confirmed"
     quote: str = Field(default="", min_length=1, max_length=500)
-    target_id: str | None = Field(default=None, pattern=r"^(?:um-[a-f0-9]{32}|memory\.\d+)$")
+    target_id: str | None = Field(
+        default=None, pattern=r"^(?:um-[a-f0-9]{32}|memory\.\d+)$"
+    )
 
 
 class MemoryDecision(Decision):
@@ -114,7 +116,9 @@ class MemoryRecord(Strict):
 
     def semantic_text(self) -> str:
         """Text used for generating vector embeddings."""
-        scope_str = f" for {self.scope}" if self.scope and self.scope != "general" else ""
+        scope_str = (
+            f" for {self.scope}" if self.scope and self.scope != "general" else ""
+        )
         return f"{self.category} {self.attribute}: {self.value}{scope_str}. {self.quote}".strip()
 
 
@@ -150,7 +154,9 @@ def calculate_decay_factor(
     record_dt = parse_iso(timestamp_str)
     elapsed_days = max(0.0, (now - record_dt).total_seconds() / 86400.0)
 
-    half_life = getattr(config, f"{record.category}_half_life_days", config.preference_half_life_days)
+    half_life = getattr(
+        config, f"{record.category}_half_life_days", config.preference_half_life_days
+    )
     if half_life <= 0:
         return 1.0
 
@@ -418,9 +424,7 @@ def validate_proposal(
         r"\b(?:prefer|prefers|preference|like|likes|love|loves|"
         r"go[- ]to|goto|favorite|favourite|go with|goes with|choice)\b"
     )
-    if proposal.category == "preference" and not re.search(
-        positive_pref, evidence
-    ):
+    if proposal.category == "preference" and not re.search(positive_pref, evidence):
         raise UserMemoryError("preference_requires_positive_preference_evidence")
     if proposal.category == "dislike" and not re.search(
         r"\b(?:dislike|hate|avoid)\b|\b(?:don't|do not) (?:like|prefer)\b", evidence
@@ -440,17 +444,73 @@ def validate_proposal(
                 if quote_words[i : i + len(value_words)] == value_words
             )
             neutral = {
-                "always", "usually", "generally", "typically", "regularly", "in", "general", "now", "on",
-                "i", "my", "think", "prefer", "preference", "like", "love", "dislike", "hate", "avoid",
-                "remember", "that", "from", "going", "forward", "actually", "instead", "of", "rather",
-                "the", "a", "an", "do", "not", "dont", "is", "are", "favorite", "favourite", "go", "to",
-                "goto", "with", "tend", "tends", "choice", "for", "stuff", "items", "things",
+                "always",
+                "usually",
+                "generally",
+                "typically",
+                "regularly",
+                "in",
+                "general",
+                "now",
+                "on",
+                "i",
+                "my",
+                "think",
+                "prefer",
+                "preference",
+                "like",
+                "love",
+                "dislike",
+                "hate",
+                "avoid",
+                "remember",
+                "that",
+                "from",
+                "going",
+                "forward",
+                "actually",
+                "instead",
+                "of",
+                "rather",
+                "the",
+                "a",
+                "an",
+                "do",
+                "not",
+                "dont",
+                "is",
+                "are",
+                "favorite",
+                "favourite",
+                "go",
+                "to",
+                "goto",
+                "with",
+                "tend",
+                "tends",
+                "choice",
+                "for",
+                "stuff",
+                "items",
+                "things",
+                "clothing",
+                "clothes",
+                "clothe",
+                "apparel",
+                "wear",
+                "design",
+                "designs",
+                "style",
+                "styles",
+                "color",
+                "colors",
             }
             start = end - len(value_words)
             if set(quote_words[:start] + quote_words[end:]) - neutral:
                 raise UserMemoryError("specific_preference_requires_scope")
         except StopIteration:
             pass
+
     if (
         re.search(r"\b(?:maybe|perhaps|might|i think|probably)\b", evidence)
         and proposal.basis == "confirmed"
@@ -534,7 +594,9 @@ class UserMemoryStore:
                     active_counts[key] -= 1
             else:
                 active_counts[key] = 1
-                fd = os.open(path / ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+                fd = os.open(
+                    path / ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600
+                )
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX)
                     yield path
@@ -579,7 +641,9 @@ class UserMemoryStore:
             """)
         return conn
 
-    def _sync_legacy_markdown(self, path: Path, user_id: str, conn: sqlite3.Connection) -> None:
+    def _sync_legacy_markdown(
+        self, path: Path, user_id: str, conn: sqlite3.Connection
+    ) -> None:
         """Migrate legacy profile.md to SQLite if SQLite is empty and profile.md exists."""
         cur = conn.execute("SELECT COUNT(*) as cnt FROM records")
         if cur.fetchone()["cnt"] > 0:
@@ -645,14 +709,18 @@ class UserMemoryStore:
                 row = cur.fetchone()
                 revision = int(row["value"]) if row else 0
 
-                cur = conn.execute("SELECT value FROM meta WHERE key = 'last_consolidated_session_id'")
+                cur = conn.execute(
+                    "SELECT value FROM meta WHERE key = 'last_consolidated_session_id'"
+                )
                 row = cur.fetchone()
                 last_sid = row["value"] if row else None
 
                 cur = conn.execute("SELECT * FROM records ORDER BY created_at ASC")
                 records = []
                 for r in cur.fetchall():
-                    emb = json.loads(r["embedding_json"]) if r["embedding_json"] else None
+                    emb = (
+                        json.loads(r["embedding_json"]) if r["embedding_json"] else None
+                    )
                     rec_dict = dict(r)
                     rec_dict.pop("embedding_json", None)
                     rec_dict["embedding"] = emb
@@ -667,12 +735,18 @@ class UserMemoryStore:
             finally:
                 conn.close()
 
-    def write_profile(self, profile: UserProfile, path: Path, conn: sqlite3.Connection) -> None:
+    def write_profile(
+        self, profile: UserProfile, path: Path, conn: sqlite3.Connection
+    ) -> None:
         """Atomically persist profile to SQLite and sync readable profile.md."""
         with conn:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('revision', ?), ('user_id', ?), ('last_consolidated_session_id', ?)",
-                (str(profile.revision), profile.user_id, profile.last_consolidated_session_id or ""),
+                (
+                    str(profile.revision),
+                    profile.user_id,
+                    profile.last_consolidated_session_id or "",
+                ),
             )
             for r in profile.records:
                 emb_json = json.dumps(r.embedding) if r.embedding else None
@@ -719,12 +793,25 @@ class UserMemoryStore:
             if os.path.exists(temp):
                 os.unlink(temp)
 
+    def clear(self, user_id: str) -> None:
+        """Clear all stored memories for a user, resetting to an empty profile."""
+        with self._locked(user_id) as path:
+            conn = self._init_db(path)
+            try:
+                with conn:
+                    conn.execute("DELETE FROM records")
+                    conn.execute("DELETE FROM meta")
+                empty = UserProfile(user_id=user_id, revision=0, records=[])
+                self.write_profile(empty, path, conn)
+            finally:
+                conn.close()
+
     def retrieve(
         self,
         user_id: str,
         query: str,
         *,
-        min_similarity: float = 0.58,
+        min_similarity: float = 0.45,
         limit: int = 5,
         now: datetime | None = None,
     ) -> list[tuple[MemoryRecord, float]]:
@@ -760,6 +847,7 @@ class UserMemoryStore:
         scored: list[tuple[MemoryRecord, float]] = []
 
         query_words = set(re.findall(r"[^\W_]+", query.casefold()))
+        query_stems = {w.rstrip("s") for w in query_words if len(w) > 2} | query_words
 
         for record in active_records:
             if not record.embedding:
@@ -770,7 +858,16 @@ class UserMemoryStore:
             # Optional lexical reinforcement if scope or value explicitly appears
             scope_words = set(re.findall(r"[^\W_]+", record.scope.casefold()))
             val_words = set(re.findall(r"[^\W_]+", record.value.casefold()))
-            overlap_bonus = 0.05 if (query_words & scope_words) or (query_words & val_words) else 0.0
+            scope_stems = {
+                w.rstrip("s") for w in scope_words if len(w) > 2
+            } | scope_words
+            val_stems = {w.rstrip("s") for w in val_words if len(w) > 2} | val_words
+
+            overlap_bonus = (
+                0.20
+                if (query_stems & scope_stems) or (query_stems & val_stems)
+                else 0.0
+            )
 
             combined_score = (sim + overlap_bonus) * decay
 
@@ -788,7 +885,7 @@ class UserMemoryStore:
         message: str,
         *,
         limit: int = 5,
-        min_similarity: float = 0.58,
+        min_similarity: float = 0.45,
     ) -> dict:
         """Build model-visible user_memory context block before agent turn processing."""
         user_id = session.user_id
@@ -816,7 +913,9 @@ class UserMemoryStore:
         if is_gift:
             return {"revision": profile.revision, "records": []}
 
-        results = self.retrieve(user_id, context_query, min_similarity=min_similarity, limit=limit)
+        results = self.retrieve(
+            user_id, context_query, min_similarity=min_similarity, limit=limit
+        )
 
         return {
             "revision": profile.revision,
@@ -861,7 +960,10 @@ class UserMemoryStore:
                         match = True
                     elif category and r.category == category.casefold():
                         match = True
-                    elif query and (query.casefold() in r.value.casefold() or query.casefold() in r.scope.casefold()):
+                    elif query and (
+                        query.casefold() in r.value.casefold()
+                        or query.casefold() in r.scope.casefold()
+                    ):
                         match = True
                     elif not attribute and not category and not query:
                         # Withdraw all active if no filter specified
@@ -879,7 +981,9 @@ class UserMemoryStore:
             finally:
                 conn.close()
 
-    def check_and_apply_explicit_forgetting(self, user_id: str, message: str) -> list[str]:
+    def check_and_apply_explicit_forgetting(
+        self, user_id: str, message: str
+    ) -> list[str]:
         """Check for explicit user instruction to forget or remove preferences and withdraw immediately."""
         text = message.casefold()
         forget_patterns = [
@@ -918,7 +1022,14 @@ class UserMemoryStore:
                         continue
 
                     target_id = op_dict.get("target_id")
-                    target = next((r for r in profile.records if r.id == target_id and r.status == "active"), None)
+                    target = next(
+                        (
+                            r
+                            for r in profile.records
+                            if r.id == target_id and r.status == "active"
+                        ),
+                        None,
+                    )
 
                     if op == "REINFORCE":
                         if target:
@@ -964,7 +1075,8 @@ class UserMemoryStore:
                                 and r.category == op_dict.get("category")
                                 and r.attribute == op_dict.get("attribute")
                                 and r.scope == op_dict.get("scope", "general")
-                                and r.value.casefold() == op_dict.get("value", "").casefold()
+                                and r.value.casefold()
+                                == op_dict.get("value", "").casefold()
                             ),
                             None,
                         )
@@ -1012,20 +1124,38 @@ class UserMemoryStore:
         visible_ids: set[str] | None = None,
     ) -> dict:
         """All-or-nothing proposal batch, grounded in this owner's actual user event."""
-        event_type = getattr(event, "type", None) if hasattr(event, "type") else (event.get("type") if isinstance(event, dict) else None)
-        user_id = getattr(event, "user_id", None) if hasattr(event, "user_id") else (event.get("user_id") if isinstance(event, dict) else None)
-        session_id = getattr(event, "session_id", None) if hasattr(event, "session_id") else (event.get("session_id") if isinstance(event, dict) else None)
-        event_id = getattr(event, "event_id", None) if hasattr(event, "event_id") else (event.get("event_id") if isinstance(event, dict) else None)
-        payload = getattr(event, "payload", {}) if hasattr(event, "payload") else (event.get("payload", {}) if isinstance(event, dict) else {})
+        event_type = (
+            getattr(event, "type", None)
+            if hasattr(event, "type")
+            else (event.get("type") if isinstance(event, dict) else None)
+        )
+        user_id = (
+            getattr(event, "user_id", None)
+            if hasattr(event, "user_id")
+            else (event.get("user_id") if isinstance(event, dict) else None)
+        )
+        session_id = (
+            getattr(event, "session_id", None)
+            if hasattr(event, "session_id")
+            else (event.get("session_id") if isinstance(event, dict) else None)
+        )
+        event_id = (
+            getattr(event, "event_id", None)
+            if hasattr(event, "event_id")
+            else (event.get("event_id") if isinstance(event, dict) else None)
+        )
+        payload = (
+            getattr(event, "payload", {})
+            if hasattr(event, "payload")
+            else (event.get("payload", {}) if isinstance(event, dict) else {})
+        )
         msg = payload.get("message", "")
 
         if (
             event_type != "user_message"
             or user_id != session.user_id
             or session_id != session.id
-            or not any(
-                e.event_id == event_id for e in session.events
-            )
+            or not any(e.event_id == event_id for e in session.events)
         ):
             raise UserMemoryError("memory_requires_owned_user_event")
 
@@ -1054,8 +1184,7 @@ class UserMemoryStore:
                 processed = [
                     r
                     for r in profile.records
-                    if r.source_event_id == event_id
-                    or r.closed_by_event_id == event_id
+                    if r.source_event_id == event_id or r.closed_by_event_id == event_id
                 ]
                 if processed:
                     return {
@@ -1092,7 +1221,10 @@ class UserMemoryStore:
                         changed.append(target.id)
                         if proposal.op == "RETRACT":
                             continue
-                    elif proposal.category != "purchase" and not self.bypass_semantic_validation:
+                    elif (
+                        proposal.category != "purchase"
+                        and not self.bypass_semantic_validation
+                    ):
                         existing = next(
                             (
                                 r
@@ -1147,7 +1279,9 @@ class UserMemoryStore:
                     if r.status == "active" and r.category == "dislike"
                 }
                 if positive & negative and not self.bypass_semantic_validation:
-                    raise UserMemoryError("memory_conflict_requires_explicit_correction")
+                    raise UserMemoryError(
+                        "memory_conflict_requires_explicit_correction"
+                    )
                 if len(profile.records) > 500:
                     raise UserMemoryError("profile_record_limit")
 

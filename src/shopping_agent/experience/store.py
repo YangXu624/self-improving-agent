@@ -85,7 +85,9 @@ class ExperienceStore:
             for col_name, col_type in new_columns:
                 if col_name not in cols:
                     try:
-                        self.conn.execute(f"ALTER TABLE lessons ADD COLUMN {col_name} {col_type}")
+                        self.conn.execute(
+                            f"ALTER TABLE lessons ADD COLUMN {col_name} {col_type}"
+                        )
                     except sqlite3.OperationalError:
                         pass
 
@@ -99,7 +101,11 @@ class ExperienceStore:
         self.close()
 
     def _row_to_lesson(self, row: sqlite3.Row) -> Lesson:
-        emb = json.loads(row["embedding_json"]) if "embedding_json" in row.keys() and row["embedding_json"] else None
+        emb = (
+            json.loads(row["embedding_json"])
+            if "embedding_json" in row.keys() and row["embedding_json"]
+            else None
+        )
         return Lesson(
             lesson_id=row["lesson_id"],
             version=row["version"],
@@ -124,7 +130,9 @@ class ExperienceStore:
             usage_count=row["usage_count"] if "usage_count" in row.keys() else 0,
             success_count=row["success_count"] if "success_count" in row.keys() else 0,
             failure_count=row["failure_count"] if "failure_count" in row.keys() else 0,
-            updated_at=row["updated_at"] if "updated_at" in row.keys() else row["created_at"],
+            updated_at=row["updated_at"]
+            if "updated_at" in row.keys()
+            else row["created_at"],
             embedding=emb,
         )
 
@@ -154,7 +162,14 @@ class ExperienceStore:
         with self.conn:
             current = self.get(lesson.lesson_id)
             if current is not None:
-                ignored = {"status", "created_at", "updated_at", "review_notes", "superseded_by_id", "embedding"}
+                ignored = {
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "review_notes",
+                    "superseded_by_id",
+                    "embedding",
+                }
                 old = {k: v for k, v in current.to_dict().items() if k not in ignored}
                 new = {k: v for k, v in lesson.to_dict().items() if k not in ignored}
                 notes_unchanged = (
@@ -209,7 +224,9 @@ class ExperienceStore:
         return self.get(lesson.lesson_id)  # type: ignore
 
     def get(self, lesson_id: str) -> Lesson | None:
-        cur = self.conn.execute("SELECT * FROM lessons WHERE lesson_id = ?", (lesson_id,))
+        cur = self.conn.execute(
+            "SELECT * FROM lessons WHERE lesson_id = ?", (lesson_id,)
+        )
         row = cur.fetchone()
         return self._row_to_lesson(row) if row is not None else None
 
@@ -395,7 +412,9 @@ class ExperienceStore:
         if current is None:
             raise KeyError(f"Lesson not found: {lesson_id}")
         if current.status not in ("confirmed", "active"):
-            raise ValueError(f"Can only activate confirmed lessons; status is {current.status}")
+            raise ValueError(
+                f"Can only activate confirmed lessons; status is {current.status}"
+            )
         with self.conn:
             self.conn.execute(
                 "UPDATE lessons SET status = 'active' WHERE lesson_id = ?",
@@ -541,10 +560,15 @@ class ExperienceStore:
 
         existing_active = self.list_lessons(status="active")
         for existing in existing_active:
-            if existing.scope == candidate.scope and existing.expected_action == candidate.expected_action:
+            if (
+                existing.scope == candidate.scope
+                and existing.expected_action == candidate.expected_action
+            ):
                 ex_emb = existing.embedding
                 if ex_emb is None:
-                    ex_emb = self.embedding_provider.embed_query(existing.semantic_text())
+                    ex_emb = self.embedding_provider.embed_query(
+                        existing.semantic_text()
+                    )
                 sim = cosine_similarity(emb, ex_emb)
                 if sim >= min_similarity_for_reinforce:
                     # Reinforce existing lesson
@@ -559,7 +583,13 @@ class ExperienceStore:
                             SET usage_count = ?, success_count = ?, confidence = ?, updated_at = ?
                             WHERE lesson_id = ?
                             """,
-                            (new_usage, new_success, new_conf, now_str, existing.lesson_id),
+                            (
+                                new_usage,
+                                new_success,
+                                new_conf,
+                                now_str,
+                                existing.lesson_id,
+                            ),
                         )
                     return "reinforced", self.get(existing.lesson_id)  # type: ignore
 

@@ -151,15 +151,25 @@ class ShoppingAgent:
             user_event = session.append(
                 "user_message", {"message": message}, request_id
             )
-            if self.user_memory is not None and hasattr(self.user_memory, "check_and_apply_explicit_forgetting"):
-                withdrawn = self.user_memory.check_and_apply_explicit_forgetting(user_id, message)
+            if self.user_memory is not None and hasattr(
+                self.user_memory, "check_and_apply_explicit_forgetting"
+            ):
+                withdrawn = self.user_memory.check_and_apply_explicit_forgetting(
+                    user_id, message
+                )
                 if withdrawn:
-                    session.append("user_memory_withdrawn", {"withdrawn_ids": withdrawn}, request_id)
+                    session.append(
+                        "user_memory_withdrawn",
+                        {"withdrawn_ids": withdrawn},
+                        request_id,
+                    )
             calls, searches, feedback, edits_allowed = 0, 0, [], True
             retrieved_experience: list[str] = []
             injected_experience: list[str] = []
             applied_experience: list[str] = []
             memory_changes, memory_rejections = [], []
+            retrieved_user_memories: list[dict] = []
+            injected_user_memories: list[dict] = []
 
             def finish(resp):
                 if self.user_memory is not None:
@@ -167,6 +177,13 @@ class ShoppingAgent:
                         "enabled": True,
                         "updates": memory_changes,
                         "rejected": memory_rejections,
+                        "retrieved": [
+                            r.get("id") for r in retrieved_user_memories if r.get("id")
+                        ],
+                        "injected": [
+                            r.get("id") for r in injected_user_memories if r.get("id")
+                        ],
+                        "injected_records": injected_user_memories,
                     }
                 exp_payload = {
                     "retrieved": retrieved_experience,
@@ -221,6 +238,9 @@ class ShoppingAgent:
                         },
                         request_id,
                     )
+                    retrieved_user_memories = [
+                        dict(r) for r in memory_view.get("records", [])
+                    ]
                 result = latest_search(
                     session, self.search.catalogue_version, self.search.strategy_version
                 )
@@ -259,7 +279,9 @@ class ShoppingAgent:
                             message, limit=1, scope=scope, context_cues=cues
                         )
                         if sem_matches:
-                            retrieved_lessons = [lesson for lesson, score in sem_matches]
+                            retrieved_lessons = [
+                                lesson for lesson, score in sem_matches
+                            ]
                     if not retrieved_lessons:
                         for trig in possible_triggers:
                             matches = self.experience.retrieve(
@@ -300,16 +322,21 @@ class ShoppingAgent:
                         context_options["memory_format"] = "compact"
                     if memory_view is not None:
                         context_options["user_memory"] = memory_view
+                    remaining_calls = self.max_calls - calls
+                    remaining_searches = max(
+                        0, min(self.max_searches - searches, remaining_calls - 1)
+                    )
+                    budget = {
+                        "model_calls": remaining_calls,
+                        "searches": remaining_searches,
+                    }
                     try:
                         built = self.context_builder(
                             session,
                             message,
                             result,
                             feedback,
-                            {
-                                "model_calls": self.max_calls - calls,
-                                "searches": self.max_searches - searches,
-                            },
+                            budget,
                             edits_allowed,
                             **context_options,
                         )
@@ -319,10 +346,7 @@ class ShoppingAgent:
                             message,
                             result,
                             feedback,
-                            {
-                                "model_calls": self.max_calls - calls,
-                                "searches": self.max_searches - searches,
-                            },
+                            budget,
                             edits_allowed,
                         )
                     if not isinstance(built, BuiltContext):
@@ -380,6 +404,10 @@ class ShoppingAgent:
                         },
                         request_id,
                     )
+                    if memory_injected:
+                        injected_user_memories = [
+                            dict(r) for r in memory_view.get("records", [])
+                        ]
                 session.append(
                     "model_request",
                     {
@@ -449,7 +477,9 @@ class ShoppingAgent:
                 )
                 try:
                     contract = (
-                        MemoryDecision if self.user_memory is not None else Decision
+                        MemoryDecision
+                        if (self.user_memory is not None and not compact)
+                        else Decision
                     )
                     ignored_retractions = []
                     if compact:
@@ -613,7 +643,10 @@ class ShoppingAgent:
                         started = time.monotonic()
                         try:
                             found = self.search.search(
-                                action, session.state, user_memory=memory_view, fallback=True
+                                action,
+                                session.state,
+                                user_memory=memory_view,
+                                fallback=True,
                             )
                         except TypeError:
                             try:
@@ -635,7 +668,20 @@ class ShoppingAgent:
                             request_id,
                         )
                         accepted(decision, sent_lessons)
-                        feedback = []
+                        if not found.get("candidates"):
+                            feedback = [
+                                {
+                                    "code": "empty_search_zero_eligible",
+                                    "message": (
+                                        "The previous search returned zero eligible products. "
+                                        "Do not repeat the exact same search query. "
+                                        "Try broader keywords, adjust or remove restrictive constraints, "
+                                        "or ask a clarifying question."
+                                    ),
+                                }
+                            ]
+                        else:
+                            feedback = []
                         continue
                     if action.type == "RECOMMEND":
                         # Must be a result actually provided to THIS decision, still current
@@ -736,7 +782,15 @@ class ShoppingAgent:
                         "message": (
                             "This search already returned no verified matches. Please change the query or requirements before trying again; no products are recommended."
                             if closure == "repeated_empty_search"
-                            else CLOSURE_MESSAGE
+                            else (
+                                "I couldn't find verified matches for that specific search within this turn's budget. Could you specify what kind of items you are looking for (such as tops, shorts, or pants)?"
+                                if any(
+                                    r.status == "active"
+                                    and r.field in {"product_type", "category"}
+                                    for r in session.state.requirements
+                                )
+                                else CLOSURE_MESSAGE
+                            )
                         ),
                         "products": [],
                         "closure": closure,
