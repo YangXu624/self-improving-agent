@@ -312,6 +312,31 @@ def render_execution_trace_section(
                         st.markdown("**Outputs:**")
                         st.json(stage.outputs)
 
+    # Show Purchase Trace Events
+    purchase_events = [
+        e
+        for e in events
+        if e.get("type")
+        in {
+            "purchase_initiated",
+            "purchase_confirmed",
+            "purchase_recorded",
+            "purchase_cancelled",
+            "purchase_evidence_used",
+            "memory_reinforced_from_purchase",
+        }
+    ]
+    if purchase_events:
+        with st.expander(
+            f"🛍️ Purchase & Decision Evidence Events ({len(purchase_events)})",
+            expanded=True,
+        ):
+            for pe in purchase_events:
+                st.caption(
+                    f"`{pe.get('timestamp', '')}` · **{pe.get('type')}** (Turn: `{pe.get('turn_id', '')}`)"
+                )
+                st.json(pe.get("payload", {}))
+
 
 def render_evaluation_runner_section(
     project_root: Path,

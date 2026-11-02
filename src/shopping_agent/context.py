@@ -394,6 +394,16 @@ def latest_search(session, catalogue_version, strategy_version):
     return None
 
 
+PURCHASE_HISTORY_INSTRUCTIONS = """
+relevant_purchases, when present, contains factual past products this customer bought.
+It is advisory observed behavior, NOT a hard constraint or an automatic instruction.
+1. Current user instructions and explicit preferences always override past purchases.
+2. Gift purchases (recipient_context="gift") reflect the recipient's needs, NOT the customer's personal taste.
+3. Avoid automatically recommending the exact same product ID again unless the customer explicitly requests a repurchase or replacement.
+4. Use past purchases as soft contextual insight to recommend complementary or stylistically harmonious options.
+"""
+
+
 def build_context(
     session,
     user_message,
@@ -404,6 +414,7 @@ def build_context(
     *,
     procedural_guidance=None,
     user_memory=None,
+    purchases=None,
     memory_format="legacy",
     max_chars=40000,
     cards_profile="baseline",
@@ -436,6 +447,30 @@ def build_context(
     }
     if procedural_guidance:
         value["procedural_guidance"] = procedural_guidance
+    if purchases:
+        value["relevant_purchases"] = [
+            {
+                "product_id": p.get("product_id")
+                if isinstance(p, dict)
+                else getattr(p, "product_id", ""),
+                "title": p.get("title")
+                if isinstance(p, dict)
+                else getattr(p, "title", ""),
+                "price": p.get("price")
+                if isinstance(p, dict)
+                else getattr(p, "price", None),
+                "attributes": p.get("attribute_snapshot", {})
+                if isinstance(p, dict)
+                else getattr(p, "attribute_snapshot", {}),
+                "recipient_context": p.get("recipient_context", "self")
+                if isinstance(p, dict)
+                else getattr(p, "recipient_context", "self"),
+                "purchased_at": p.get("timestamp")
+                if isinstance(p, dict)
+                else getattr(p, "timestamp", ""),
+            }
+            for p in purchases
+        ]
     if user_memory is not None:
         value["user_memory"] = (
             compact_user_memory(user_memory) if compact else user_memory
@@ -469,6 +504,8 @@ def build_context(
             )
             + USER_MEMORY_INSTRUCTIONS
         )
+    if purchases:
+        instructions = instructions + PURCHASE_HISTORY_INSTRUCTIONS
     if compact:
         example.pop("based_on_state_version")
         instructions = COMPACT_SYSTEM

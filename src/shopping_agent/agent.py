@@ -102,6 +102,7 @@ class ShoppingAgent:
         memory_format="legacy",
         auto_finalize: bool = False,
         runtime_config: RuntimeConfig | None = None,
+        purchase_store=None,
     ):
         self.runtime_config = runtime_config
         if runtime_config is not None:
@@ -116,6 +117,7 @@ class ShoppingAgent:
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
         self.user_memory = user_memory
+        self.purchase_store = purchase_store
         self.auto_finalize = auto_finalize
         if memory_format not in FORMATS:
             raise ValueError("Unknown memory format")
@@ -401,6 +403,29 @@ class ShoppingAgent:
                         context_options["memory_format"] = "compact"
                     if memory_view is not None:
                         context_options["user_memory"] = memory_view
+                    if self.purchase_store is not None:
+                        try:
+                            rel_purchases = self.purchase_store.find_relevant_purchases(
+                                user_id, message, limit=3
+                            )
+                            if rel_purchases:
+                                context_options["purchases"] = rel_purchases
+                                if calls == 0:
+                                    session.append(
+                                        "purchase_evidence_used",
+                                        {
+                                            "count": len(rel_purchases),
+                                            "purchases": [
+                                                p.to_dict()
+                                                if hasattr(p, "to_dict")
+                                                else p
+                                                for p in rel_purchases
+                                            ],
+                                        },
+                                        request_id,
+                                    )
+                        except Exception:
+                            pass
                     remaining_calls = self.max_calls - calls
                     remaining_searches = max(
                         0, min(self.max_searches - searches, remaining_calls - 1)
@@ -975,7 +1000,11 @@ class ShoppingAgent:
 
                 try:
                     res = consolidate_session(
-                        session, user_id, self.user_memory, self.policy
+                        session,
+                        user_id,
+                        self.user_memory,
+                        self.policy,
+                        purchase_store=self.purchase_store,
                     )
                     results["user_memory"] = {
                         "idempotent": res.idempotent,

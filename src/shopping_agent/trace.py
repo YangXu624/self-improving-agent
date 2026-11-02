@@ -207,6 +207,22 @@ class TraceExtractor:
                 "retrieve_user_memory"
             ].summary = "User memory disabled or not retrieved."
 
+        purch_ev = next(
+            (e for e in turn_events if e.get("type") == "purchase_evidence_used"), None
+        )
+        if purch_ev:
+            p_count = purch_ev.get("payload", {}).get("count", 0)
+            if stages["retrieve_user_memory"].status == "skipped":
+                stages["retrieve_user_memory"].status = "completed"
+                stages[
+                    "retrieve_user_memory"
+                ].summary = f"{p_count} past purchase(s) retrieved as context"
+            else:
+                stages[
+                    "retrieve_user_memory"
+                ].summary += f" · {p_count} past purchase(s) retrieved"
+            stages["retrieve_user_memory"].metrics["purchases_retrieved"] = p_count
+
         # 3. Retrieve Procedural Memories
         exp_sel = next(
             (e for e in turn_events if e.get("type") == "experience_selection"), None
@@ -435,6 +451,22 @@ class TraceExtractor:
             stages[
                 "consolidate_user_memory"
             ].summary = f"{len(applied)} preference(s) recorded: {payload.get('reason', '')[:80]}"
+            reinf_ev = next(
+                (
+                    e
+                    for e in events
+                    if e.get("type") == "memory_reinforced_from_purchase"
+                ),
+                None,
+            )
+            if reinf_ev:
+                reinf_ops = reinf_ev.get("payload", {}).get("operations", [])
+                stages[
+                    "consolidate_user_memory"
+                ].summary += f" · {len(reinf_ops)} reinforced from purchase evidence"
+                stages["consolidate_user_memory"].metrics[
+                    "reinforced_from_purchase"
+                ] = len(reinf_ops)
             stages["consolidate_user_memory"].outputs = {"operations": applied}
         else:
             stages["finalize_session"].status = "pending"

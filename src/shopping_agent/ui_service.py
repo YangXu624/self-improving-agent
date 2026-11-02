@@ -1,6 +1,7 @@
 """Thin UI boundary around the existing agent/store; no Streamlit dependency here."""
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from .agent import DecisionPolicy, ShoppingAgent
 from .context import builder_for_profile
 from .contracts import Event
 from .memory_views import compact_state
+from .purchases import PurchaseRecord, PurchaseStore
 from .retrieval import LexicalSearch, file_hash
 from .runtime_config import RuntimeConfig
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
@@ -35,6 +37,7 @@ class ChatService:
         cards_profile: str = "baseline",
         user_memory_enabled: bool = False,
         user_memory_root: Path | None = None,
+        purchases_db_path: Path | None = None,
         memory_format: str = "compact",
         default_user_id: str = DEFAULT_MANUAL_USER_ID,
         runtime_config: RuntimeConfig | None = None,
@@ -55,6 +58,12 @@ class ChatService:
         self._user_memory_store = UserMemoryStore(self._user_memory_root)
         self.user_memory_enabled = user_memory_enabled
         self.user_memory = self._user_memory_store if user_memory_enabled else None
+        p_path = purchases_db_path or Path(
+            os.environ.get(
+                "ASTRA_PURCHASES_DB", sessions.parent / "purchases" / "purchases.sqlite"
+            )
+        )
+        self.purchase_store = PurchaseStore(p_path)
 
         tool = self._search()
         tool.close()
@@ -178,6 +187,8 @@ class ChatService:
                 None,
             )
 
+            summary = self.get_purchase_summary(uid)
+            purchases = self.get_purchases(uid, include_cancelled=True)
             return {
                 "session_id": session.id,
                 "user_id": uid,
@@ -188,6 +199,8 @@ class ChatService:
                 "finalized": finalized_event is not None,
                 "finalization_details": finalized_event,
                 "config_snapshot": config_snapshot or self.runtime_config.to_dict(),
+                "purchase_summary": summary,
+                "recent_purchases": purchases,
             }
 
     def send(
@@ -225,6 +238,7 @@ class ChatService:
                 user_memory=self.user_memory,
                 memory_format=self.memory_format,
                 runtime_config=cfg,
+                purchase_store=self.purchase_store,
             ).turn(uid, session_id, message, request_id=request_id)
         finally:
             tool.close()
@@ -290,6 +304,7 @@ class ChatService:
                 context_builder=self.context_builder,
                 user_memory=self.user_memory,
                 memory_format=self.memory_format,
+                purchase_store=self.purchase_store,
             )
             results = agent.finalize_session(uid, session_id)
         finally:
@@ -342,6 +357,116 @@ class ChatService:
                 "session_finalized", res_dict, turn_id=f"finalize-{session_id}"
             )
         return res_dict
+
+    def record_purchase(
+        self,
+        user_id: str | None,
+        session_id: str,
+        turn_id: str,
+        product_id: str,
+        title: str,
+        *,
+        price: float | None = None,
+        currency: str = "USD",
+        quantity: int = 1,
+        recipient_context: str = "self",
+        attribute_snapshot: dict | None = None,
+    ) -> dict:
+        """Record a confirmed simulated purchase for the user, update session events."""
+        uid = self.resolve_user_id(user_id)
+        record = PurchaseRecord(
+            customer_id=uid,
+            session_id=session_id,
+            turn_id=turn_id,
+            product_id=product_id,
+            title=title,
+            attribute_snapshot=attribute_snapshot or {},
+            price=price,
+            currency=currency,
+            quantity=quantity,
+            recipient_context=recipient_context
+            if recipient_context in {"self", "gift", "other"}
+            else "self",
+            status="simulated_completed",
+            source="confirmed_user_interaction",
+        )
+        saved = self.purchase_store.record_purchase(record)
+        saved_dict = saved.to_dict()
+
+        # Audit events in active session
+        try:
+            with self.store.open(uid, session_id) as session:
+                session.append(
+                    "purchase_initiated",
+                    {"product_id": product_id, "title": title, "price": price},
+                    turn_id=f"purchase-init-{saved.purchase_id}",
+                )
+                session.append(
+                    "purchase_confirmed",
+                    {
+                        "purchase_id": saved.purchase_id,
+                        "product_id": product_id,
+                        "quantity": quantity,
+                    },
+                    turn_id=f"purchase-conf-{saved.purchase_id}",
+                )
+                session.append(
+                    "purchase_recorded",
+                    saved_dict,
+                    turn_id=f"purchase-rec-{saved.purchase_id}",
+                )
+        except Exception:
+            pass
+
+        return saved_dict
+
+    def cancel_purchase(
+        self,
+        user_id: str | None,
+        purchase_id: str,
+        session_id: str | None = None,
+        reason: str = "Mistaken simulated purchase",
+    ) -> dict | None:
+        """Cancel a simulated purchase while preserving audit history."""
+        uid = self.resolve_user_id(user_id)
+        updated = self.purchase_store.cancel_purchase(uid, purchase_id, reason=reason)
+        if not updated:
+            return None
+        res_dict = updated.to_dict()
+        sid = session_id or updated.session_id
+        if sid:
+            try:
+                with self.store.open(uid, sid) as session:
+                    session.append(
+                        "purchase_cancelled",
+                        {
+                            "purchase_id": purchase_id,
+                            "reason": reason,
+                            "cancelled_at": updated.cancelled_at,
+                        },
+                        turn_id=f"purchase-cancel-{purchase_id}",
+                    )
+            except Exception:
+                pass
+        return res_dict
+
+    def get_purchases(
+        self,
+        user_id: str | None,
+        *,
+        include_cancelled: bool = True,
+        session_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        uid = self.resolve_user_id(user_id)
+        records = self.purchase_store.get_purchases(
+            uid, include_cancelled=include_cancelled, session_id=session_id, limit=limit
+        )
+        return [r.to_dict() for r in records]
+
+    def get_purchase_summary(self, user_id: str | None) -> dict:
+        uid = self.resolve_user_id(user_id)
+        return self.purchase_store.get_summary(uid)
 
     def inspect_memory(self, user_id: str | None = None) -> dict:
         """Inspect stored memories for the given user."""

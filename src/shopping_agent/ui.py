@@ -92,7 +92,91 @@ def product_image_url(value: object) -> str | None:
         return None
 
 
-def render_products(products: list[dict], show_images: bool) -> None:
+@st.dialog("Confirm Simulated Purchase (Demo)")
+def confirm_purchase_dialog(
+    product: dict,
+    service: ChatService,
+    owner: str,
+    session_id: str,
+    turn_id: str,
+) -> None:
+    st.markdown(f"**{product['title']}**")
+    st.caption(f"Product Catalogue ID: `{product['id']}`")
+    price = product.get("facts", {}).get("price")
+    if price is not None:
+        st.markdown(f"### USD {price:.2f}")
+    else:
+        st.markdown("### Price unlisted")
+
+    st.info(
+        "ℹ️ **Simulated Purchase Notice**: This is a demo transaction for customer preference learning. "
+        "No real payment, order placement, or shipping information is collected.",
+        icon="🛍️",
+    )
+
+    recipient = st.selectbox(
+        "Who is this item for?",
+        options=["self", "gift", "other"],
+        format_func=lambda x: (
+            "For myself"
+            if x == "self"
+            else (
+                "As a gift (recipient preferences separate)" if x == "gift" else "Other"
+            )
+        ),
+        key=f"recip_sel_{product['id']}_{turn_id}",
+    )
+    quantity = st.number_input(
+        "Quantity",
+        min_value=1,
+        max_value=10,
+        value=1,
+        step=1,
+        key=f"qty_sel_{product['id']}_{turn_id}",
+    )
+
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button(
+            "✓ Confirm Purchase",
+            type="primary",
+            use_container_width=True,
+            key=f"dlg_conf_{product['id']}_{turn_id}",
+        ):
+            service.record_purchase(
+                owner,
+                session_id,
+                turn_id,
+                product["id"],
+                product["title"],
+                price=price,
+                quantity=quantity,
+                recipient_context=recipient,
+                attribute_snapshot=product.get("facts", {}),
+            )
+            st.session_state["purchase_success_notice"] = (
+                f"Simulated purchase confirmed for **{product['title'][:45]}**! "
+                f"Added to your Purchase History."
+            )
+            st.rerun()
+    with col_cancel:
+        if st.button(
+            "Cancel",
+            use_container_width=True,
+            key=f"dlg_cancel_{product['id']}_{turn_id}",
+        ):
+            st.rerun()
+
+
+def render_products(
+    products: list[dict],
+    show_images: bool,
+    *,
+    service: ChatService | None = None,
+    owner: str = "",
+    session_id: str = "",
+    request_id: str = "",
+) -> None:
     """Render only persisted tool-backed cards, even when remote images are unavailable."""
     if not products:
         return
@@ -134,6 +218,141 @@ def render_products(products: list[dict], show_images: bool) -> None:
                         "matched_soft_ids": product["matched_soft_ids"],
                     }
                 )
+            if service and session_id and product.get("id"):
+                btn_key = f"buy_btn_{session_id}_{request_id}_{product['id']}"
+                if st.button("🛍️ Buy (Demo)", key=btn_key, use_container_width=True):
+                    confirm_purchase_dialog(
+                        product, service, owner, session_id, request_id
+                    )
+
+
+def render_purchase_history(service: ChatService, owner: str, sid: str) -> None:
+    st.markdown("### 📦 Simulated Purchase History")
+    st.caption(
+        f"Verified catalogue purchases recorded for customer `{owner}`. "
+        "These events provide episodic decision evidence used during memory consolidation."
+    )
+
+    summary = service.get_purchase_summary(owner)
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Purchases", summary.get("total_count", 0))
+    with col2:
+        st.metric("Active Completed", summary.get("active_count", 0))
+    with col3:
+        st.metric("Total Recorded Spend", f"USD {summary.get('total_spend', 0.0):.2f}")
+    with col4:
+        st.metric("Customer ID", owner)
+
+    st.divider()
+
+    col_f1, col_f2 = st.columns([1, 1])
+    with col_f1:
+        include_cancelled = st.checkbox(
+            "Include cancelled purchases", value=True, key="purch_incl_canc"
+        )
+    with col_f2:
+        current_session_only = st.checkbox(
+            "Show current session only", value=False, key="purch_curr_sess"
+        )
+
+    purchases = service.get_purchases(
+        owner,
+        include_cancelled=include_cancelled,
+        session_id=sid if current_session_only else None,
+    )
+
+    if not purchases:
+        st.info(
+            "No purchases recorded yet for this customer. "
+            "Click **Buy (Demo)** on any recommended product in the chat to test purchase-based learning.",
+            icon="🛍️",
+        )
+        return
+
+    st.caption(f"Showing {len(purchases)} purchase record(s):")
+    for p in purchases:
+        with st.container(border=True):
+            head_col1, head_col2 = st.columns([3, 1])
+            with head_col1:
+                st.markdown(f"#### {p['title']}")
+                st.caption(
+                    f"Product ID: `{p['product_id']}` · Purchase ID: `{p['purchase_id']}`"
+                )
+            with head_col2:
+                if p["status"] == "simulated_cancelled":
+                    st.markdown(
+                        "<span style='color: #ef4444; font-weight: 600;'>[Simulated Cancelled]</span>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        "<span style='color: #10b981; font-weight: 600;'>[Simulated Completed]</span>",
+                        unsafe_allow_html=True,
+                    )
+
+            dcol1, dcol2, dcol3, dcol4 = st.columns(4)
+            with dcol1:
+                price = p.get("price")
+                st.text(
+                    f"Price: USD {price:.2f}"
+                    if price is not None
+                    else "Price: unlisted"
+                )
+            with dcol2:
+                st.text(f"Quantity: {p.get('quantity', 1)}")
+            with dcol3:
+                recip = p.get("recipient_context", "self")
+                recip_label = (
+                    "🎁 Gift"
+                    if recip == "gift"
+                    else ("Self" if recip == "self" else "Other")
+                )
+                st.text(f"Recipient: {recip_label}")
+            with dcol4:
+                ts = p.get("timestamp", "")
+                st.text(f"Date: {ts[:10]} {ts[11:16]}")
+
+            attrs = p.get("attribute_snapshot", {})
+            if attrs:
+                attr_pills = " · ".join(
+                    f"{k.capitalize()}: {v}"
+                    for k, v in attrs.items()
+                    if v and k != "price"
+                )
+                if attr_pills:
+                    st.caption(f"Attributes: {attr_pills}")
+
+            if p["status"] == "simulated_cancelled":
+                st.caption(
+                    f"Cancelled at: {p.get('cancelled_at', '')} · Reason: {p.get('cancellation_reason', '')}"
+                )
+            else:
+                with st.expander("Cancel / Correct this simulated purchase"):
+                    st.caption(
+                        "You can cancel a mistaken purchase without deleting its audit history."
+                    )
+                    reason = st.text_input(
+                        "Cancellation Reason",
+                        value="Customer correction / demo test cancellation",
+                        key=f"canc_reason_{p['purchase_id']}",
+                    )
+                    if st.button(
+                        "Confirm Cancellation",
+                        key=f"canc_btn_{p['purchase_id']}",
+                        type="secondary",
+                    ):
+                        service.cancel_purchase(
+                            owner,
+                            p["purchase_id"],
+                            session_id=sid,
+                            reason=reason,
+                        )
+                        st.success(f"Simulated purchase {p['purchase_id']} cancelled.")
+                        st.rerun()
+
+            with st.expander("Inspect Raw Audit Event (JSON)"):
+                st.json(p)
 
 
 def render_activity(events: list[dict], request_id: str) -> None:
@@ -550,15 +769,19 @@ def run_app(project_root: Path) -> None:
             icon="ℹ️",
         )
 
-    # Main Tabs: Chat vs Catalogue Browser vs Memory Inspector vs Developer Console
-    chat_tab, catalogue_tab, inspector_tab, dev_tab = st.tabs(
+    # Main Tabs: Chat vs Purchase History vs Catalogue Browser vs Memory Inspector vs Developer Console
+    chat_tab, purchases_tab, catalogue_tab, inspector_tab, dev_tab = st.tabs(
         [
             "💬 Shopping Chat",
+            "📦 Purchase History",
             "🛍️ Browse Catalogue",
             "🧠 Memory Inspector",
             "🛠️ Developer Console & Eval Runner",
         ]
     )
+
+    with purchases_tab:
+        render_purchase_history(service, owner, sid)
 
     with catalogue_tab:
         render_catalogue_browser(service, show_images)
@@ -584,6 +807,8 @@ def run_app(project_root: Path) -> None:
     with chat_tab:
         if notice := st.session_state.pop("send_error", None):
             st.error(notice)
+        if purch_notice := st.session_state.pop("purchase_success_notice", None):
+            st.success(purch_notice, icon="🛍️")
 
         # Prominent Finish Session & Save Memory Action Bar
         col_btn, col_info = st.columns([1, 2])
@@ -692,7 +917,14 @@ def run_app(project_root: Path) -> None:
                 st.text(message["message"])
                 if message["role"] == "assistant":
                     if message.get("products"):
-                        render_products(message["products"], show_images)
+                        render_products(
+                            message["products"],
+                            show_images,
+                            service=service,
+                            owner=owner,
+                            session_id=sid,
+                            request_id=message.get("request_id", ""),
+                        )
                     if message.get("follow_up_question") and message.get(
                         "follow_up_question"
                     ) != message.get("message"):
