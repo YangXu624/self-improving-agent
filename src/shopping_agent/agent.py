@@ -31,6 +31,7 @@ from .memory_views import (
     redundant_retractions,
 )
 from .provider import PolicyReply, ProviderError
+from .runtime_config import RuntimeConfig
 from .sessions import SessionError, dumps
 from .state import StateError, apply_updates
 from .user_memory import MemoryDecision, UserMemoryError
@@ -100,7 +101,14 @@ class ShoppingAgent:
         user_memory=None,
         memory_format="legacy",
         auto_finalize: bool = False,
+        runtime_config: RuntimeConfig | None = None,
     ):
+        self.runtime_config = runtime_config
+        if runtime_config is not None:
+            max_calls = runtime_config.agent_max_calls
+            max_searches = runtime_config.agent_max_searches
+            if memory_format == "legacy" and runtime_config.memory_format != "legacy":
+                memory_format = runtime_config.memory_format
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
         self.store, self.search, self.policy = store, search, policy
@@ -143,9 +151,68 @@ class ShoppingAgent:
                 raise SessionError(
                     "interrupted_turn; inspect history and use a new request ID"
                 )
+
+            # Check maximum conversation turns
+            user_msg_count = sum(1 for e in session.events if e.type == "user_message")
+            max_turns = (
+                self.runtime_config.max_conversation_turns
+                if self.runtime_config
+                else 20
+            )
+            if user_msg_count >= max_turns:
+                closure = "conversation_turn_limit_reached"
+                msg = f"Maximum conversation turns ({max_turns}) reached for this session."
+                resp = {
+                    "status": "closed",
+                    "action": "RESPOND",
+                    "message": msg,
+                    "products": [],
+                    "closure": closure,
+                }
+                return self._complete(session, request_id, resp, 0, 0, closure=closure)
+
+            # Check session API spending ceiling
+            total_prompt_tok = sum(
+                e.payload.get("metadata", {}).get("usage", {}).get("prompt_tokens", 0)
+                for e in session.events
+                if e.type == "model_response"
+            )
+            total_compl_tok = sum(
+                e.payload.get("metadata", {})
+                .get("usage", {})
+                .get("completion_tokens", 0)
+                for e in session.events
+                if e.type == "model_response"
+            )
+            est_cost = (total_prompt_tok * 1.4e-7) + (total_compl_tok * 2.8e-7)
+            cost_cap = (
+                self.runtime_config.session_api_cost_ceiling_usd
+                if self.runtime_config
+                else 50.0
+            )
+            if est_cost > cost_cap:
+                closure = "session_api_cost_ceiling_exceeded"
+                msg = f"Session API spending limit (${cost_cap:.2f}) reached (estimated spend: ${est_cost:.3f})."
+                resp = {
+                    "status": "closed",
+                    "action": "RESPOND",
+                    "message": msg,
+                    "products": [],
+                    "closure": closure,
+                }
+                return self._complete(session, request_id, resp, 0, 0, closure=closure)
+
             session.append(
                 "turn_started",
-                {"max_calls": self.max_calls, "max_searches": self.max_searches},
+                {
+                    "max_calls": self.max_calls,
+                    "max_searches": self.max_searches,
+                    **(
+                        {"runtime_config": self.runtime_config.to_dict()}
+                        if self.runtime_config
+                        else {}
+                    ),
+                },
                 request_id,
             )
             user_event = session.append(
@@ -223,7 +290,19 @@ class ShoppingAgent:
                 memory_view = None
                 if self.user_memory is not None:
                     try:
-                        memory_view = self.user_memory.context(session, message)
+                        min_sim = (
+                            self.runtime_config.user_memory_similarity_threshold
+                            if self.runtime_config
+                            else 0.45
+                        )
+                        top_k = (
+                            self.runtime_config.user_memory_top_k
+                            if self.runtime_config
+                            else 5
+                        )
+                        memory_view = self.user_memory.context(
+                            session, message, min_similarity=min_sim, limit=top_k
+                        )
                     except (UserMemoryError, OSError):
                         failure = "user_memory_unavailable"
                         session.append(
@@ -629,6 +708,11 @@ class ShoppingAgent:
                             raise ActionError(
                                 "search_requires_a_remaining_decision_call"
                             )
+                        if self.runtime_config:
+                            action.limit = min(
+                                action.limit,
+                                self.runtime_config.candidate_retrieval_limit,
+                            )
                         searches += 1
                         session.append(
                             "tool_call",
@@ -641,12 +725,17 @@ class ShoppingAgent:
                             request_id,
                         )
                         started = time.monotonic()
+                        fallback_opt = (
+                            self.runtime_config.search_fallback
+                            if self.runtime_config
+                            else True
+                        )
                         try:
                             found = self.search.search(
                                 action,
                                 session.state,
                                 user_memory=memory_view,
-                                fallback=True,
+                                fallback=fallback_opt,
                             )
                         except TypeError:
                             try:

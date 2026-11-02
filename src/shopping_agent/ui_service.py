@@ -10,6 +10,7 @@ from .context import builder_for_profile
 from .contracts import Event
 from .memory_views import compact_state
 from .retrieval import LexicalSearch, file_hash
+from .runtime_config import RuntimeConfig
 from .sessions import MAX_EVENT_BYTES, SessionError, SessionStore
 from .user_memory import UserMemoryStore
 
@@ -36,11 +37,15 @@ class ChatService:
         user_memory_root: Path | None = None,
         memory_format: str = "compact",
         default_user_id: str = DEFAULT_MANUAL_USER_ID,
+        runtime_config: RuntimeConfig | None = None,
     ):
         self.index = index
         self.catalogue_hash = file_hash(catalogue)
         self.policy = policy
         self.memory_format = memory_format
+        self.runtime_config = runtime_config or RuntimeConfig(
+            memory_format=memory_format, user_memory_enabled=user_memory_enabled
+        )
         self.context_builder = builder_for_profile(
             cards_profile, memory_format=memory_format
         )
@@ -53,6 +58,14 @@ class ChatService:
 
         tool = self._search()
         tool.close()
+
+    def set_runtime_config(self, config: RuntimeConfig) -> None:
+        """Update active runtime config for subsequent actions."""
+        self.runtime_config = config
+        self.set_user_memory_enabled(config.user_memory_enabled)
+
+    def get_runtime_config(self) -> RuntimeConfig:
+        return self.runtime_config
 
     def set_user_memory_enabled(self, enabled: bool) -> None:
         """Toggle memory system on or off without re-instantiating storage."""
@@ -79,9 +92,21 @@ class ChatService:
     def _search(self) -> LexicalSearch:
         return LexicalSearch(self.index, expected_catalogue_hash=self.catalogue_hash)
 
-    def create(self, user_id: str | None = None) -> str:
+    def create(
+        self,
+        user_id: str | None = None,
+        runtime_config: RuntimeConfig | None = None,
+    ) -> str:
         uid = self.resolve_user_id(user_id)
-        return self.store.create(uid)
+        cfg = runtime_config or self.runtime_config
+        sid = self.store.create(uid)
+        with self.store.open(uid, sid) as session:
+            session.append(
+                "session_config_snapshot",
+                {"runtime_config": cfg.to_dict()},
+                turn_id=f"create-{sid}",
+            )
+        return sid
 
     def sessions(self, user_id: str | None = None) -> list[dict[str, str]]:
         """List only this local owner's valid UUID sessions, newest first.
@@ -144,6 +169,15 @@ class ChatService:
                 elif event.type == "session_finalized":
                     finalized_event = event.payload
 
+            config_snapshot = next(
+                (
+                    e.payload.get("runtime_config")
+                    for e in session.events
+                    if e.type == "session_config_snapshot"
+                ),
+                None,
+            )
+
             return {
                 "session_id": session.id,
                 "user_id": uid,
@@ -153,14 +187,36 @@ class ChatService:
                 "events": [e.model_dump() for e in session.events],
                 "finalized": finalized_event is not None,
                 "finalization_details": finalized_event,
+                "config_snapshot": config_snapshot or self.runtime_config.to_dict(),
             }
 
     def send(
-        self, user_id: str | None, session_id: str, message: str, request_id: str
+        self,
+        user_id: str | None,
+        session_id: str,
+        message: str,
+        request_id: str,
+        runtime_config: RuntimeConfig | None = None,
     ) -> dict:
         uid = self.resolve_user_id(user_id)
         tool = self._search()
         try:
+            cfg = runtime_config or self.runtime_config
+            with self.store.open(uid, session_id) as session:
+                snap = next(
+                    (
+                        e.payload.get("runtime_config")
+                        for e in session.events
+                        if e.type == "session_config_snapshot"
+                    ),
+                    None,
+                )
+                if snap and runtime_config is None:
+                    try:
+                        cfg = RuntimeConfig.from_dict(snap)
+                    except Exception:
+                        cfg = self.runtime_config
+
             return ShoppingAgent(
                 self.store,
                 tool,
@@ -168,6 +224,7 @@ class ChatService:
                 context_builder=self.context_builder,
                 user_memory=self.user_memory,
                 memory_format=self.memory_format,
+                runtime_config=cfg,
             ).turn(uid, session_id, message, request_id=request_id)
         finally:
             tool.close()

@@ -9,8 +9,14 @@ from uuid import uuid4
 import streamlit as st
 
 from .cards import PROFILES
+from .dev_console import (
+    render_evaluation_runner_section,
+    render_execution_trace_section,
+    render_parameters_section,
+)
 from .memory_views import FORMATS
 from .provider import DeepSeekPolicy, ProviderError
+from .runtime_config import PRESETS, RuntimeConfig
 from .sessions import SessionError
 from .ui_service import DEFAULT_MANUAL_USER_ID, ChatService
 
@@ -282,6 +288,72 @@ def _sidebar(service: ChatService) -> tuple[str, str, bool, bool]:
         st.caption("Session ID")
         st.code(sid, language=None)
         show_images = st.checkbox("Show product images", value=True, key="show_images")
+
+        st.divider()
+        with st.expander("🛠️ Developer Console", expanded=False):
+            st.caption("Operational Limits & Presets")
+            curr_cfg: RuntimeConfig = st.session_state.get(
+                "runtime_config", service.get_runtime_config()
+            )
+            preset_options = list(PRESETS.keys()) + ["Custom"]
+            current_preset = st.session_state.get(
+                "selected_preset", "Evaluation (Standard Benchmark)"
+            )
+            chosen_p = st.selectbox(
+                "Quick Preset",
+                preset_options,
+                index=preset_options.index(current_preset)
+                if current_preset in preset_options
+                else 1,
+                key="sidebar_preset_select",
+            )
+            if chosen_p in PRESETS and chosen_p != current_preset:
+                st.session_state["selected_preset"] = chosen_p
+                new_cfg = PRESETS[chosen_p]
+                st.session_state["runtime_config"] = new_cfg
+                service.set_runtime_config(new_cfg)
+                st.rerun()
+
+            c_calls = st.slider(
+                "Calls / Turn",
+                1,
+                6,
+                int(curr_cfg.agent_max_calls),
+                key="sb_max_calls",
+            )
+            c_searches = st.slider(
+                "Searches / Turn",
+                1,
+                3,
+                int(curr_cfg.agent_max_searches),
+                key="sb_max_searches",
+            )
+            c_mem_thresh = st.slider(
+                "Similarity Threshold",
+                0.10,
+                0.90,
+                float(curr_cfg.user_memory_similarity_threshold),
+                step=0.05,
+                key="sb_mem_thresh",
+            )
+            if (
+                c_calls != curr_cfg.agent_max_calls
+                or c_searches != curr_cfg.agent_max_searches
+                or abs(c_mem_thresh - curr_cfg.user_memory_similarity_threshold) > 0.01
+            ):
+                updated_cfg = curr_cfg.copy(
+                    agent_max_calls=c_calls,
+                    agent_max_searches=c_searches,
+                    user_memory_similarity_threshold=c_mem_thresh,
+                )
+                st.session_state["runtime_config"] = updated_cfg
+                st.session_state["selected_preset"] = "Custom"
+                service.set_runtime_config(updated_cfg)
+
+            st.caption(
+                "Full controls, execution trace & eval runner in Developer Console tab."
+            )
+
         st.caption(
             "Local app. Identity is server-isolated for development; no accounts or external auth."
         )
@@ -477,8 +549,25 @@ def run_app(project_root: Path) -> None:
             icon="ℹ️",
         )
 
-    # Main Tabs: Chat vs Memory Inspector
-    chat_tab, inspector_tab = st.tabs(["💬 Shopping Chat", "🧠 Memory Inspector"])
+    # Main Tabs: Chat vs Memory Inspector vs Developer Console
+    chat_tab, inspector_tab, dev_tab = st.tabs(
+        ["💬 Shopping Chat", "🧠 Memory Inspector", "🛠️ Developer Console & Eval Runner"]
+    )
+
+    with dev_tab:
+        sec_param, sec_trace, sec_eval = st.tabs(
+            [
+                "⚙️ Operational Parameters",
+                "🔍 Live Execution Trace",
+                "📊 Synthetic Evaluation Runner",
+            ]
+        )
+        with sec_param:
+            render_parameters_section(service, view, project_root)
+        with sec_trace:
+            render_execution_trace_section(view, service)
+        with sec_eval:
+            render_evaluation_runner_section(project_root, service)
 
     with inspector_tab:
         render_memory_inspector(service, owner)
@@ -655,7 +744,10 @@ def run_app(project_root: Path) -> None:
             if message.strip():
                 try:
                     with st.spinner("The shop agent is working…"):
-                        service.send(owner, sid, message, uuid4().hex)
+                        active_cfg = st.session_state.get("runtime_config")
+                        service.send(
+                            owner, sid, message, uuid4().hex, runtime_config=active_cfg
+                        )
                 except SAFE_ERRORS:
                     st.session_state["send_error"] = (
                         "The turn could not finish. Check the recorded state and activity before retrying; accepted changes may have been saved."

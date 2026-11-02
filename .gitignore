@@ -16,6 +16,7 @@ __pycache__/
 htmlcov/
 build/
 dist/
+scratch/
 
 # Frontend dependencies and generated caches; no stack is selected
 node_modules/
