@@ -5,7 +5,12 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .models import ExperienceSnapshot, Lesson
+from ..embeddings import (
+    EmbeddingProvider,
+    cosine_similarity,
+    get_default_embedding_provider,
+)
+from .models import ExperienceSnapshot, Lesson, utc_now_iso
 from .sanitizer import validate_lesson
 
 SCHEMA = """
@@ -26,7 +31,16 @@ CREATE TABLE IF NOT EXISTS lessons (
     supersedes_id TEXT,
     superseded_by_id TEXT,
     review_notes TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    situation TEXT NOT NULL DEFAULT '',
+    strategy TEXT NOT NULL DEFAULT '',
+    rationale TEXT NOT NULL DEFAULT '',
+    confidence REAL NOT NULL DEFAULT 0.8,
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT '',
+    embedding_json TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_lessons_lookup
@@ -35,19 +49,45 @@ ON lessons(status, trigger_type, scope);
 
 
 class ExperienceStore:
-    """Manages lesson lifecycle, provenance, retrieval, and immutable snapshot creation."""
+    """Manages lesson lifecycle, provenance, semantic retrieval, and immutable snapshot creation."""
 
-    def __init__(self, path: str | Path = ":memory:"):
+    def __init__(
+        self,
+        path: str | Path = ":memory:",
+        *,
+        embedding_provider: EmbeddingProvider | None = None,
+    ):
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path, autocommit=False)
         self.conn.row_factory = sqlite3.Row
+        self.embedding_provider = embedding_provider or get_default_embedding_provider()
         self._init_db()
 
     def _init_db(self) -> None:
         with self.conn:
             self.conn.executescript(SCHEMA)
+            # Automatic schema migration for existing sqlite dbs
+            cur = self.conn.execute("PRAGMA table_info(lessons)")
+            cols = {row["name"] for row in cur.fetchall()}
+            new_columns = [
+                ("situation", "TEXT NOT NULL DEFAULT ''"),
+                ("strategy", "TEXT NOT NULL DEFAULT ''"),
+                ("rationale", "TEXT NOT NULL DEFAULT ''"),
+                ("confidence", "REAL NOT NULL DEFAULT 0.8"),
+                ("usage_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("success_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("failure_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("updated_at", "TEXT NOT NULL DEFAULT ''"),
+                ("embedding_json", "TEXT"),
+            ]
+            for col_name, col_type in new_columns:
+                if col_name not in cols:
+                    try:
+                        self.conn.execute(f"ALTER TABLE lessons ADD COLUMN {col_name} {col_type}")
+                    except sqlite3.OperationalError:
+                        pass
 
     def close(self) -> None:
         self.conn.close()
@@ -59,6 +99,7 @@ class ExperienceStore:
         self.close()
 
     def _row_to_lesson(self, row: sqlite3.Row) -> Lesson:
+        emb = json.loads(row["embedding_json"]) if "embedding_json" in row.keys() and row["embedding_json"] else None
         return Lesson(
             lesson_id=row["lesson_id"],
             version=row["version"],
@@ -76,6 +117,15 @@ class ExperienceStore:
             superseded_by_id=row["superseded_by_id"],
             review_notes=row["review_notes"],
             created_at=row["created_at"],
+            situation=row["situation"] if "situation" in row.keys() else "",
+            strategy=row["strategy"] if "strategy" in row.keys() else "",
+            rationale=row["rationale"] if "rationale" in row.keys() else "",
+            confidence=row["confidence"] if "confidence" in row.keys() else 0.8,
+            usage_count=row["usage_count"] if "usage_count" in row.keys() else 0,
+            success_count=row["success_count"] if "success_count" in row.keys() else 0,
+            failure_count=row["failure_count"] if "failure_count" in row.keys() else 0,
+            updated_at=row["updated_at"] if "updated_at" in row.keys() else row["created_at"],
+            embedding=emb,
         )
 
     def add_candidate(
@@ -95,10 +145,16 @@ class ExperienceStore:
             forbidden_titles=forbidden_titles,
             allow_non_learning=allow_non_learning,
         )
+
+        emb = lesson.embedding
+        if emb is None:
+            emb = self.embedding_provider.embed_query(lesson.semantic_text())
+        emb_json = json.dumps(emb) if emb else None
+
         with self.conn:
             current = self.get(lesson.lesson_id)
             if current is not None:
-                ignored = {"status", "created_at", "review_notes", "superseded_by_id"}
+                ignored = {"status", "created_at", "updated_at", "review_notes", "superseded_by_id", "embedding"}
                 old = {k: v for k, v in current.to_dict().items() if k not in ignored}
                 new = {k: v for k, v in lesson.to_dict().items() if k not in ignored}
                 notes_unchanged = (
@@ -111,27 +167,16 @@ class ExperienceStore:
                     raise ValueError(
                         "Reviewed lesson is immutable; use explicit revision/supersession"
                     )
-            cursor = self.conn.execute(
+            self.conn.execute(
                 """
-                INSERT INTO lessons (
+                INSERT OR REPLACE INTO lessons (
                     lesson_id, version, scope, trigger_type, trigger_condition,
                     directive, expected_action, action_signature, observed_outcome,
                     hypothesized_cause, evidence, status, supersedes_id,
-                    superseded_by_id, review_notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(lesson_id) DO UPDATE SET
-                    version=excluded.version,
-                    scope=excluded.scope,
-                    trigger_type=excluded.trigger_type,
-                    trigger_condition=excluded.trigger_condition,
-                    directive=excluded.directive,
-                    expected_action=excluded.expected_action,
-                    action_signature=excluded.action_signature,
-                    observed_outcome=excluded.observed_outcome,
-                    hypothesized_cause=excluded.hypothesized_cause,
-                    evidence=excluded.evidence,
-                    review_notes=excluded.review_notes
-                WHERE lessons.status = 'candidate'
+                    superseded_by_id, review_notes, created_at, situation, strategy,
+                    rationale, confidence, usage_count, success_count, failure_count,
+                    updated_at, embedding_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lesson.lesson_id,
@@ -150,23 +195,32 @@ class ExperienceStore:
                     lesson.superseded_by_id,
                     lesson.review_notes,
                     lesson.created_at,
+                    lesson.situation,
+                    lesson.strategy,
+                    lesson.rationale,
+                    lesson.confidence,
+                    lesson.usage_count,
+                    lesson.success_count,
+                    lesson.failure_count,
+                    lesson.updated_at or lesson.created_at,
+                    emb_json,
                 ),
             )
-            if cursor.rowcount != 1:
-                raise ValueError(
-                    "Reviewed lesson changed concurrently; explicit revision required"
-                )
-        return self.get(lesson.lesson_id)
+        return self.get(lesson.lesson_id)  # type: ignore
 
     def get(self, lesson_id: str) -> Lesson | None:
-        cur = self.conn.execute(
-            "SELECT * FROM lessons WHERE lesson_id = ?", (lesson_id,)
-        )
+        cur = self.conn.execute("SELECT * FROM lessons WHERE lesson_id = ?", (lesson_id,))
         row = cur.fetchone()
-        return self._row_to_lesson(row) if row else None
+        return self._row_to_lesson(row) if row is not None else None
 
-    def confirm(self, lesson_id: str, review_notes: str | None = None) -> Lesson:
-        """Explicitly approve a candidate lesson, promoting it to active status."""
+    def confirm(
+        self,
+        lesson_id: str,
+        review_notes: str | None = None,
+        *,
+        activate: bool = True,
+    ) -> Lesson:
+        """Explicitly approve a candidate lesson, promoting it to active (or confirmed) status."""
         current = self.get(lesson_id)
         if not current:
             raise KeyError(f"Lesson not found: {lesson_id}")
@@ -177,12 +231,15 @@ class ExperienceStore:
             if current.review_notes and review_notes
             else review_notes or current.review_notes
         )
+        new_status = "active" if activate else "confirmed"
         with self.conn:
             self.conn.execute(
-                "UPDATE lessons SET status = 'active', review_notes = ? WHERE lesson_id = ?",
-                (notes, lesson_id),
+                "UPDATE lessons SET status = ?, review_notes = ? WHERE lesson_id = ?",
+                (new_status, notes, lesson_id),
             )
         return self.get(lesson_id)  # type: ignore
+
+    confirm_candidate = confirm
 
     def reject(
         self,
@@ -245,6 +302,11 @@ class ExperienceStore:
         if old.status in ("superseded", "retracted", "rejected"):
             raise ValueError(f"Cannot supersede lesson in status: {old.status!r}")
 
+        emb = new_lesson.embedding
+        if emb is None:
+            emb = self.embedding_provider.embed_query(new_lesson.semantic_text())
+        emb_json = json.dumps(emb) if emb else None
+
         replacement = Lesson(
             lesson_id=new_lesson.lesson_id,
             version=old.version + 1,
@@ -262,6 +324,15 @@ class ExperienceStore:
             superseded_by_id=None,
             review_notes=new_lesson.review_notes,
             created_at=new_lesson.created_at,
+            situation=new_lesson.situation,
+            strategy=new_lesson.strategy,
+            rationale=new_lesson.rationale,
+            confidence=new_lesson.confidence,
+            usage_count=new_lesson.usage_count,
+            success_count=new_lesson.success_count,
+            failure_count=new_lesson.failure_count,
+            updated_at=new_lesson.updated_at,
+            embedding=emb,
         )
         validate_lesson(
             replacement,
@@ -284,8 +355,10 @@ class ExperienceStore:
                     lesson_id, version, scope, trigger_type, trigger_condition,
                     directive, expected_action, action_signature, observed_outcome,
                     hypothesized_cause, evidence, status, supersedes_id,
-                    superseded_by_id, review_notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    superseded_by_id, review_notes, created_at, situation, strategy,
+                    rationale, confidence, usage_count, success_count, failure_count,
+                    updated_at, embedding_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     replacement.lesson_id,
@@ -304,9 +377,31 @@ class ExperienceStore:
                     replacement.superseded_by_id,
                     replacement.review_notes,
                     replacement.created_at,
+                    replacement.situation,
+                    replacement.strategy,
+                    replacement.rationale,
+                    replacement.confidence,
+                    replacement.usage_count,
+                    replacement.success_count,
+                    replacement.failure_count,
+                    replacement.updated_at or replacement.created_at,
+                    emb_json,
                 ),
             )
         return self.get(old_lesson_id), self.get(replacement.lesson_id)  # type: ignore
+
+    def activate(self, lesson_id: str) -> Lesson:
+        current = self.get(lesson_id)
+        if current is None:
+            raise KeyError(f"Lesson not found: {lesson_id}")
+        if current.status not in ("confirmed", "active"):
+            raise ValueError(f"Can only activate confirmed lessons; status is {current.status}")
+        with self.conn:
+            self.conn.execute(
+                "UPDATE lessons SET status = 'active' WHERE lesson_id = ?",
+                (lesson_id,),
+            )
+        return self.get(lesson_id)  # type: ignore
 
     def list_lessons(
         self,
@@ -336,11 +431,7 @@ class ExperienceStore:
         context_cues: dict[str, Any] | None = None,
         max_lessons: int = 1,
     ) -> list[Lesson]:
-        """Retrieve active lessons matching behavioral trigger and scope.
-
-        Specific scope takes precedence over cross-category ('*').
-        Context predicates in trigger_condition must match context_cues if specified.
-        """
+        """Retrieve active lessons matching behavioral trigger and scope."""
         cur = self.conn.execute(
             """
             SELECT * FROM lessons
@@ -356,7 +447,6 @@ class ExperienceStore:
         cues = context_cues or {}
 
         for lesson in candidates:
-            # Check condition predicates against context cues
             cond = lesson.trigger_condition
             matches = True
             for k, expected in cond.items():
@@ -373,6 +463,110 @@ class ExperienceStore:
                 if len(matched) >= max_lessons:
                     break
         return matched
+
+    def retrieve_semantic(
+        self,
+        situation_query: str,
+        *,
+        min_similarity: float = 0.50,
+        limit: int = 2,
+        scope: str = "*",
+        context_cues: dict[str, Any] | None = None,
+    ) -> list[tuple[Lesson, float]]:
+        """Retrieve active procedural lessons using vector semantic similarity to the current shopping situation."""
+        cur = self.conn.execute(
+            """
+            SELECT * FROM lessons
+            WHERE status IN ('active', 'confirmed')
+              AND scope IN (?, '*')
+            """,
+            (scope,),
+        )
+        candidates = [self._row_to_lesson(r) for r in cur.fetchall()]
+        if not candidates:
+            return []
+
+        # Ensure embeddings exist
+        missing_emb = [les for les in candidates if not les.embedding]
+        if missing_emb:
+            texts = [les.semantic_text() for les in missing_emb]
+            embs = self.embedding_provider.embed(texts)
+            with self.conn:
+                for les, emb in zip(missing_emb, embs, strict=False):
+                    self.conn.execute(
+                        "UPDATE lessons SET embedding_json = ? WHERE lesson_id = ?",
+                        (json.dumps(emb), les.lesson_id),
+                    )
+            # Re-fetch with embeddings
+            candidates = [self.get(les.lesson_id) for les in candidates]  # type: ignore
+
+        query_emb = self.embedding_provider.embed_query(situation_query)
+        scored: list[tuple[Lesson, float]] = []
+
+        for lesson in candidates:
+            if not lesson.embedding:
+                continue
+            if context_cues and lesson.trigger_condition:
+                cues_match = True
+                for k, expected in lesson.trigger_condition.items():
+                    actual = context_cues.get(k)
+                    if isinstance(expected, bool):
+                        if bool(actual) != expected:
+                            cues_match = False
+                            break
+                    elif actual != expected:
+                        cues_match = False
+                        break
+                if not cues_match:
+                    continue
+            sim = cosine_similarity(query_emb, lesson.embedding)
+            score = sim * lesson.confidence
+            if sim >= min_similarity:
+                scored.append((lesson, score))
+
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return scored[:limit]
+
+    def reinforce_or_add_lesson(
+        self,
+        candidate: Lesson,
+        *,
+        min_similarity_for_reinforce: float = 0.82,
+        allow_non_learning: bool = False,
+    ) -> tuple[str, Lesson]:
+        """Compare candidate lesson with existing lessons. Reinforce if similar; add if novel."""
+        emb = candidate.embedding
+        if emb is None:
+            emb = self.embedding_provider.embed_query(candidate.semantic_text())
+
+        existing_active = self.list_lessons(status="active")
+        for existing in existing_active:
+            if existing.scope == candidate.scope and existing.expected_action == candidate.expected_action:
+                ex_emb = existing.embedding
+                if ex_emb is None:
+                    ex_emb = self.embedding_provider.embed_query(existing.semantic_text())
+                sim = cosine_similarity(emb, ex_emb)
+                if sim >= min_similarity_for_reinforce:
+                    # Reinforce existing lesson
+                    with self.conn:
+                        new_usage = existing.usage_count + 1
+                        new_success = existing.success_count + 1
+                        new_conf = min(0.99, existing.confidence + 0.05)
+                        now_str = utc_now_iso()
+                        self.conn.execute(
+                            """
+                            UPDATE lessons
+                            SET usage_count = ?, success_count = ?, confidence = ?, updated_at = ?
+                            WHERE lesson_id = ?
+                            """,
+                            (new_usage, new_success, new_conf, now_str, existing.lesson_id),
+                        )
+                    return "reinforced", self.get(existing.lesson_id)  # type: ignore
+
+        # Novel lesson: add as candidate and activate
+        added = self.add_candidate(candidate, allow_non_learning=allow_non_learning)
+        activated = self.confirm_candidate(added.lesson_id, activate=True)
+        return "added", activated
 
     def create_snapshot(self, snapshot_id: str) -> ExperienceSnapshot:
         """Freeze all active lessons into an immutable ExperienceSnapshot."""

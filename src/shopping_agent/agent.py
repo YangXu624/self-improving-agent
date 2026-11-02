@@ -99,6 +99,7 @@ class ShoppingAgent:
         experience=None,
         user_memory=None,
         memory_format="legacy",
+        auto_finalize: bool = False,
     ):
         if not 1 <= max_calls <= 6 or not 1 <= max_searches <= 3:
             raise ValueError("Invalid execution bounds")
@@ -107,6 +108,7 @@ class ShoppingAgent:
         self.max_calls, self.max_searches = max_calls, max_searches
         self.experience = experience
         self.user_memory = user_memory
+        self.auto_finalize = auto_finalize
         if memory_format not in FORMATS:
             raise ValueError("Unknown memory format")
         self.memory_format = memory_format
@@ -149,6 +151,10 @@ class ShoppingAgent:
             user_event = session.append(
                 "user_message", {"message": message}, request_id
             )
+            if self.user_memory is not None and hasattr(self.user_memory, "check_and_apply_explicit_forgetting"):
+                withdrawn = self.user_memory.check_and_apply_explicit_forgetting(user_id, message)
+                if withdrawn:
+                    session.append("user_memory_withdrawn", {"withdrawn_ids": withdrawn}, request_id)
             calls, searches, feedback, edits_allowed = 0, 0, [], True
             retrieved_experience: list[str] = []
             injected_experience: list[str] = []
@@ -248,16 +254,23 @@ class ShoppingAgent:
                             "candidate_selection",
                             "attribute_clarification",
                         ]
-                    for trig in possible_triggers:
-                        matches = self.experience.retrieve(
-                            trigger_type=trig,
-                            scope=scope,
-                            context_cues=cues,
-                            max_lessons=1,
+                    if hasattr(self.experience, "retrieve_semantic"):
+                        sem_matches = self.experience.retrieve_semantic(
+                            message, limit=1, scope=scope, context_cues=cues
                         )
-                        if matches:
-                            retrieved_lessons = matches
-                            break
+                        if sem_matches:
+                            retrieved_lessons = [lesson for lesson, score in sem_matches]
+                    if not retrieved_lessons:
+                        for trig in possible_triggers:
+                            matches = self.experience.retrieve(
+                                trigger_type=trig,
+                                scope=scope,
+                                context_cues=cues,
+                                max_lessons=1,
+                            )
+                            if matches:
+                                retrieved_lessons = matches
+                                break
                     if retrieved_lessons:
                         for lesson in retrieved_lessons:
                             if lesson.lesson_id not in retrieved_experience:
@@ -768,3 +781,51 @@ class ShoppingAgent:
         session.append("assistant_response", response, request_id)
         session.append("turn_completed", {"response": response}, request_id)
         return response
+
+    def finalize_session(
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        outcome: dict | None = None,
+    ) -> dict:
+        """Run end-of-session consolidation for user memory and experience distillation exactly once."""
+        results = {"user_memory": None, "experience": None}
+        with self.store.open(user_id, session_id) as session:
+            if self.user_memory is not None:
+                from .consolidation import consolidate_session
+
+                try:
+                    res = consolidate_session(
+                        session, user_id, self.user_memory, self.policy
+                    )
+                    results["user_memory"] = {
+                        "idempotent": res.idempotent,
+                        "revision": res.revision,
+                        "applied": res.operations_applied,
+                        "rejected": res.rejected_operations,
+                        "reason": res.reason,
+                    }
+                except Exception as exc:
+                    results["user_memory"] = {"error": str(exc)}
+
+            if self.experience is not None:
+                from .experience.distiller import distill_session_experience
+                from .experience.store import ExperienceStore
+
+                if isinstance(self.experience, ExperienceStore):
+                    try:
+                        exp_res = distill_session_experience(
+                            session, self.experience, self.policy, outcome=outcome
+                        )
+                        results["experience"] = {
+                            "has_lesson": exp_res.has_lesson,
+                            "status": exp_res.status,
+                            "lesson_id": exp_res.lesson.lesson_id
+                            if exp_res.lesson
+                            else None,
+                            "reason": exp_res.reason,
+                        }
+                    except Exception as exc:
+                        results["experience"] = {"error": str(exc)}
+        return results

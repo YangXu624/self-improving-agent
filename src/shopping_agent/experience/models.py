@@ -45,6 +45,26 @@ class Lesson:
     review_notes: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
 
+    # Redesigned semantic and statistical fields
+    situation: str = ""
+    strategy: str = ""
+    rationale: str = ""
+    confidence: float = 0.8
+    usage_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    updated_at: str = ""
+    embedding: list[float] | None = None
+
+    def semantic_text(self) -> str:
+        """Text used for semantic situation embedding."""
+        parts = [
+            f"Situation: {self.situation}" if self.situation else f"When: {self.directive}",
+            f"Strategy: {self.strategy}" if self.strategy else f"Action: {self.expected_action}",
+            f"Rationale: {self.rationale}" if self.rationale else "",
+        ]
+        return " ".join(p for p in parts if p).strip()
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -67,6 +87,15 @@ class Lesson:
             superseded_by_id=data.get("superseded_by_id"),
             review_notes=data.get("review_notes"),
             created_at=data.get("created_at") or utc_now_iso(),
+            situation=data.get("situation", ""),
+            strategy=data.get("strategy", ""),
+            rationale=data.get("rationale", ""),
+            confidence=float(data.get("confidence", 0.8)),
+            usage_count=int(data.get("usage_count", 0)),
+            success_count=int(data.get("success_count", 0)),
+            failure_count=int(data.get("failure_count", 0)),
+            updated_at=data.get("updated_at") or data.get("created_at") or utc_now_iso(),
+            embedding=data.get("embedding"),
         )
 
 

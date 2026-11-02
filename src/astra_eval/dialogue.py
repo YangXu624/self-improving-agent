@@ -521,4 +521,14 @@ class DialogueRunner:
         record.applied_experience = sorted(
             {x for t in record.turns for x in t.applied_experience}
         )
+        if getattr(self.agent, "auto_finalize", False) and hasattr(self.agent, "finalize_session"):
+            outcome = {
+                "termination": record.termination,
+                "target_hit": getattr(record, "target_hit", None) is not None,
+                "turns": len(record.turns),
+            }
+            try:
+                self.agent.finalize_session(user, sid, outcome=outcome)
+            except Exception:
+                pass
         return record
